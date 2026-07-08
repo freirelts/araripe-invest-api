@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: araripe-invest-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${ARARIPE_DB_NAME:-araripe_invest}
+      POSTGRES_USER: ${ARARIPE_DB_USERNAME:-araripe}
+      POSTGRES_PASSWORD: ${ARARIPE_DB_PASSWORD:-araripe_local_password}
+    ports:
+      - "${ARARIPE_DB_PORT:-5432}:5432"
+    volumes:
+      - araripe-invest-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  araripe-invest-postgres-data:
