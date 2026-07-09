@@ -64,4 +64,14 @@ public class FinancialStatementSnapshot {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
+
+	public FinancialStatementSnapshot(Asset asset, StatementType statementType, PeriodType periodType,
+			LocalDate endDate, String source, String payloadJson) {
+		this.asset = asset;
+		this.statementType = statementType;
+		this.periodType = periodType;
+		this.endDate = endDate;
+		this.source = source;
+		this.payloadJson = payloadJson;
+	}
 }

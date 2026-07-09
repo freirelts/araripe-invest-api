@@ -55,4 +55,12 @@ public class MacroIndicatorSnapshot {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
+
+	public MacroIndicatorSnapshot(String slug, String name, LocalDate referenceDate, BigDecimal value, String source) {
+		this.slug = slug;
+		this.name = name;
+		this.referenceDate = referenceDate;
+		this.value = value;
+		this.source = source;
+	}
 }

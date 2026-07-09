@@ -69,4 +69,13 @@ public class DividendEvent {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
+
+	public DividendEvent(Asset asset, DividendEventType eventType, LocalDate lastDatePrior, LocalDate paymentDate,
+			String source) {
+		this.asset = asset;
+		this.eventType = eventType;
+		this.lastDatePrior = lastDatePrior;
+		this.paymentDate = paymentDate;
+		this.source = source;
+	}
 }
