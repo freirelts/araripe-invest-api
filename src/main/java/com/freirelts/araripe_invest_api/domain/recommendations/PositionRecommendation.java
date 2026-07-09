@@ -3,6 +3,9 @@ package com.freirelts.araripe_invest_api.domain.recommendations;
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
+import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
+import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
+import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -50,6 +53,18 @@ public class PositionRecommendation {
 	@ManyToOne(fetch = FetchType.LAZY, optional = false)
 	@JoinColumn(name = "asset_id", nullable = false)
 	private Asset asset;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "customer_position_thesis_id")
+	private CustomerPositionThesis customerPositionThesis;
+
+	@ManyToOne(fetch = FetchType.LAZY)
+	@JoinColumn(name = "current_thesis_id")
+	private PositionThesis currentThesis;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "thesis_type", length = 60)
+	private ThesisType thesisType;
 
 	@Column(name = "reference_date", nullable = false)
 	private LocalDate referenceDate;

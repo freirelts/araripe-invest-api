@@ -95,4 +95,14 @@ public class PositionThesis {
 
 	@OneToOne(mappedBy = "thesis", fetch = FetchType.LAZY)
 	private AllocationPlan allocationPlan;
+
+	public PositionThesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, ThesisStatus status, int score,
+			String ruleVersion) {
+		this.asset = asset;
+		this.referenceDate = referenceDate;
+		this.thesisType = thesisType;
+		this.status = status;
+		this.score = score;
+		this.ruleVersion = ruleVersion;
+	}
 }
