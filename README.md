@@ -43,7 +43,7 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `ARARIPE_BOOTSTRAP_ADMIN_PASSWORD` | Senha inicial do primeiro admin. Exige pelo menos 12 caracteres. |
 | `ARARIPE_BOOTSTRAP_ADMIN_NAME` | Nome do primeiro admin. |
 | `BRAPI_BASE_URL` | URL base da brapi. Default: `https://brapi.dev/api`. |
-| `BRAPI_API_TOKEN` | Token da brapi, usado somente no backend. |
+| `BRAPI_API_TOKEN` | Token da brapi, usado somente no backend e nunca registrado em logs. |
 | `BRAPI_TIMEOUT_SECONDS` | Timeout por chamada externa. |
 | `BRAPI_RETRY_MAX_ATTEMPTS` | Limite de tentativas para brapi. |
 | `OPENAI_API_KEY` | Chave OpenAI para Spring AI. |
@@ -101,6 +101,21 @@ Authorization: Bearer <token>
 ```
 
 O endpoint `GET /api/v1/auth/me` retorna o usuario autenticado. Rotas `/api/v1/admin/**` exigem perfil `ADMIN`.
+
+## Universo monitorado e brapi.dev
+
+O cadastro administrativo de ativos define o universo monitorado. A integracao com brapi.dev consulta somente simbolos cadastrados e com `active=true`; simbolos ausentes ou inativos sao ignorados antes de qualquer chamada externa.
+
+Endpoints administrativos principais:
+
+```http
+GET /api/v1/admin/assets
+POST /api/v1/admin/assets
+PUT /api/v1/admin/assets/{assetId}
+PATCH /api/v1/admin/assets/{assetId}/status
+```
+
+O client brapi fica isolado atras dos contratos `MarketDataProvider`, `FundamentalDataProvider` e `MacroEconomicDataProvider`.
 
 Para criar o primeiro admin local de forma controlada, configure:
 
