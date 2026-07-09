@@ -34,8 +34,14 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `ARARIPE_DB_URL` | URL JDBC completa do PostgreSQL em producao. |
 | `ARARIPE_DB_USERNAME` | Usuario do banco. Default: `araripe`. |
 | `ARARIPE_DB_PASSWORD` | Senha do banco local. |
-| `ARARIPE_LOCAL_SECURITY_USERNAME` | Usuario tecnico local temporario ate a fase de autenticacao. |
-| `ARARIPE_LOCAL_SECURITY_PASSWORD` | Senha tecnica local temporaria. Troque em qualquer ambiente compartilhado. |
+| `ARARIPE_JWT_ISSUER` | Emissor esperado dos tokens JWT. Default: `araripe-invest-api`. |
+| `ARARIPE_JWT_AUDIENCE` | Audiencia esperada dos tokens JWT. Default: `araripe-invest-fed`. |
+| `ARARIPE_JWT_SECRET` | Segredo HMAC para assinar JWT. Use valor forte e com pelo menos 32 bytes. |
+| `ARARIPE_JWT_EXPIRATION` | Duracao do token no formato ISO-8601, como `PT2H`. |
+| `ARARIPE_BOOTSTRAP_ADMIN_ENABLED` | Habilita criacao do primeiro admin no start. Default: `false`. |
+| `ARARIPE_BOOTSTRAP_ADMIN_EMAIL` | E-mail do primeiro admin quando o bootstrap estiver habilitado. |
+| `ARARIPE_BOOTSTRAP_ADMIN_PASSWORD` | Senha inicial do primeiro admin. Exige pelo menos 12 caracteres. |
+| `ARARIPE_BOOTSTRAP_ADMIN_NAME` | Nome do primeiro admin. |
 | `BRAPI_BASE_URL` | URL base da brapi. Default: `https://brapi.dev/api`. |
 | `BRAPI_API_TOKEN` | Token da brapi, usado somente no backend. |
 | `BRAPI_TIMEOUT_SECONDS` | Timeout por chamada externa. |
@@ -73,11 +79,38 @@ SPRING_PROFILES_ACTIVE=local ./mvnw spring-boot:run
 
 A API sobe em `http://localhost:8080`.
 
-Quando a Fase 1 estiver completa, o health check do Actuator deve responder em:
+O health check do Actuator responde sem autenticacao em:
 
 ```text
 http://localhost:8080/actuator/health
 ```
+
+## Autenticacao
+
+A API usa JWT stateless assinado com HMAC. Cadastro e login ficam publicos:
+
+```http
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+```
+
+Rotas autenticadas exigem header:
+
+```http
+Authorization: Bearer <token>
+```
+
+O endpoint `GET /api/v1/auth/me` retorna o usuario autenticado. Rotas `/api/v1/admin/**` exigem perfil `ADMIN`.
+
+Para criar o primeiro admin local de forma controlada, configure:
+
+```bash
+ARARIPE_BOOTSTRAP_ADMIN_ENABLED=true
+ARARIPE_BOOTSTRAP_ADMIN_EMAIL=admin@araripe.test
+ARARIPE_BOOTSTRAP_ADMIN_PASSWORD=troque-esta-senha
+```
+
+Depois do primeiro login, desabilite o bootstrap em ambientes compartilhados.
 
 ## Testes
 
