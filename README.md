@@ -31,6 +31,7 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `ARARIPE_DB_HOST` | Host do PostgreSQL. Default: `localhost`. |
 | `ARARIPE_DB_PORT` | Porta do PostgreSQL. Default: `5432`. |
 | `ARARIPE_DB_NAME` | Nome do banco. Default: `araripe_invest`. |
+| `ARARIPE_DB_URL` | URL JDBC completa do PostgreSQL em producao. |
 | `ARARIPE_DB_USERNAME` | Usuario do banco. Default: `araripe`. |
 | `ARARIPE_DB_PASSWORD` | Senha do banco local. |
 | `ARARIPE_LOCAL_SECURITY_USERNAME` | Usuario tecnico local temporario ate a fase de autenticacao. |
