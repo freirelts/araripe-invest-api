@@ -47,9 +47,12 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `BRAPI_TIMEOUT_SECONDS` | Timeout por chamada externa. |
 | `BRAPI_RETRY_MAX_ATTEMPTS` | Limite de tentativas para brapi. |
 | `OPENAI_API_KEY` | Chave OpenAI para Spring AI. |
-| `OPENAI_MODEL` | Modelo usado para enriquecimento contextual. |
+| `OPENAI_ENABLED` | Habilita o adapter OpenAI quando houver `ChatClient`; sem modelo configurado o backend usa fallback deterministico auditavel. |
+| `OPENAI_MODEL` | Modelo usado para enriquecimento contextual. Default: `gpt-5.6-luna`. |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout da chamada de IA. |
-| `SPRING_AI_MODEL_CHAT` | Provider do modelo de chat. Default local: `none`; use `openai` quando a integracao for configurada. |
+| `OPENAI_MAX_TOKENS` | Limite de tokens de saida para o contexto estruturado. |
+| `OPENAI_PROMPT_VERSION` | Versao do prompt macro/setorial persistida na auditoria. |
+| `SPRING_AI_MODEL_CHAT` | Provider do modelo de chat. Default: `openai`. Em testes automatizados fica desabilitado. |
 | `SPRING_AI_MODEL_EMBEDDING` | Provider de embeddings. Default local: `none`. |
 | `SPRING_AI_MODEL_IMAGE` | Provider de imagem. Default local: `none`. |
 | `SPRING_AI_MODEL_AUDIO_SPEECH` | Provider de audio speech. Default local: `none`. |

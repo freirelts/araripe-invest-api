@@ -79,4 +79,14 @@ public class AiContextAnalysis {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
+
+	public AiContextAnalysis(Asset asset, LocalDate referenceDate, String provider, String model, String promptVersion,
+			String promptHash) {
+		this.asset = asset;
+		this.referenceDate = referenceDate;
+		this.provider = provider;
+		this.model = model;
+		this.promptVersion = promptVersion;
+		this.promptHash = promptHash;
+	}
 }
