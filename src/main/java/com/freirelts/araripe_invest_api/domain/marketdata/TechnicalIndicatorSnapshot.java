@@ -90,4 +90,10 @@ public class TechnicalIndicatorSnapshot {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
+
+	public TechnicalIndicatorSnapshot(Asset asset, LocalDate tradeDate, String calculationVersion) {
+		this.asset = asset;
+		this.tradeDate = tradeDate;
+		this.calculationVersion = calculationVersion;
+	}
 }

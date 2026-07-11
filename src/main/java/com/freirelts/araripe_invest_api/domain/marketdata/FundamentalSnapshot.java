@@ -17,6 +17,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,8 +28,8 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "fundamental_snapshots", uniqueConstraints = @UniqueConstraint(name = "uk_fundamental_snapshots_asset_period_source", columnNames = {
-		"asset_id", "reference_date", "period_type", "source" }))
+@Table(name = "fundamental_snapshots", uniqueConstraints = @UniqueConstraint(name = "uk_fundamental_snapshots_asset_period_source_version", columnNames = {
+		"asset_id", "reference_date", "period_type", "source", "calculation_version" }))
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class FundamentalSnapshot {
 
@@ -103,15 +105,44 @@ public class FundamentalSnapshot {
 	@Column(name = "earnings_growth", precision = 10, scale = 6)
 	private BigDecimal earningsGrowth;
 
+	@Column(name = "annual_revenue_growth", precision = 10, scale = 6)
+	private BigDecimal annualRevenueGrowth;
+
+	@Column(name = "quarterly_revenue_growth", precision = 10, scale = 6)
+	private BigDecimal quarterlyRevenueGrowth;
+
+	@Column(name = "annual_earnings_growth", precision = 10, scale = 6)
+	private BigDecimal annualEarningsGrowth;
+
+	@Column(name = "quarterly_earnings_growth", precision = 10, scale = 6)
+	private BigDecimal quarterlyEarningsGrowth;
+
+	@Column(name = "ebitda_growth", precision = 10, scale = 6)
+	private BigDecimal ebitdaGrowth;
+
 	@Column(name = "free_cashflow", precision = 24, scale = 6)
 	private BigDecimal freeCashflow;
 
 	@Column(name = "operating_cashflow", precision = 24, scale = 6)
 	private BigDecimal operatingCashflow;
 
+	@Column(name = "net_debt", precision = 24, scale = 6)
+	private BigDecimal netDebt;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "quality_status", nullable = false, length = 32)
 	private DataQualityStatus qualityStatus = DataQualityStatus.PENDING;
+
+	@Column(name = "calculation_version", nullable = false, length = 40)
+	private String calculationVersion = "collector-v1";
+
+	@Column(name = "missing_fields_json", nullable = false, columnDefinition = "jsonb")
+	@JdbcTypeCode(SqlTypes.JSON)
+	private String missingFieldsJson = "[]";
+
+	@Column(name = "assumptions_json", nullable = false, columnDefinition = "jsonb")
+	@JdbcTypeCode(SqlTypes.JSON)
+	private String assumptionsJson = "[]";
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();

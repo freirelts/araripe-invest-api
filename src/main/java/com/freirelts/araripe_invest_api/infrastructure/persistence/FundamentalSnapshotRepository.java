@@ -10,6 +10,9 @@ import java.util.UUID;
 
 public interface FundamentalSnapshotRepository extends JpaRepository<FundamentalSnapshot, UUID> {
 
-	Optional<FundamentalSnapshot> findByAssetIdAndReferenceDateAndPeriodTypeAndSource(UUID assetId,
-			LocalDate referenceDate, PeriodType periodType, String source);
+	Optional<FundamentalSnapshot> findByAssetIdAndReferenceDateAndPeriodTypeAndSourceAndCalculationVersion(UUID assetId,
+			LocalDate referenceDate, PeriodType periodType, String source, String calculationVersion);
+
+	Optional<FundamentalSnapshot> findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceOrderByReferenceDateDescCreatedAtDesc(
+			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source);
 }

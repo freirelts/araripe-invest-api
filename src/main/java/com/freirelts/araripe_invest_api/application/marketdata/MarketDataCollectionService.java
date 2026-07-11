@@ -43,6 +43,7 @@ import java.util.function.BiConsumer;
 public class MarketDataCollectionService {
 
 	private static final String SOURCE = "brapi";
+	private static final String COLLECTOR_CALCULATION_VERSION = "collector-v1";
 
 	private final MarketDataProvider marketDataProvider;
 	private final FundamentalDataProvider fundamentalDataProvider;
@@ -187,9 +188,10 @@ public class MarketDataCollectionService {
 				LocalDate referenceDate = parsedReferenceDate == null ? referenceDate(response.requestedAt())
 						: parsedReferenceDate;
 				FundamentalSnapshot snapshot = fundamentalSnapshotRepository
-						.findByAssetIdAndReferenceDateAndPeriodTypeAndSource(asset.getId(), referenceDate,
-								PeriodType.TTM, SOURCE)
+						.findByAssetIdAndReferenceDateAndPeriodTypeAndSourceAndCalculationVersion(asset.getId(),
+								referenceDate, PeriodType.TTM, SOURCE, COLLECTOR_CALCULATION_VERSION)
 						.orElseGet(() -> new FundamentalSnapshot(asset, referenceDate, PeriodType.TTM, SOURCE));
+				snapshot.setCalculationVersion(COLLECTOR_CALCULATION_VERSION);
 				mapper.accept(snapshot, data);
 				snapshot.setQualityStatus(fundamentalQuality(snapshot));
 				fundamentalSnapshotRepository.save(snapshot);
