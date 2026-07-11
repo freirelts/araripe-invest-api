@@ -15,4 +15,10 @@ public interface FundamentalSnapshotRepository extends JpaRepository<Fundamental
 
 	Optional<FundamentalSnapshot> findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceOrderByReferenceDateDescCreatedAtDesc(
 			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source);
+
+	Optional<FundamentalSnapshot> findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionOrderByReferenceDateDescCreatedAtDesc(
+			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source, String calculationVersion);
+
+	java.util.List<FundamentalSnapshot> findTop4ByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionOrderByReferenceDateDescCreatedAtDesc(
+			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source, String calculationVersion);
 }

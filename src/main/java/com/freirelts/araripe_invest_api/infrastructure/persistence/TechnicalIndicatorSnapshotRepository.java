@@ -11,4 +11,7 @@ public interface TechnicalIndicatorSnapshotRepository extends JpaRepository<Tech
 
 	Optional<TechnicalIndicatorSnapshot> findByAssetIdAndTradeDateAndCalculationVersion(UUID assetId,
 			LocalDate tradeDate, String calculationVersion);
+
+	Optional<TechnicalIndicatorSnapshot> findTopByAssetIdAndTradeDateLessThanEqualAndCalculationVersionOrderByTradeDateDescCreatedAtDesc(
+			UUID assetId, LocalDate tradeDate, String calculationVersion);
 }
