@@ -3,8 +3,11 @@ package com.freirelts.araripe_invest_api.infrastructure.persistence;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
+import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,4 +15,7 @@ public interface NotificationEventRepository extends JpaRepository<NotificationE
 
 	Optional<NotificationEvent> findByRecommendationIdAndChannelAndEventType(UUID recommendationId,
 			NotificationChannel channel, NotificationEventType eventType);
+
+	List<NotificationEvent> findByReferenceDateAndChannelAndStatus(LocalDate referenceDate,
+			NotificationChannel channel, NotificationStatus status);
 }

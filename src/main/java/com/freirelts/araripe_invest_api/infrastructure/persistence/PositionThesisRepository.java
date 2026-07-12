@@ -22,4 +22,7 @@ public interface PositionThesisRepository extends JpaRepository<PositionThesis, 
 
 	List<PositionThesis> findByAssetIdAndReferenceDateAndRuleVersionOrderByScoreDesc(UUID assetId,
 			LocalDate referenceDate, String ruleVersion);
+
+	List<PositionThesis> findByReferenceDateAndRuleVersionOrderByScoreDesc(LocalDate referenceDate,
+			String ruleVersion);
 }

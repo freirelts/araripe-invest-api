@@ -134,6 +134,24 @@ class AuthSecurityTests {
 
 		mockMvc.perform(get("/api/v1/admin/assets").header("Authorization", bearer(adminToken)))
 				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/v1/admin/jobs/RANKING/runs").header("Authorization", bearer(customerToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"referenceDate":"2026-07-07"}
+								"""))
+				.andExpect(status().isForbidden());
+
+		mockMvc.perform(post("/api/v1/admin/jobs/RANKING/runs").header("Authorization", bearer(adminToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"referenceDate":"2026-07-07"}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.jobName").value("RANKING"))
+				.andExpect(jsonPath("$.referenceDate").value("2026-07-07"))
+				.andExpect(jsonPath("$.status").value("SUCCESS"))
+				.andExpect(jsonPath("$.requestedByUserId").isString());
 	}
 
 	@Test
