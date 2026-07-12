@@ -14,6 +14,9 @@ public interface PositionThesisRepository extends JpaRepository<PositionThesis, 
 	Optional<PositionThesis> findTopByAssetIdAndThesisTypeOrderByReferenceDateDescCreatedAtDesc(UUID assetId,
 			ThesisType thesisType);
 
+	Optional<PositionThesis> findTopByAssetIdAndThesisTypeAndReferenceDateLessThanEqualOrderByReferenceDateDescCreatedAtDesc(
+			UUID assetId, ThesisType thesisType, LocalDate referenceDate);
+
 	Optional<PositionThesis> findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(UUID assetId,
 			LocalDate referenceDate, ThesisType thesisType, String ruleVersion);
 

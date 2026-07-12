@@ -34,7 +34,7 @@ import java.util.UUID;
 @Setter
 @Entity
 @Table(name = "position_recommendations", uniqueConstraints = @UniqueConstraint(name = "uk_position_recommendations_idempotency", columnNames = {
-		"user_id", "position_id", "reference_date", "recommendation_type", "rule_version" }))
+		"user_id", "position_id", "reference_date", "rule_version" }))
 @NoArgsConstructor
 public class PositionRecommendation {
 
