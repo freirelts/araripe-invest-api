@@ -12,5 +12,6 @@ public record AssetScreeningDiagnostic(
 		LocalDate referenceDate,
 		ScreeningStatus status,
 		String ruleVersion,
-		List<EliminatoryFilterReason> failedFilters) {
+		List<EliminatoryFilterReason> failedFilters,
+		List<PositionThesisScoreDiagnostic> thesisScores) {
 }

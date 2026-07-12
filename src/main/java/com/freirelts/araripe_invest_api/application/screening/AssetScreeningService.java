@@ -1,19 +1,23 @@
 package com.freirelts.araripe_invest_api.application.screening;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
+import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
 import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
+import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.screening.AssetScreeningResult;
 import com.freirelts.araripe_invest_api.domain.screening.ScreeningStatus;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetScreeningResultRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,6 +41,7 @@ public class AssetScreeningService {
 	private final TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository;
 	private final FundamentalSnapshotRepository fundamentalSnapshotRepository;
 	private final AssetScreeningResultRepository assetScreeningResultRepository;
+	private final PositionThesisRepository positionThesisRepository;
 	private final EliminatoryFilterEvaluator evaluator;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -44,12 +49,14 @@ public class AssetScreeningService {
 			TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
 			FundamentalSnapshotRepository fundamentalSnapshotRepository,
 			AssetScreeningResultRepository assetScreeningResultRepository,
+			PositionThesisRepository positionThesisRepository,
 			EliminatoryFilterEvaluator evaluator) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
 		this.fundamentalSnapshotRepository = fundamentalSnapshotRepository;
 		this.assetScreeningResultRepository = assetScreeningResultRepository;
+		this.positionThesisRepository = positionThesisRepository;
 		this.evaluator = evaluator;
 	}
 
@@ -105,7 +112,21 @@ public class AssetScreeningService {
 		assetScreeningResultRepository.save(result);
 
 		return new AssetScreeningDiagnostic(asset.getId(), asset.getSymbol(), referenceDate, status, RULE_VERSION,
-				failedFilters);
+				failedFilters, thesisScores(asset, referenceDate));
+	}
+
+	private List<PositionThesisScoreDiagnostic> thesisScores(Asset asset, LocalDate referenceDate) {
+		return positionThesisRepository
+				.findByAssetIdAndReferenceDateAndRuleVersionOrderByScoreDesc(asset.getId(), referenceDate,
+						PositionThesisGenerationService.RULE_VERSION)
+				.stream()
+				.map(this::toScoreDiagnostic)
+				.toList();
+	}
+
+	private PositionThesisScoreDiagnostic toScoreDiagnostic(PositionThesis thesis) {
+		return new PositionThesisScoreDiagnostic(thesis.getId(), thesis.getThesisType(), thesis.getStatus(),
+				thesis.getScore(), thesis.getRuleVersion(), jsonNode(thesis.getScoreBreakdownJson()));
 	}
 
 	private EliminatoryFilterInput buildInput(LocalDate referenceDate, DailyCandle candle,
@@ -158,6 +179,15 @@ public class AssetScreeningService {
 		}
 		catch (JsonProcessingException ex) {
 			throw new IllegalStateException("Could not serialize screening filter audit payload.", ex);
+		}
+	}
+
+	private JsonNode jsonNode(String value) {
+		try {
+			return objectMapper.readTree(value);
+		}
+		catch (JsonProcessingException ex) {
+			throw new IllegalStateException("Could not deserialize thesis score audit payload.", ex);
 		}
 	}
 }

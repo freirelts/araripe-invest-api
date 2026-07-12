@@ -1,6 +1,7 @@
 package com.freirelts.araripe_invest_api.application.thesis;
 
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
+import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
@@ -43,7 +44,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ PositionThesisGenerationService.class, EliminatoryFilterEvaluator.class })
+@Import({ PositionThesisGenerationService.class, EliminatoryFilterEvaluator.class, ScoringService.class })
 class PositionThesisGenerationServiceTests {
 
 	@Container
@@ -103,12 +104,37 @@ class PositionThesisGenerationServiceTests {
 			assertThat(thesis.getSafetyMarginPercent()).isGreaterThanOrEqualTo(new BigDecimal("0.150000"));
 			assertThat(thesis.getStopPrice()).isPositive();
 			assertThat(thesis.getTargetPrice()).isPositive();
+			assertThat(thesis.getRuleVersion()).isEqualTo(ScoringService.RULE_VERSION);
+			assertThat(thesis.getScore()).isBetween(0, 100);
+			assertThat(thesis.getScoreBreakdownJson()).contains("FUNDAMENTAL_QUALITY",
+					"VALUATION_SAFETY_MARGIN", "CASH_GENERATION", "RISK_VOLATILITY",
+					"MACRO_SECTOR_CONTEXT");
 			assertThat(thesis.getReasonsJson()).contains("ENTRY_ZONE");
 			assertThat(thesis.getReviewPointsJson()).contains("preco", "fundamentos", "tendencia");
 			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().isValid()).isTrue();
 			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getSuggestedQuantity())
 					.isEqualTo(50);
 		});
+	}
+
+	@Test
+	void exposesPersistedScoreBreakdownInAssetDiagnostic() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("RADL3", "Raia Drogasil", "Saude"));
+		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
+		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY);
+		saveStrongFundamental(asset, referenceDate);
+		saveDividend(asset, LocalDate.of(2025, 4, 1));
+		saveDividend(asset, LocalDate.of(2026, 4, 1));
+
+		service.generateForAsset(asset, referenceDate);
+
+		assertThat(positionThesisRepository
+				.findByAssetIdAndReferenceDateAndRuleVersionOrderByScoreDesc(asset.getId(), referenceDate,
+						PositionThesisGenerationService.RULE_VERSION))
+				.hasSize(3)
+				.allSatisfy(thesis -> assertThat(thesis.getScoreBreakdownJson()).contains("components",
+						"weightedPoints"));
 	}
 
 	@Test

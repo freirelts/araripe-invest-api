@@ -3,6 +3,9 @@ package com.freirelts.araripe_invest_api.application.thesis;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
+import com.freirelts.araripe_invest_api.application.scoring.ScoreResult;
+import com.freirelts.araripe_invest_api.application.scoring.ScoringInput;
+import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterCode;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterInput;
@@ -38,7 +41,7 @@ import java.util.List;
 @Service
 public class PositionThesisGenerationService {
 
-	public static final String RULE_VERSION = "phase6-v1";
+	public static final String RULE_VERSION = ScoringService.RULE_VERSION;
 	private static final String DERIVED_SOURCE = "araripe-indicators";
 	private static final BigDecimal CAPITAL_BASE = new BigDecimal("10000.00");
 	private static final BigDecimal DEFAULT_TARGET_ALLOCATION_PERCENT = new BigDecimal("10.000000");
@@ -59,13 +62,14 @@ public class PositionThesisGenerationService {
 	private final PositionThesisRepository positionThesisRepository;
 	private final AllocationPlanRepository allocationPlanRepository;
 	private final EliminatoryFilterEvaluator eliminatoryFilterEvaluator;
+	private final ScoringService scoringService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public PositionThesisGenerationService(AssetRepository assetRepository, DailyCandleRepository dailyCandleRepository,
 			TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
 			FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
 			PositionThesisRepository positionThesisRepository, AllocationPlanRepository allocationPlanRepository,
-			EliminatoryFilterEvaluator eliminatoryFilterEvaluator) {
+			EliminatoryFilterEvaluator eliminatoryFilterEvaluator, ScoringService scoringService) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
@@ -74,6 +78,7 @@ public class PositionThesisGenerationService {
 		this.positionThesisRepository = positionThesisRepository;
 		this.allocationPlanRepository = allocationPlanRepository;
 		this.eliminatoryFilterEvaluator = eliminatoryFilterEvaluator;
+		this.scoringService = scoringService;
 	}
 
 	@Transactional
@@ -134,11 +139,14 @@ public class PositionThesisGenerationService {
 				"Tendencia longa saudavel ou neutra evita tese contra deterioracao estrutural.");
 
 		boolean mandatory = profitable && cashHealthy && debtControlled && valuationComplete;
+		ScoreResult scoreResult = score(context, ThesisType.QUALITY_REASONABLE_PRICE, fairPrice, priceCeiling,
+				safetyMargin);
+		score = scoreResult.finalScore();
 		ThesisStatus status = status(context, score, mandatory, priceCeiling, priceAttractive(context.currentPrice(),
 				priceCeiling, safetyMargin));
 
 		return draft(context, ThesisType.QUALITY_REASONABLE_PRICE, status, score, fairPrice, priceCeiling, safetyMargin,
-				reasons);
+				reasons, scoreResult);
 	}
 
 	private ThesisDraft evaluateSustainableDividends(ThesisMarketContext context) {
@@ -188,11 +196,14 @@ public class PositionThesisGenerationService {
 
 		boolean mandatory = attractiveYield && recurringDividends && payoutHealthy && profitAndCashCoverage
 				&& priceCeiling != null && safetyMargin != null;
+		ScoreResult scoreResult = score(context, ThesisType.SUSTAINABLE_DIVIDENDS, fairPrice, priceCeiling,
+				safetyMargin);
+		score = scoreResult.finalScore();
 		ThesisStatus status = status(context, score, mandatory, priceCeiling, priceAttractive(context.currentPrice(),
 				priceCeiling, safetyMargin));
 
 		return draft(context, ThesisType.SUSTAINABLE_DIVIDENDS, status, score, fairPrice, priceCeiling, safetyMargin,
-				reasons);
+				reasons, scoreResult);
 	}
 
 	private ThesisDraft evaluateProfitableGrowth(ThesisMarketContext context) {
@@ -239,11 +250,14 @@ public class PositionThesisGenerationService {
 
 		boolean mandatory = revenueGrowth && profitGrowth && profitability && trendHealthy && valuationAcceptable
 				&& fairPrice != null && priceCeiling != null && safetyMargin != null;
+		ScoreResult scoreResult = score(context, ThesisType.PROFITABLE_GROWTH_HEALTHY_TREND, fairPrice, priceCeiling,
+				safetyMargin);
+		score = scoreResult.finalScore();
 		ThesisStatus status = status(context, score, mandatory, priceCeiling, priceAttractive(context.currentPrice(),
 				priceCeiling, safetyMargin));
 
 		return draft(context, ThesisType.PROFITABLE_GROWTH_HEALTHY_TREND, status, score, fairPrice, priceCeiling,
-				safetyMargin, reasons);
+				safetyMargin, reasons, scoreResult);
 	}
 
 	private PositionThesis save(ThesisDraft draft) {
@@ -257,7 +271,7 @@ public class PositionThesisGenerationService {
 		thesis.setThesisType(draft.thesisType());
 		thesis.setStatus(draft.status());
 		thesis.setScore(draft.score());
-		thesis.setScoreBreakdownJson(json(scoreBreakdown(draft)));
+		thesis.setScoreBreakdownJson(json(draft.scoreResult()));
 		thesis.setReasonsJson(json(draft.reasons()));
 		thesis.setFailedFiltersJson(json(draft.context().failedFilters()));
 		thesis.setFairPriceEstimate(draft.fairPrice());
@@ -372,12 +386,13 @@ public class PositionThesisGenerationService {
 	}
 
 	private ThesisDraft draft(ThesisMarketContext context, ThesisType thesisType, ThesisStatus status, int score,
-			BigDecimal fairPrice, BigDecimal priceCeiling, BigDecimal safetyMargin, List<ThesisReason> reasons) {
+			BigDecimal fairPrice, BigDecimal priceCeiling, BigDecimal safetyMargin, List<ThesisReason> reasons,
+			ScoreResult scoreResult) {
 		if (!context.failedFilters().isEmpty()) {
 			reasons.add(new ThesisReason("dados", "ELIMINATORY_FILTER_BLOCK",
 					"Ativo bloqueado pelos filtros eliminatorios; tese nao pode virar recomendacao acionavel."));
 			status = blockedStatus(context.failedFilters());
-			score = 0;
+			score = scoreResult.finalScore();
 		}
 		if (priceCeiling != null && context.currentPrice() != null) {
 			reasons.add(new ThesisReason("valuation", "ENTRY_ZONE",
@@ -385,7 +400,20 @@ public class PositionThesisGenerationService {
 							RoundingMode.HALF_UP) + "."));
 		}
 		return new ThesisDraft(context, thesisType, status, Math.min(100, Math.max(0, score)), fairPrice, priceCeiling,
-				safetyMargin, reasons);
+				safetyMargin, reasons, scoreResult);
+	}
+
+	private ScoreResult score(ThesisMarketContext context, ThesisType thesisType, BigDecimal fairPrice,
+			BigDecimal priceCeiling, BigDecimal safetyMargin) {
+		return scoringService.score(new ScoringInput(thesisType, context.currentPrice(), fairPrice, priceCeiling,
+				safetyMargin, context.trailingPe(), context.priceToBook(), context.enterpriseToEbitda(),
+				context.earningsPerShare(), context.dividendYield(), context.profitMargin(), context.grossMargin(),
+				context.ebitdaMargin(), context.operatingMargin(), context.roe(), context.roa(), context.debtToEquity(),
+				context.revenueGrowth(), context.earningsGrowth(), context.annualRevenueGrowth(),
+				context.quarterlyRevenueGrowth(), context.annualEarningsGrowth(), context.quarterlyEarningsGrowth(),
+				context.ebitdaGrowth(), context.freeCashflow(), context.operatingCashflow(), context.sma200(),
+				context.historicalVolatility(), context.recentDrawdown(), context.trendStatus(),
+				context.cashDividendEventsLastThreeYears(), context.failedFilters()));
 	}
 
 	private ThesisStatus status(ThesisMarketContext context, int score, boolean mandatory, BigDecimal priceCeiling,
@@ -454,11 +482,6 @@ public class PositionThesisGenerationService {
 						+ ", pois a margem de seguranca fica comprimida."),
 				new ReviewPoint("fundamentos", fundamentals),
 				new ReviewPoint("tendencia", "Reavaliar se perder a media de 200 periodos ou se a tendencia virar DOWN_TREND."));
-	}
-
-	private ScoreBreakdown scoreBreakdown(ThesisDraft draft) {
-		return new ScoreBreakdown(draft.score(), draft.thesisType().name(), RULE_VERSION,
-				"Score preliminar da Fase 6; a composicao completa sera refinada na Fase 7.");
 	}
 
 	private BigDecimal stopPrice(ThesisMarketContext context) {
@@ -686,6 +709,10 @@ public class PositionThesisGenerationService {
 			return technical == null ? null : technical.getHistoricalVolatility();
 		}
 
+		BigDecimal recentDrawdown() {
+			return technical == null ? null : technical.getRecentDrawdown();
+		}
+
 		TrendStatus trendStatus() {
 			return technical == null ? TrendStatus.INSUFFICIENT_DATA : technical.getTrendStatus();
 		}
@@ -693,7 +720,8 @@ public class PositionThesisGenerationService {
 	}
 
 	private record ThesisDraft(ThesisMarketContext context, ThesisType thesisType, ThesisStatus status, int score,
-			BigDecimal fairPrice, BigDecimal priceCeiling, BigDecimal safetyMargin, List<ThesisReason> reasons) {
+			BigDecimal fairPrice, BigDecimal priceCeiling, BigDecimal safetyMargin, List<ThesisReason> reasons,
+			ScoreResult scoreResult) {
 	}
 
 	private record ThesisReason(String category, String code, String message) {
@@ -702,6 +730,4 @@ public class PositionThesisGenerationService {
 	private record ReviewPoint(String type, String message) {
 	}
 
-	private record ScoreBreakdown(int preliminaryScore, String thesisType, String ruleVersion, String note) {
-	}
 }
