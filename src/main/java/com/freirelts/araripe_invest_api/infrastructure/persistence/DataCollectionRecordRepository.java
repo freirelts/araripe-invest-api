@@ -12,4 +12,6 @@ public interface DataCollectionRecordRepository extends JpaRepository<DataCollec
 
 	List<DataCollectionRecord> findByReferenceDateAndCategory(LocalDate referenceDate,
 			DataCollectionCategory category);
+
+	List<DataCollectionRecord> findByReferenceDateOrderByCreatedAtDesc(LocalDate referenceDate);
 }

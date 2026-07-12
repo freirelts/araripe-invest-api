@@ -100,4 +100,7 @@ public class NotificationEvent {
 
 	@Column(name = "sent_at")
 	private Instant sentAt;
+
+	@Column(name = "read_at")
+	private Instant readAt;
 }

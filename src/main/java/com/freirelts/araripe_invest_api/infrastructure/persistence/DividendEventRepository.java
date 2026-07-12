@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -16,4 +17,6 @@ public interface DividendEventRepository extends JpaRepository<DividendEvent, UU
 
 	long countByAssetIdAndEventTypeInAndLastDatePriorBetween(UUID assetId, Collection<DividendEventType> eventTypes,
 			LocalDate from, LocalDate to);
+
+	List<DividendEvent> findTop20ByAssetIdOrderByLastDatePriorDescPaymentDateDesc(UUID assetId);
 }
