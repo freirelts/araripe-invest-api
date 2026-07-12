@@ -3,6 +3,10 @@ package com.freirelts.araripe_invest_api.application.thesis;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationInput;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationResult;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationSettings;
 import com.freirelts.araripe_invest_api.application.scoring.ScoreResult;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringInput;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
@@ -43,14 +47,10 @@ public class PositionThesisGenerationService {
 
 	public static final String RULE_VERSION = ScoringService.RULE_VERSION;
 	private static final String DERIVED_SOURCE = "araripe-indicators";
-	private static final BigDecimal CAPITAL_BASE = new BigDecimal("10000.00");
 	private static final BigDecimal DEFAULT_TARGET_ALLOCATION_PERCENT = new BigDecimal("10.000000");
 	private static final BigDecimal REDUCED_TARGET_ALLOCATION_PERCENT = new BigDecimal("6.000000");
 	private static final BigDecimal MIN_SAFETY_MARGIN = new BigDecimal("0.150000");
 	private static final BigDecimal PRICE_REVIEW_PREMIUM = new BigDecimal("1.150000");
-	private static final BigDecimal STOP_PERCENT = new BigDecimal("0.150000");
-	private static final BigDecimal TARGET_RETURN_FLOOR = new BigDecimal("0.250000");
-	private static final BigDecimal ONE_HUNDRED = new BigDecimal("100.000000");
 	private static final List<DividendEventType> CASH_DIVIDEND_EVENTS = List.of(DividendEventType.DIVIDEND,
 			DividendEventType.JCP);
 
@@ -63,13 +63,15 @@ public class PositionThesisGenerationService {
 	private final AllocationPlanRepository allocationPlanRepository;
 	private final EliminatoryFilterEvaluator eliminatoryFilterEvaluator;
 	private final ScoringService scoringService;
+	private final RiskAllocationService riskAllocationService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public PositionThesisGenerationService(AssetRepository assetRepository, DailyCandleRepository dailyCandleRepository,
 			TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
 			FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
 			PositionThesisRepository positionThesisRepository, AllocationPlanRepository allocationPlanRepository,
-			EliminatoryFilterEvaluator eliminatoryFilterEvaluator, ScoringService scoringService) {
+			EliminatoryFilterEvaluator eliminatoryFilterEvaluator, ScoringService scoringService,
+			RiskAllocationService riskAllocationService) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
@@ -79,6 +81,7 @@ public class PositionThesisGenerationService {
 		this.allocationPlanRepository = allocationPlanRepository;
 		this.eliminatoryFilterEvaluator = eliminatoryFilterEvaluator;
 		this.scoringService = scoringService;
+		this.riskAllocationService = riskAllocationService;
 	}
 
 	@Transactional
@@ -261,6 +264,7 @@ public class PositionThesisGenerationService {
 	}
 
 	private PositionThesis save(ThesisDraft draft) {
+		RiskAllocationResult risk = riskAllocation(draft);
 		PositionThesis thesis = positionThesisRepository
 				.findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(draft.context().asset().getId(),
 						draft.context().referenceDate(), draft.thesisType(), RULE_VERSION)
@@ -277,44 +281,56 @@ public class PositionThesisGenerationService {
 		thesis.setFairPriceEstimate(draft.fairPrice());
 		thesis.setPriceCeiling(draft.priceCeiling());
 		thesis.setSafetyMarginPercent(draft.safetyMargin());
-		thesis.setStopPrice(stopPrice(draft.context()));
-		thesis.setTargetPrice(targetPrice(draft.context(), draft.fairPrice()));
+		thesis.setStopPrice(risk.stopPrice());
+		thesis.setTargetPrice(risk.targetPrice());
 		thesis.setReviewPointsJson(json(reviewPoints(draft)));
 		thesis.setRuleVersion(RULE_VERSION);
 		PositionThesis saved = positionThesisRepository.save(thesis);
-		upsertAllocationPlan(saved, draft);
+		upsertAllocationPlan(saved, risk);
 		return saved;
 	}
 
-	private void upsertAllocationPlan(PositionThesis thesis, ThesisDraft draft) {
-		if (!positive(draft.context().currentPrice()) || !positive(draft.priceCeiling())) {
+	private RiskAllocationResult riskAllocation(ThesisDraft draft) {
+		return riskAllocationService.calculate(new RiskAllocationInput(RiskAllocationSettings.conservativeDefault(),
+				draft.status(), draft.context().currentPrice(), draft.fairPrice(), draft.priceCeiling(),
+				draft.safetyMargin(), allocationPercent(draft.context()), BigDecimal.ZERO, BigDecimal.ZERO, null, null,
+				null, draft.context().recentDrawdown(), draft.context().trendStatus(),
+				fundamentalsDeteriorated(draft.context())));
+	}
+
+	private void upsertAllocationPlan(PositionThesis thesis, RiskAllocationResult risk) {
+		if (!positive(risk.currentPrice()) || !positive(risk.priceCeiling())) {
 			return;
 		}
 		AllocationPlan plan = allocationPlanRepository.findByThesisId(thesis.getId())
 				.orElseGet(() -> new AllocationPlan(thesis));
-		BigDecimal targetAllocation = allocationPercent(draft.context());
-		BigDecimal maxPositionValue = CAPITAL_BASE.multiply(targetAllocation)
-				.divide(ONE_HUNDRED, 2, RoundingMode.HALF_UP);
-		boolean valid = draft.status() == ThesisStatus.APORTE_PLANEJADO || draft.status() == ThesisStatus.OPORTUNIDADE;
-		int quantity = valid ? maxPositionValue.divide(draft.context().currentPrice(), 0, RoundingMode.DOWN).intValue()
-				: 0;
 
-		// Alocacao sugerida respeita teto por ativo e entrada parcelada; quando preco passa do teto, quantidade e zero.
+		// O plano persistido guarda os limites usados para auditoria: teto por ativo/setor, reserva de caixa,
+		// parcelas de entrada, stop, objetivo e motivo de bloqueio quando alguma regra de risco falha.
 		plan.setThesis(thesis);
-		plan.setCapitalBase(CAPITAL_BASE);
-		plan.setTargetAllocationPercent(targetAllocation);
-		plan.setMaxAllocationPerAssetPercent(DEFAULT_TARGET_ALLOCATION_PERCENT);
-		plan.setMaxPositionValue(maxPositionValue);
-		plan.setCurrentPrice(scaleMoney(draft.context().currentPrice()));
-		plan.setPriceCeiling(scaleMoney(draft.priceCeiling()));
-		plan.setSuggestedQuantity(quantity);
-		plan.setRecommendedAction(draft.status().name());
-		plan.setFirstTrancheValue(valid ? maxPositionValue.multiply(new BigDecimal("0.500000"))
-				.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-		plan.setRemainingPlannedValue(valid ? maxPositionValue.multiply(new BigDecimal("0.500000"))
-				.setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-		plan.setValid(valid);
-		plan.setInvalidReason(valid ? null : "Sem aporte sugerido porque a tese, margem de seguranca ou preco teto nao foram atendidos.");
+		plan.setCapitalBase(risk.capitalBase());
+		plan.setTargetAllocationPercent(risk.targetAllocationPercent());
+		plan.setMaxAllocationPerAssetPercent(risk.maxAllocationPerAssetPercent());
+		plan.setMaxAllocationPerSectorPercent(risk.maxAllocationPerSectorPercent());
+		plan.setMinimumCashReservePercent(risk.minimumCashReservePercent());
+		plan.setMaxPositionValue(risk.maxPositionValue());
+		plan.setAvailableForAsset(risk.availableForAsset());
+		plan.setAvailableForSector(risk.availableForSector());
+		plan.setCurrentPrice(risk.currentPrice());
+		plan.setPriceCeiling(risk.priceCeiling());
+		plan.setFairPriceEstimate(risk.fairPriceEstimate());
+		plan.setSafetyMarginPercent(risk.safetyMarginPercent());
+		plan.setEstimatedUpsidePercent(risk.estimatedUpsidePercent());
+		plan.setSuggestedQuantity(risk.suggestedQuantity());
+		plan.setRecommendedAction(risk.recommendedAction());
+		plan.setFirstTrancheValue(risk.firstTrancheValue());
+		plan.setSecondTrancheValue(risk.secondTrancheValue());
+		plan.setThirdTrancheValue(risk.thirdTrancheValue());
+		plan.setRemainingPlannedValue(risk.remainingPlannedValue());
+		plan.setStopPrice(risk.stopPrice());
+		plan.setTargetPrice(risk.targetPrice());
+		plan.setValid(risk.valid());
+		plan.setInvalidReason(risk.invalidReason());
 		allocationPlanRepository.save(plan);
 	}
 
@@ -484,29 +500,18 @@ public class PositionThesisGenerationService {
 				new ReviewPoint("tendencia", "Reavaliar se perder a media de 200 periodos ou se a tendencia virar DOWN_TREND."));
 	}
 
-	private BigDecimal stopPrice(ThesisMarketContext context) {
-		if (!positive(context.currentPrice())) {
-			return null;
-		}
-		// Stop inicial usa 15% abaixo do preco atual para explicitar risco antes de haver preco medio do cliente.
-		BigDecimal priceStop = context.currentPrice().multiply(BigDecimal.ONE.subtract(STOP_PERCENT));
-		BigDecimal trendStop = context.sma200() == null ? null : context.sma200().multiply(new BigDecimal("0.950000"));
-		return scaleMoney(maximumPositive(priceStop, trendStop));
-	}
-
-	private BigDecimal targetPrice(ThesisMarketContext context, BigDecimal fairPrice) {
-		if (!positive(context.currentPrice())) {
-			return null;
-		}
-		// Objetivo inicial usa o valor justo estimado; sem valuation disponivel, aplica retorno alvo conservador de 25%.
-		BigDecimal floorTarget = context.currentPrice().multiply(BigDecimal.ONE.add(TARGET_RETURN_FLOOR));
-		return scaleMoney(fairPrice == null ? floorTarget : fairPrice);
-	}
-
 	private BigDecimal allocationPercent(ThesisMarketContext context) {
 		boolean higherRisk = greaterThan(context.historicalVolatility(), new BigDecimal("0.400000"))
 				|| greaterThan(context.debtToEquity(), new BigDecimal("1.500000"));
 		return higherRisk ? REDUCED_TARGET_ALLOCATION_PERCENT : DEFAULT_TARGET_ALLOCATION_PERCENT;
+	}
+
+	private boolean fundamentalsDeteriorated(ThesisMarketContext context) {
+		return context.failedFilters().stream()
+				.map(EliminatoryFilterReason::code)
+				.anyMatch(code -> code == EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION
+						|| code == EliminatoryFilterCode.RECURRING_LOSSES
+						|| code == EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW);
 	}
 
 	private BigDecimal analysisClose(DailyCandle candle) {

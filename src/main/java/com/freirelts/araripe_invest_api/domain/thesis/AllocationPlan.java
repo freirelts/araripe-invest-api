@@ -42,14 +42,35 @@ public class AllocationPlan {
 	@Column(name = "max_allocation_per_asset_percent", nullable = false, precision = 10, scale = 6)
 	private BigDecimal maxAllocationPerAssetPercent;
 
+	@Column(name = "max_allocation_per_sector_percent", precision = 10, scale = 6)
+	private BigDecimal maxAllocationPerSectorPercent;
+
+	@Column(name = "minimum_cash_reserve_percent", precision = 10, scale = 6)
+	private BigDecimal minimumCashReservePercent;
+
 	@Column(name = "max_position_value", nullable = false, precision = 19, scale = 2)
 	private BigDecimal maxPositionValue;
+
+	@Column(name = "available_for_asset", precision = 19, scale = 2)
+	private BigDecimal availableForAsset;
+
+	@Column(name = "available_for_sector", precision = 19, scale = 2)
+	private BigDecimal availableForSector;
 
 	@Column(name = "current_price", nullable = false, precision = 19, scale = 6)
 	private BigDecimal currentPrice;
 
 	@Column(name = "price_ceiling", nullable = false, precision = 19, scale = 6)
 	private BigDecimal priceCeiling;
+
+	@Column(name = "fair_price_estimate", precision = 19, scale = 6)
+	private BigDecimal fairPriceEstimate;
+
+	@Column(name = "safety_margin_percent", precision = 10, scale = 6)
+	private BigDecimal safetyMarginPercent;
+
+	@Column(name = "estimated_upside_percent", precision = 10, scale = 6)
+	private BigDecimal estimatedUpsidePercent;
 
 	@Column(name = "suggested_quantity", nullable = false)
 	private int suggestedQuantity;
@@ -60,8 +81,20 @@ public class AllocationPlan {
 	@Column(name = "first_tranche_value", precision = 19, scale = 2)
 	private BigDecimal firstTrancheValue;
 
+	@Column(name = "second_tranche_value", precision = 19, scale = 2)
+	private BigDecimal secondTrancheValue;
+
+	@Column(name = "third_tranche_value", precision = 19, scale = 2)
+	private BigDecimal thirdTrancheValue;
+
 	@Column(name = "remaining_planned_value", precision = 19, scale = 2)
 	private BigDecimal remainingPlannedValue;
+
+	@Column(name = "stop_price", precision = 19, scale = 6)
+	private BigDecimal stopPrice;
+
+	@Column(name = "target_price", precision = 19, scale = 6)
+	private BigDecimal targetPrice;
 
 	@Column(nullable = false)
 	private boolean valid;

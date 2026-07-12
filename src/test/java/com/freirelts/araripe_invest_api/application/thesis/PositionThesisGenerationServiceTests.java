@@ -1,6 +1,7 @@
 package com.freirelts.araripe_invest_api.application.thesis;
 
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
@@ -44,7 +45,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({ PositionThesisGenerationService.class, EliminatoryFilterEvaluator.class, ScoringService.class })
+@Import({ PositionThesisGenerationService.class, EliminatoryFilterEvaluator.class, ScoringService.class,
+		RiskAllocationService.class })
 class PositionThesisGenerationServiceTests {
 
 	@Container
@@ -114,6 +116,43 @@ class PositionThesisGenerationServiceTests {
 			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().isValid()).isTrue();
 			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getSuggestedQuantity())
 					.isEqualTo(50);
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow()
+					.getMaxAllocationPerSectorPercent()).isEqualByComparingTo("25.000000");
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow()
+					.getMinimumCashReservePercent()).isEqualByComparingTo("10.000000");
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getFirstTrancheValue())
+					.isEqualByComparingTo("500.00");
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getSecondTrancheValue())
+					.isEqualByComparingTo("250.00");
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getThirdTrancheValue())
+					.isEqualByComparingTo("250.00");
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getStopPrice())
+					.isEqualByComparingTo(thesis.getStopPrice());
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getTargetPrice())
+					.isEqualByComparingTo(thesis.getTargetPrice());
+		});
+	}
+
+	@Test
+	void persistsBlockedAllocationPlanWhenPriceIsAboveCeiling() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("CARO3", "Companhia Cara", "Consumo"));
+		saveValidCandle(asset, referenceDate, new BigDecimal("34.50"));
+		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY);
+		saveStrongFundamental(asset, referenceDate);
+		saveDividend(asset, LocalDate.of(2025, 4, 1));
+		saveDividend(asset, LocalDate.of(2026, 4, 1));
+
+		service.generateForAsset(asset, referenceDate);
+
+		PositionThesis qualityThesis = positionThesisRepository
+				.findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(asset.getId(), referenceDate,
+						ThesisType.QUALITY_REASONABLE_PRICE, PositionThesisGenerationService.RULE_VERSION)
+				.orElseThrow();
+		assertThat(allocationPlanRepository.findByThesisId(qualityThesis.getId())).hasValueSatisfying(plan -> {
+			assertThat(plan.isValid()).isFalse();
+			assertThat(plan.getSuggestedQuantity()).isZero();
+			assertThat(plan.getInvalidReason()).contains("preco teto");
 		});
 	}
 
