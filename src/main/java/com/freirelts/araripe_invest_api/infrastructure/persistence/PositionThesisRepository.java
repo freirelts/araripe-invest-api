@@ -4,6 +4,7 @@ import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +12,7 @@ public interface PositionThesisRepository extends JpaRepository<PositionThesis, 
 
 	Optional<PositionThesis> findTopByAssetIdAndThesisTypeOrderByReferenceDateDescCreatedAtDesc(UUID assetId,
 			ThesisType thesisType);
+
+	Optional<PositionThesis> findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(UUID assetId,
+			LocalDate referenceDate, ThesisType thesisType, String ruleVersion);
 }

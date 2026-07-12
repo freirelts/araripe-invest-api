@@ -71,4 +71,8 @@ public class AllocationPlan {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
+
+	public AllocationPlan(PositionThesis thesis) {
+		this.thesis = thesis;
+	}
 }
