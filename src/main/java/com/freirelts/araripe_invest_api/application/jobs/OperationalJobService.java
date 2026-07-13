@@ -8,13 +8,11 @@ import com.freirelts.araripe_invest_api.application.ai.AiContextSource;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiRequest;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisService;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
-import com.freirelts.araripe_invest_api.application.marketdata.HistoricalDataRequest;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
 import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
-import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.jobs.JobName;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRun;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRunStatus;
@@ -24,7 +22,6 @@ import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
@@ -53,7 +50,6 @@ public class OperationalJobService {
 
 	private final JobRunRepository jobRunRepository;
 	private final UserRepository userRepository;
-	private final AssetRepository assetRepository;
 	private final PositionThesisRepository positionThesisRepository;
 	private final NotificationEventRepository notificationEventRepository;
 	private final MarketDataCollectionService marketDataCollectionService;
@@ -65,15 +61,14 @@ public class OperationalJobService {
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public OperationalJobService(JobRunRepository jobRunRepository, UserRepository userRepository,
-			AssetRepository assetRepository, PositionThesisRepository positionThesisRepository,
-			NotificationEventRepository notificationEventRepository, MarketDataCollectionService marketDataCollectionService,
+			PositionThesisRepository positionThesisRepository, NotificationEventRepository notificationEventRepository,
+			MarketDataCollectionService marketDataCollectionService,
 			IndicatorCalculationService indicatorCalculationService, AssetScreeningService assetScreeningService,
 			PositionThesisGenerationService thesisGenerationService,
 			EconomicContextAnalysisService economicContextAnalysisService,
 			PositionRecommendationService positionRecommendationService) {
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
-		this.assetRepository = assetRepository;
 		this.positionThesisRepository = positionThesisRepository;
 		this.notificationEventRepository = notificationEventRepository;
 		this.marketDataCollectionService = marketDataCollectionService;
@@ -113,8 +108,7 @@ public class OperationalJobService {
 	private Map<String, Object> executeJob(JobName jobName, LocalDate referenceDate, JobRunTrigger trigger,
 			UUID requestedByUserId) {
 		return switch (jobName) {
-			case DAILY_MARKET_DATA_COLLECTION -> collectMarketData();
-			case FUNDAMENTAL_DATA_COLLECTION -> collectFundamentalData();
+			case DAILY_MARKET_DATA_COLLECTION, FUNDAMENTAL_DATA_COLLECTION -> collectMarketAndFundamentalData();
 			case INDICATOR_CALCULATION -> count("indicatorResults",
 					() -> indicatorCalculationService.calculateForActiveAssets(referenceDate).size());
 			case FILTERS_AND_THESES -> filtersAndTheses(referenceDate);
@@ -133,9 +127,9 @@ public class OperationalJobService {
 		boolean failed = false;
 		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses,
 		// contexto de IA apenas depois da tese deterministica e varredura de carteira antes de qualquer notificacao.
-		for (JobName step : List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.FUNDAMENTAL_DATA_COLLECTION,
-				JobName.INDICATOR_CALCULATION, JobName.FILTERS_AND_THESES, JobName.RANKING,
-				JobName.AI_CONTEXT_ENRICHMENT, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST)) {
+		for (JobName step : List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
+				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.AI_CONTEXT_ENRICHMENT, JobName.PORTFOLIO_SCAN,
+				JobName.DAILY_NOTIFICATION_DIGEST)) {
 			JobRunResult result = execute(step, referenceDate, trigger, requestedByUserId);
 			steps.add(Map.of("runId", result.runId().toString(), "jobName", result.jobName().name(), "status",
 					result.status().name(), "summary", result.summary()));
@@ -144,23 +138,13 @@ public class OperationalJobService {
 		return Map.of("steps", steps, "failed", failed);
 	}
 
-	private Map<String, Object> collectMarketData() {
+	private Map<String, Object> collectMarketAndFundamentalData() {
 		MarketDataCollectionSummary summary = marketDataCollectionService.collectActiveAssetData(DEFAULT_MACRO_SLUGS);
-		return Map.of("candlesPersisted", summary.candlesPersisted(), "macroSnapshotsPersisted",
-				summary.macroSnapshotsPersisted(), "collectionRecordsPersisted", summary.collectionRecordsPersisted(),
-				"warnings", summary.warnings());
-	}
-
-	private Map<String, Object> collectFundamentalData() {
-		List<String> symbols = assetRepository.findByActiveTrueOrderBySymbolAsc().stream()
-				.map(Asset::getSymbol)
-				.toList();
-		MarketDataCollectionSummary summary = marketDataCollectionService.collect(symbols,
-				HistoricalDataRequest.dailyAscending("1y"), DEFAULT_MACRO_SLUGS);
-		return Map.of("fundamentalSnapshotsPersisted", summary.fundamentalSnapshotsPersisted(),
-				"financialStatementsPersisted", summary.financialStatementsPersisted(), "dividendEventsPersisted",
-				summary.dividendEventsPersisted(), "collectionRecordsPersisted", summary.collectionRecordsPersisted(),
-				"warnings", summary.warnings());
+		return Map.of("candlesPersisted", summary.candlesPersisted(), "fundamentalSnapshotsPersisted",
+				summary.fundamentalSnapshotsPersisted(), "financialStatementsPersisted",
+				summary.financialStatementsPersisted(), "dividendEventsPersisted", summary.dividendEventsPersisted(),
+				"macroSnapshotsPersisted", summary.macroSnapshotsPersisted(), "collectionRecordsPersisted",
+				summary.collectionRecordsPersisted(), "warnings", summary.warnings());
 	}
 
 	private Map<String, Object> filtersAndTheses(LocalDate referenceDate) {
