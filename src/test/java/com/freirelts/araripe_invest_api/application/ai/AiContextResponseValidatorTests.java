@@ -24,6 +24,7 @@ class AiContextResponseValidatorTests {
 				"Impacto neutro sobre a tese principal.",
 				"MEDIA",
 				List.of("Banco Central SGS"),
+				List.of("https://www.bcb.gov.br/"),
 				"Manter recomendacao deterministica sem alterar objetivo ou stop.",
 				false));
 
@@ -40,11 +41,29 @@ class AiContextResponseValidatorTests {
 				"Impacto neutro.",
 				"BAIXA",
 				List.of("Fonte nao configurada"),
+				List.of("https://example.com/noticia"),
 				"Explicacao preserva recomendacao base.",
 				false));
 
 		assertThat(result.status()).isEqualTo(AiValidationStatus.INVALID);
 		assertThat(result.errorMessage()).contains("configured source");
+	}
+
+	@Test
+	void rejectsResponseWithoutExternalWebUrl() {
+		AiContextValidationResult result = validator.validate(request(), new AiContextStructuredOutput(
+				"Contexto macro neutro.",
+				List.of(),
+				List.of(),
+				"Impacto neutro.",
+				"BAIXA",
+				List.of("Banco Central SGS"),
+				List.of("internal://source"),
+				"Explicacao preserva recomendacao base.",
+				false));
+
+		assertThat(result.status()).isEqualTo(AiValidationStatus.INVALID);
+		assertThat(result.errorMessage()).contains("external web source URL");
 	}
 
 	private EconomicContextAiRequest request() {

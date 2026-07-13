@@ -13,7 +13,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -23,7 +22,6 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.concurrent.TimeoutException;
 
-@Component
 class OpenAiEconomicContextAiProvider implements EconomicContextAiProvider {
 
 	static final String PROVIDER = "openai-spring-ai";

@@ -48,6 +48,7 @@ public class OperationalJobService {
 	private static final Logger log = LoggerFactory.getLogger(OperationalJobService.class);
 	private static final List<String> DEFAULT_MACRO_SLUGS = List.of("selic", "ipca", "usdbrl");
 	private static final String AI_SOURCE_NAME = "Araripe Invest deterministic engine";
+	private static final String WEB_SEARCH_SOURCE_NAME = "OpenAI Web Search";
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
 	};
 
@@ -240,7 +241,9 @@ public class OperationalJobService {
 		return new EconomicContextAiRequest(AiAssetContext.from(thesis.getAsset()), thesis.getReferenceDate(),
 				thesis.getThesisType(), null, thesis.getScore(), data,
 				List.of(new AiContextSource(AI_SOURCE_NAME, "internal://position-theses/" + thesis.getId(),
-						"Tese deterministica, score, valuation, stop, objetivo e margem de seguranca.")),
+						"Tese deterministica, score, valuation, stop, objetivo e margem de seguranca."),
+						new AiContextSource(WEB_SEARCH_SOURCE_NAME, "openai://web_search",
+								"Busca web obrigatoria por noticias economicas, institucionais e setoriais recentes.")),
 				List.of("IA nao aprova ativo bloqueado por filtro deterministico.",
 						"IA nao altera preco teto, stop, objetivo ou alocacao."));
 	}

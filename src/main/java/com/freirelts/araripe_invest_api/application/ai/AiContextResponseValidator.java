@@ -28,6 +28,9 @@ public class AiContextResponseValidator {
 		if (!referencesConfiguredSource(request, output)) {
 			return AiContextValidationResult.invalid("AI response cites no configured source.");
 		}
+		if (!hasExternalWebEvidence(output)) {
+			return AiContextValidationResult.invalid("AI response must include at least one external web source URL.");
+		}
 		return AiContextValidationResult.valid();
 	}
 
@@ -44,6 +47,30 @@ public class AiContextResponseValidator {
 			}
 		}
 		return false;
+	}
+
+	private boolean hasExternalWebEvidence(AiContextStructuredOutput output) {
+		if (output.sourceUrls() != null) {
+			for (String url : output.sourceUrls()) {
+				if (isExternalUrl(url)) {
+					return true;
+				}
+			}
+		}
+		for (String source : output.sources()) {
+			if (isExternalUrl(source)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private boolean isExternalUrl(String value) {
+		if (isBlank(value)) {
+			return false;
+		}
+		String normalized = value.toLowerCase(Locale.ROOT);
+		return normalized.startsWith("https://") || normalized.startsWith("http://");
 	}
 
 	private boolean isBlank(String value) {

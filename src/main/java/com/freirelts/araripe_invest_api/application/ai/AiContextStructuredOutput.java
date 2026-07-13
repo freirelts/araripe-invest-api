@@ -9,6 +9,7 @@ public record AiContextStructuredOutput(
 		String thesisImpact,
 		String confidenceLevel,
 		List<String> sources,
+		List<String> sourceUrls,
 		String recommendationExplanation,
 		boolean conflictsWithDeterministicRecommendation) {
 }

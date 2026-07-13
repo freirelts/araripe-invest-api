@@ -21,7 +21,9 @@ class DeterministicFallbackEconomicContextAiProviderTests {
 	@Test
 	void returnsUnavailableTraceWhenOpenAiIsNotConfigured() {
 		DeterministicFallbackEconomicContextAiProvider provider = new DeterministicFallbackEconomicContextAiProvider(
-				new OpenAiProperties(true, "gpt-4.1-mini", 30, 900, "macro-sector-context-v1"), new ObjectMapper());
+				new OpenAiProperties(true, "gpt-4.1-mini", "test-key", "https://api.openai.com/v1", 30, 900,
+						"macro-sector-context-v1", "gpt-5.5", "medium"),
+				new ObjectMapper());
 
 		EconomicContextAiResult result = provider.analyze(new EconomicContextAiRequest(
 				new AiAssetContext("WEGE3", "WEG S.A.", "Bens Industriais", "Motores"),
