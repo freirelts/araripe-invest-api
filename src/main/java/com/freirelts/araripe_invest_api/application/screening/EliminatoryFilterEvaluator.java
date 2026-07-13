@@ -115,8 +115,8 @@ public class EliminatoryFilterEvaluator {
 	private void evaluateFundamentalDeterioration(EliminatoryFilterInput input,
 			List<EliminatoryFilterReason> reasons) {
 		// A deterioracao fundamental e registrada por dimensao para nao tratar queda de lucro isolada como queda de
-		// receita ou margem. Qualquer periodo disponivel pode acionar o bloqueio, evitando mascarar um trimestre ruim
-		// quando o crescimento anual generico esta preenchido.
+		// receita ou margem. A janela trimestral usada aqui deve comparar o mesmo trimestre do ano anterior; queda QoQ
+		// pode ser sazonal e nao deve bloquear receita sozinha.
 		if (lessOrEqualAny(STRONG_REVENUE_DROP, input.getRevenueGrowth(), input.getAnnualRevenueGrowth(),
 				input.getQuarterlyRevenueGrowth())) {
 			reasons.add(reason(EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION,

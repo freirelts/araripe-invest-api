@@ -78,7 +78,7 @@ class EliminatoryFilterEvaluatorTests {
 	}
 
 	@Test
-	void filtersQuarterlyDeteriorationEvenWhenGenericGrowthIsPositive() {
+	void filtersSameQuarterRevenueDeteriorationEvenWhenGenericGrowthIsPositive() {
 		assertCodes(validInput()
 				.revenueGrowth(new BigDecimal("0.05"))
 				.annualRevenueGrowth(new BigDecimal("0.04"))

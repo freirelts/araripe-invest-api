@@ -138,6 +138,8 @@ class IndicatorCalculationServiceTests {
 		collector.setPriceToBook(new BigDecimal("1.800000"));
 		collector.setEnterpriseToEbitda(new BigDecimal("6.200000"));
 		collector.setDividendYield(new BigDecimal("0.080000"));
+		collector.setRevenueGrowth(new BigDecimal("0.070000"));
+		collector.setEarningsGrowth(new BigDecimal("0.080000"));
 		collector.setQualityStatus(DataQualityStatus.VALID);
 		fundamentalSnapshotRepository.saveAndFlush(collector);
 		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
@@ -155,6 +157,10 @@ class IndicatorCalculationServiceTests {
 		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.QUARTERLY, LocalDate.of(2025, 12, 31),
 				"""
 						{"totalRevenue":300,"netIncome":35,"cleanEbitda":70}
+						""");
+		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.QUARTERLY, LocalDate.of(2025, 3, 31),
+				"""
+						{"totalRevenue":280,"netIncome":35,"cleanEbitda":64}
 						""");
 		saveStatement(asset, StatementType.BALANCE_SHEET, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
 				"""
@@ -174,8 +180,10 @@ class IndicatorCalculationServiceTests {
 		assertThat(result.fundamentalComplete()).isTrue();
 		assertThat(snapshot.getMostRecentQuarter()).isEqualTo(LocalDate.of(2025, 12, 31));
 		assertThat(snapshot.getTrailingPe()).isEqualByComparingTo("9.500000");
+		assertThat(snapshot.getRevenueGrowth()).isEqualByComparingTo("0.070000");
+		assertThat(snapshot.getEarningsGrowth()).isEqualByComparingTo("0.080000");
 		assertThat(snapshot.getAnnualRevenueGrowth()).isEqualByComparingTo("0.200000");
-		assertThat(snapshot.getQuarterlyRevenueGrowth()).isEqualByComparingTo("0.166667");
+		assertThat(snapshot.getQuarterlyRevenueGrowth()).isEqualByComparingTo("0.250000");
 		assertThat(snapshot.getAnnualEarningsGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getQuarterlyEarningsGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getEbitdaGrowth()).isEqualByComparingTo("0.200000");

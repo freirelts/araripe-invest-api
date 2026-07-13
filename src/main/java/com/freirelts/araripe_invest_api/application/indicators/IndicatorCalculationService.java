@@ -140,22 +140,22 @@ public class IndicatorCalculationService {
 		StatementValues latestAnnualIncome = first(annualIncome);
 		StatementValues previousAnnualIncome = second(annualIncome);
 		StatementValues latestQuarterlyIncome = first(quarterlyIncome);
-		StatementValues previousQuarterlyIncome = second(quarterlyIncome);
+		StatementValues comparableQuarterlyIncome = sameQuarterPreviousYear(quarterlyIncome, latestQuarterlyIncome);
 		StatementValues latestCash = first(annualCash);
 		StatementValues latestBalance = first(annualBalance);
 
 		derived.setAnnualRevenueGrowth(growth(value(latestAnnualIncome, "revenue", missingFields),
 				value(previousAnnualIncome, "revenue", missingFields)).orElse(derived.getAnnualRevenueGrowth()));
 		derived.setQuarterlyRevenueGrowth(growth(value(latestQuarterlyIncome, "revenue", missingFields),
-				value(previousQuarterlyIncome, "revenue", missingFields)).orElse(derived.getQuarterlyRevenueGrowth()));
+				value(comparableQuarterlyIncome, "revenue", missingFields)).orElse(derived.getQuarterlyRevenueGrowth()));
 		derived.setAnnualEarningsGrowth(growth(value(latestAnnualIncome, "netIncome", missingFields),
 				value(previousAnnualIncome, "netIncome", missingFields)).orElse(derived.getAnnualEarningsGrowth()));
 		derived.setQuarterlyEarningsGrowth(growth(value(latestQuarterlyIncome, "netIncome", missingFields),
-				value(previousQuarterlyIncome, "netIncome", missingFields)).orElse(derived.getQuarterlyEarningsGrowth()));
+				value(comparableQuarterlyIncome, "netIncome", missingFields)).orElse(derived.getQuarterlyEarningsGrowth()));
 		derived.setEbitdaGrowth(growth(value(latestAnnualIncome, "ebitda", missingFields),
 				value(previousAnnualIncome, "ebitda", missingFields))
 			.or(() -> growth(value(latestQuarterlyIncome, "ebitda", missingFields),
-					value(previousQuarterlyIncome, "ebitda", missingFields)))
+					value(comparableQuarterlyIncome, "ebitda", missingFields)))
 			.orElse(derived.getEbitdaGrowth()));
 
 		BigDecimal revenue = value(latestAnnualIncome, "revenue", missingFields);
@@ -191,11 +191,11 @@ public class IndicatorCalculationService {
 				: scaleMoney(totalDebt.subtract(cash)));
 		derived.setOperatingCashflow(nonNull(operatingCashflow, derived.getOperatingCashflow()));
 		derived.setFreeCashflow(nonNull(freeCashflow, nonNull(calculatedFreeCashflow, derived.getFreeCashflow())));
-		derived.setRevenueGrowth(nonNull(derived.getAnnualRevenueGrowth(), derived.getRevenueGrowth()));
-		derived.setEarningsGrowth(nonNull(derived.getAnnualEarningsGrowth(), derived.getEarningsGrowth()));
+		derived.setRevenueGrowth(nonNull(derived.getRevenueGrowth(), derived.getAnnualRevenueGrowth()));
+		derived.setEarningsGrowth(nonNull(derived.getEarningsGrowth(), derived.getAnnualEarningsGrowth()));
 
 		assumptions.add("Crescimento anual compara a ultima demonstracao anual valida com a anual imediatamente anterior.");
-		assumptions.add("Crescimento trimestral compara o ultimo trimestre valido com o trimestre imediatamente anterior.");
+		assumptions.add("Crescimento trimestral compara o ultimo trimestre valido com o mesmo trimestre do ano anterior para reduzir ruido sazonal.");
 		assumptions.add("Fluxo de caixa livre usa caixa operacional menos capex quando capex vem positivo, ou soma quando capex vem negativo.");
 		derived.setAssumptionsJson(json(assumptions));
 		derived.setQualityStatus(fundamentalQuality(derived, revenue, netIncome, operatingCashflow, missingFields));
@@ -534,6 +534,17 @@ public class IndicatorCalculationService {
 
 	private StatementValues second(List<StatementValues> statements) {
 		return statements.size() < 2 ? null : statements.get(1);
+	}
+
+	private StatementValues sameQuarterPreviousYear(List<StatementValues> statements, StatementValues latest) {
+		if (latest == null) {
+			return null;
+		}
+		LocalDate targetEndDate = latest.endDate().minusYears(1);
+		return statements.stream()
+				.filter(statement -> targetEndDate.equals(statement.endDate()))
+				.findFirst()
+				.orElse(null);
 	}
 
 	private <T> T nonNull(T preferred, T fallback) {
