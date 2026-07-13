@@ -10,6 +10,7 @@ import com.freirelts.araripe_invest_api.application.marketdata.MacroEconomicData
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.ProviderRawResponse;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
+import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -74,8 +75,10 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 	}
 
 	@Override
-	public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/income-statement", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+	public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols, PeriodType periodType) {
+		return fetchForSymbols("/v2/stocks/income-statement", symbols, query -> query
+				.queryParam("symbols", query.joinedSymbols())
+				.queryParam("period", brapiStatementPeriod(periodType)));
 	}
 
 	@Override
@@ -162,6 +165,14 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_REQUEST_FAILED",
 					"Brapi request failed before a valid response was received: " + ex.getClass().getSimpleName() + ".");
 		}
+	}
+
+	private static String brapiStatementPeriod(PeriodType periodType) {
+		return switch (periodType) {
+			case ANNUAL -> "annual";
+			case QUARTERLY -> "quarterly";
+			case TTM -> throw new IllegalArgumentException("Brapi statement endpoints do not support TTM period.");
+		};
 	}
 
 	record Query(String path, List<String> symbols, StringBuilder queryString) {

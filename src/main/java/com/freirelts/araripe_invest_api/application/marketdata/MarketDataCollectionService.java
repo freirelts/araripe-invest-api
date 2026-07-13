@@ -102,8 +102,12 @@ public class MarketDataCollectionService {
 				DataCollectionCategory.FINANCIAL_DATA, this::applyFinancialData));
 		summary = summary.plus(processStatements(fundamentalDataProvider.fetchBalanceSheets(normalizedSymbols),
 				DataCollectionCategory.BALANCE_SHEET, StatementType.BALANCE_SHEET));
-		summary = summary.plus(processStatements(fundamentalDataProvider.fetchIncomeStatements(normalizedSymbols),
-				DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT));
+		summary = summary.plus(processStatements(
+				fundamentalDataProvider.fetchIncomeStatements(normalizedSymbols, PeriodType.ANNUAL),
+				DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL));
+		summary = summary.plus(processStatements(
+				fundamentalDataProvider.fetchIncomeStatements(normalizedSymbols, PeriodType.QUARTERLY),
+				DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT, PeriodType.QUARTERLY));
 		summary = summary.plus(processStatements(fundamentalDataProvider.fetchCashFlows(normalizedSymbols),
 				DataCollectionCategory.CASH_FLOW, StatementType.CASH_FLOW));
 		summary = summary.plus(processDividends(fundamentalDataProvider.fetchDividends(normalizedSymbols)));
@@ -206,6 +210,11 @@ public class MarketDataCollectionService {
 
 	private MarketDataCollectionSummary processStatements(ProviderRawResponse response, DataCollectionCategory category,
 			StatementType statementType) {
+		return processStatements(response, category, statementType, null);
+	}
+
+	private MarketDataCollectionSummary processStatements(ProviderRawResponse response, DataCollectionCategory category,
+			StatementType statementType, PeriodType requestedPeriodType) {
 		List<String> warnings = new ArrayList<>();
 		int persisted = 0;
 		if (response.payload() != null) {
@@ -222,7 +231,7 @@ public class MarketDataCollectionService {
 						warnings.add(category + " returned statement without endDate for " + asset.getSymbol() + ".");
 						continue;
 					}
-					PeriodType periodType = periodType(text(statementNode, "type"));
+					PeriodType periodType = periodType(text(statementNode, "type"), requestedPeriodType);
 					FinancialStatementSnapshot snapshot = financialStatementSnapshotRepository
 							.findByAssetIdAndStatementTypeAndPeriodTypeAndEndDateAndSource(asset.getId(),
 									statementType, periodType, endDate, SOURCE)
@@ -506,9 +515,9 @@ public class MarketDataCollectionService {
 		return DataQualityStatus.VALID;
 	}
 
-	private static PeriodType periodType(String type) {
+	private static PeriodType periodType(String type, PeriodType fallback) {
 		if (type == null) {
-			return PeriodType.TTM;
+			return fallback == null ? PeriodType.TTM : fallback;
 		}
 		String normalized = type.toLowerCase(Locale.ROOT);
 		if (normalized.contains("year") || normalized.contains("annual")) {
@@ -517,7 +526,7 @@ public class MarketDataCollectionService {
 		if (normalized.contains("quarter")) {
 			return PeriodType.QUARTERLY;
 		}
-		return PeriodType.TTM;
+		return fallback == null ? PeriodType.TTM : fallback;
 	}
 
 	private static DividendEventType dividendType(String label, boolean stockEvent) {

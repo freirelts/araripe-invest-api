@@ -2,6 +2,8 @@ package com.freirelts.araripe_invest_api.application.marketdata;
 
 import java.util.Collection;
 
+import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
+
 public interface FundamentalDataProvider {
 
 	ProviderRawResponse fetchCompanyProfiles(Collection<String> symbols);
@@ -12,7 +14,7 @@ public interface FundamentalDataProvider {
 
 	ProviderRawResponse fetchBalanceSheets(Collection<String> symbols);
 
-	ProviderRawResponse fetchIncomeStatements(Collection<String> symbols);
+	ProviderRawResponse fetchIncomeStatements(Collection<String> symbols, PeriodType periodType);
 
 	ProviderRawResponse fetchCashFlows(Collection<String> symbols);
 

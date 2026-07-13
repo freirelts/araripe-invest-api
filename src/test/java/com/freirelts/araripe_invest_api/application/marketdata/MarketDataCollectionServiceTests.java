@@ -98,10 +98,10 @@ class MarketDataCollectionServiceTests {
 
 		assertThat(summary.candlesPersisted()).isEqualTo(2);
 		assertThat(summary.fundamentalSnapshotsPersisted()).isEqualTo(2);
-		assertThat(summary.financialStatementsPersisted()).isEqualTo(3);
+		assertThat(summary.financialStatementsPersisted()).isEqualTo(4);
 		assertThat(summary.dividendEventsPersisted()).isEqualTo(2);
 		assertThat(summary.macroSnapshotsPersisted()).isEqualTo(1);
-		assertThat(summary.collectionRecordsPersisted()).isEqualTo(9);
+		assertThat(summary.collectionRecordsPersisted()).isEqualTo(10);
 		assertThat(summary.warnings()).isZero();
 
 		assertThat(dailyCandleRepository.findAll()).hasSize(2)
@@ -116,10 +116,15 @@ class MarketDataCollectionServiceTests {
 					assertThat(snapshot.getRoe()).isEqualByComparingTo("0.24267222");
 					assertThat(snapshot.getQualityStatus()).isEqualTo(DataQualityStatus.VALID);
 				});
-		assertThat(financialStatementSnapshotRepository.findAll()).hasSize(3)
+		assertThat(financialStatementSnapshotRepository.findAll()).hasSize(4)
 				.extracting("statementType")
 				.containsExactlyInAnyOrder(StatementType.BALANCE_SHEET, StatementType.INCOME_STATEMENT,
-						StatementType.CASH_FLOW);
+						StatementType.INCOME_STATEMENT, StatementType.CASH_FLOW);
+		assertThat(financialStatementSnapshotRepository.findAll().stream()
+				.filter(snapshot -> snapshot.getStatementType() == StatementType.INCOME_STATEMENT)
+				.toList())
+			.extracting("periodType")
+			.containsExactlyInAnyOrder(PeriodType.ANNUAL, PeriodType.QUARTERLY);
 		assertThat(dividendEventRepository.findAll()).hasSize(2)
 				.extracting("eventType")
 				.containsExactlyInAnyOrder(DividendEventType.JCP, DividendEventType.SPLIT);
@@ -131,7 +136,7 @@ class MarketDataCollectionServiceTests {
 		assertThat(dataCollectionRecordRepository.findByReferenceDateAndCategory(LocalDate.of(2026, 7, 9),
 				DataCollectionCategory.DAILY_HISTORY)).singleElement()
 				.satisfies(record -> assertThat(record.getStatus()).isEqualTo(DataCollectionStatus.SUCCESS));
-		assertThat(dataCollectionRecordRepository.findAll()).hasSize(9)
+		assertThat(dataCollectionRecordRepository.findAll()).hasSize(10)
 				.allSatisfy(record -> assertThat(record.getPayloadJson()).isNotBlank());
 	}
 
@@ -202,10 +207,10 @@ class MarketDataCollectionServiceTests {
 
 		assertThat(dailyCandleRepository.findAll()).hasSize(2);
 		assertThat(fundamentalSnapshotRepository.findAll()).hasSize(1);
-		assertThat(financialStatementSnapshotRepository.findAll()).hasSize(3);
+		assertThat(financialStatementSnapshotRepository.findAll()).hasSize(4);
 		assertThat(dividendEventRepository.findAll()).hasSize(2);
 		assertThat(macroIndicatorSnapshotRepository.findAll()).hasSize(1);
-		assertThat(dataCollectionRecordRepository.findAll()).hasSize(18);
+		assertThat(dataCollectionRecordRepository.findAll()).hasSize(20);
 	}
 
 	@Test
@@ -376,11 +381,16 @@ class MarketDataCollectionServiceTests {
 		}
 
 		@Override
-		public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols) {
+		public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols, PeriodType periodType) {
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/income-statement", symbols, """
 						{"results":[]}
 						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
+			if (periodType == PeriodType.QUARTERLY) {
+				return success("/v2/stocks/income-statement", symbols, """
+						{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":[{"endDate":"2026-03-31","totalRevenue":125000000000,"netIncome":30000000000}]}]}
+						""");
 			}
 			return success("/v2/stocks/income-statement", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":[{"type":"yearly","endDate":"2025-12-31","totalRevenue":497549000000,"netIncome":110605000000}]}]}

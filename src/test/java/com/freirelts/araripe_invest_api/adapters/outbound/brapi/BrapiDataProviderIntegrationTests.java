@@ -3,10 +3,12 @@ package com.freirelts.araripe_invest_api.adapters.outbound.brapi;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.freirelts.araripe_invest_api.application.assets.MonitoredAssetUniverseService;
 import com.freirelts.araripe_invest_api.application.auth.AuthService;
+import com.freirelts.araripe_invest_api.application.marketdata.FundamentalDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.ProviderRawResponse;
 import com.freirelts.araripe_invest_api.application.marketdata.ProviderResponseStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
+import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
@@ -58,6 +60,9 @@ class BrapiDataProviderIntegrationTests {
 
 	@Autowired
 	private MarketDataProvider marketDataProvider;
+
+	@Autowired
+	private FundamentalDataProvider fundamentalDataProvider;
 
 	@Autowired
 	private MonitoredAssetUniverseService monitoredAssetUniverse;
@@ -157,6 +162,22 @@ class BrapiDataProviderIntegrationTests {
 	}
 
 	@Test
+	void providerAddsPeriodWhenFetchingAnnualAndQuarterlyIncomeStatements() {
+		assetRepository.saveAndFlush(new Asset("PETR4", "Petrobras PN", "Energia"));
+
+		ProviderRawResponse annual = fundamentalDataProvider.fetchIncomeStatements(List.of("petr4"),
+				PeriodType.ANNUAL);
+		ProviderRawResponse quarterly = fundamentalDataProvider.fetchIncomeStatements(List.of("petr4"),
+				PeriodType.QUARTERLY);
+
+		assertThat(annual.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(quarterly.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(BRAPI_SERVER.requestUris()).hasSize(2);
+		assertThat(BRAPI_SERVER.requestUris().get(0).getRawQuery()).isEqualTo("symbols=PETR4&period=annual");
+		assertThat(BRAPI_SERVER.requestUris().get(1).getRawQuery()).isEqualTo("symbols=PETR4&period=quarterly");
+	}
+
+	@Test
 	void providerSkipsExternalCallWhenNoRequestedAssetIsActive() {
 		Asset inactive = new Asset("ABEV3", "Ambev ON", "Consumo");
 		inactive.setActive(false);
@@ -212,6 +233,7 @@ class BrapiDataProviderIntegrationTests {
 				throw new IllegalStateException("Could not start test brapi server.", ex);
 			}
 			server.createContext("/api/v2/stocks/quote", this::handleQuote);
+			server.createContext("/api/v2/stocks/income-statement", this::handleIncomeStatement);
 			server.start();
 		}
 
@@ -239,11 +261,26 @@ class BrapiDataProviderIntegrationTests {
 		}
 
 		private void handleQuote(HttpExchange exchange) throws IOException {
+			recordRequest(exchange);
+			writeJson(exchange, """
+					{"results":[],"requestedAt":"2026-07-09T12:00:00.000Z","took":1}
+					""");
+		}
+
+		private void handleIncomeStatement(HttpExchange exchange) throws IOException {
+			recordRequest(exchange);
+			writeJson(exchange, """
+					{"results":[],"requestedAt":"2026-07-09T12:00:00.000Z","took":1}
+					""");
+		}
+
+		private void recordRequest(HttpExchange exchange) {
 			requestUris.add(exchange.getRequestURI());
 			authorizationHeaders.add(exchange.getRequestHeaders().getFirst("Authorization"));
-			byte[] body = """
-					{"results":[],"requestedAt":"2026-07-09T12:00:00.000Z","took":1}
-					""".getBytes(StandardCharsets.UTF_8);
+		}
+
+		private void writeJson(HttpExchange exchange, String json) throws IOException {
+			byte[] body = json.getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().set("Content-Type", "application/json");
 			exchange.sendResponseHeaders(200, body.length);
 			try (OutputStream outputStream = exchange.getResponseBody()) {
