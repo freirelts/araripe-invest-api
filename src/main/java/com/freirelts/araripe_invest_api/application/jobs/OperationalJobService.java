@@ -210,14 +210,14 @@ public class OperationalJobService {
 		log.info("AI context enrichment started for referenceDate={} candidateTheses={}", referenceDate,
 				theses.size());
 		int persisted = 0;
-		for (PositionThesis thesis : theses) {
-			economicContextAnalysisService.analyzeAndPersist(thesis.getAsset(), aiRequest(thesis));
-			persisted++;
-			if (persisted % 10 == 0 || persisted == theses.size()) {
-				log.info("AI context enrichment progress referenceDate={} persisted={} total={}", referenceDate,
-						persisted, theses.size());
-			}
-		}
+//		for (PositionThesis thesis : theses) {
+//			economicContextAnalysisService.analyzeAndPersist(thesis.getAsset(), aiRequest(thesis));
+//			persisted++;
+//			if (persisted % 10 == 0 || persisted == theses.size()) {
+//				log.info("AI context enrichment progress referenceDate={} persisted={} total={}", referenceDate,
+//						persisted, theses.size());
+//			}
+//		}
 		log.info("AI context enrichment finished for referenceDate={} aiAnalysesPersisted={}", referenceDate,
 				persisted);
 		return Map.of("candidateTheses", theses.size(), "aiAnalysesPersisted", persisted);

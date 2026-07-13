@@ -28,10 +28,39 @@ class ScoringServiceTests {
 		assertThat(first.components()).extracting(ScoreComponent::weightPercent)
 				.containsExactly(30, 20, 15, 10, 10, 10, 5);
 		assertThat(first.ruleVersion()).isEqualTo(ScoringService.RULE_VERSION);
+		assertThat(first.blockedByEliminatoryFilter()).isFalse();
+		assertThat(first.scoreCalculated()).isTrue();
+		assertThat(first.failedFilters()).isEmpty();
 	}
 
 	@Test
-	void eliminatoryFilterZerosScoreBeforeAnyComponentCanApproveThesis() {
+	void dataQualityFilterZerosScoreBecauseDiagnosticScoreWouldBeUnreliable() {
+		ScoreResult result = service.score(new ScoringInput(ThesisType.QUALITY_REASONABLE_PRICE,
+				new BigDecimal("20.00"), new BigDecimal("40.00"), new BigDecimal("34.00"),
+				new BigDecimal("0.500000"), new BigDecimal("5.000000"), new BigDecimal("1.000000"),
+				new BigDecimal("4.000000"), new BigDecimal("4.000000"), BigDecimal.ZERO, new BigDecimal("0.200000"),
+				new BigDecimal("0.400000"), new BigDecimal("0.250000"), new BigDecimal("0.220000"),
+				new BigDecimal("0.180000"), new BigDecimal("0.100000"), new BigDecimal("0.500000"),
+				new BigDecimal("0.120000"), new BigDecimal("0.150000"), new BigDecimal("0.150000"),
+				new BigDecimal("0.100000"), new BigDecimal("0.160000"), new BigDecimal("0.110000"),
+				new BigDecimal("0.180000"), new BigDecimal("300.000000"), new BigDecimal("500.000000"),
+				new BigDecimal("18.000000"), new BigDecimal("0.250000"), new BigDecimal("-0.100000"),
+				TrendStatus.HEALTHY, 2,
+				List.of(new EliminatoryFilterReason(EliminatoryFilterCode.DATA_QUALITY_BLOCKED,
+						"Dados incompletos, atrasados ou inconsistentes bloqueiam a triagem."))));
+
+		assertThat(result.finalScore()).isZero();
+		assertThat(result.blockedByEliminatoryFilter()).isTrue();
+		assertThat(result.scoreCalculated()).isFalse();
+		assertThat(result.failedFilters()).extracting(EliminatoryFilterReason::code)
+				.containsExactly(EliminatoryFilterCode.DATA_QUALITY_BLOCKED);
+		assertThat(result.components()).singleElement()
+				.extracting(ScoreComponent::code)
+				.isEqualTo("ELIMINATORY_FILTER_BLOCK");
+	}
+
+	@Test
+	void nonDataEliminatoryFilterKeepsDiagnosticScoreButBlocksActionability() {
 		ScoreResult result = service.score(new ScoringInput(ThesisType.QUALITY_REASONABLE_PRICE,
 				new BigDecimal("20.00"), new BigDecimal("40.00"), new BigDecimal("34.00"),
 				new BigDecimal("0.500000"), new BigDecimal("5.000000"), new BigDecimal("1.000000"),
@@ -46,11 +75,14 @@ class ScoringServiceTests {
 				List.of(new EliminatoryFilterReason(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY,
 						"Volume financeiro medio abaixo do minimo."))));
 
-		assertThat(result.finalScore()).isZero();
+		assertThat(result.finalScore()).isGreaterThan(0);
 		assertThat(result.blockedByEliminatoryFilter()).isTrue();
-		assertThat(result.components()).singleElement()
-				.extracting(ScoreComponent::code)
-				.isEqualTo("ELIMINATORY_FILTER_BLOCK");
+		assertThat(result.scoreCalculated()).isTrue();
+		assertThat(result.failedFilters()).extracting(EliminatoryFilterReason::code)
+				.containsExactly(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY);
+		assertThat(result.components()).extracting(ScoreComponent::code)
+				.containsExactly("FUNDAMENTAL_QUALITY", "VALUATION_SAFETY_MARGIN", "CASH_GENERATION",
+						"QUALITY_RESILIENCE_SCORE", "LONG_TREND", "RISK_VOLATILITY", "MACRO_SECTOR_CONTEXT");
 	}
 
 	@Test

@@ -1,5 +1,7 @@
 package com.freirelts.araripe_invest_api.application.scoring;
 
+import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterCode;
+import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterReason;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import org.springframework.stereotype.Service;
@@ -22,8 +24,9 @@ public class ScoringService {
 	private static final BigDecimal MIN_GROWTH = new BigDecimal("0.080000");
 
 	public ScoreResult score(ScoringInput input) {
-		if (input.failedFilters() != null && !input.failedFilters().isEmpty()) {
-			return blockedScore(input);
+		List<EliminatoryFilterReason> failedFilters = failedFilters(input);
+		if (hasUnscorableFilter(failedFilters)) {
+			return blockedScore(input, failedFilters);
 		}
 		List<ScoreComponent> components = List.of(
 				component("FUNDAMENTAL_QUALITY", "Qualidade fundamentalista", 30,
@@ -45,19 +48,31 @@ public class ScoringService {
 				.reduce(BigDecimal.ZERO, BigDecimal::add)
 				.setScale(0, RoundingMode.HALF_UP)
 				.intValue();
-		return new ScoreResult(clamp(finalScore), input.thesisType(), RULE_VERSION, false, components);
+		return new ScoreResult(clamp(finalScore), input.thesisType(), RULE_VERSION, !failedFilters.isEmpty(), true,
+				failedFilters, components);
 	}
 
-	private ScoreResult blockedScore(ScoringInput input) {
-		// Filtros eliminatorios precedem o score: liquidez, dados, fundamentos, tendencia e risco podem bloquear a tese
-		// mesmo que algum subscore isolado pareca bom. Isso impede que ativo barato, iliquido ou sem dado vire recomendacao.
-		List<String> evidence = input.failedFilters().stream()
+	private ScoreResult blockedScore(ScoringInput input, List<EliminatoryFilterReason> failedFilters) {
+		// Dados ou fundamentos minimos ausentes tornam a nota artificial. Nesses casos o motor registra o bloqueio sem
+		// calcular subscores; outros filtros continuam bloqueando recomendacao, mas preservam score diagnostico.
+		List<String> evidence = failedFilters.stream()
 				.map(reason -> reason.code().name())
 				.toList();
 		ScoreComponent blocked = new ScoreComponent("ELIMINATORY_FILTER_BLOCK", "Bloqueio por filtro eliminatorio",
 				100, 0, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
 				"Score zerado porque filtros obrigatorios falharam antes da pontuacao.", evidence);
-		return new ScoreResult(0, input.thesisType(), RULE_VERSION, true, List.of(blocked));
+		return new ScoreResult(0, input.thesisType(), RULE_VERSION, true, false, failedFilters, List.of(blocked));
+	}
+
+	private List<EliminatoryFilterReason> failedFilters(ScoringInput input) {
+		return input.failedFilters() == null ? List.of() : input.failedFilters();
+	}
+
+	private boolean hasUnscorableFilter(List<EliminatoryFilterReason> failedFilters) {
+		return failedFilters.stream()
+				.map(EliminatoryFilterReason::code)
+				.anyMatch(code -> code == EliminatoryFilterCode.DATA_QUALITY_BLOCKED
+						|| code == EliminatoryFilterCode.MINIMUM_FUNDAMENTALS_MISSING);
 	}
 
 	private ScoreComponent component(String code, String label, int weightPercent, ScoreRuleEvaluation evaluation,

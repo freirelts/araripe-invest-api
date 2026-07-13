@@ -222,7 +222,12 @@ class PositionThesisGenerationServiceTests {
 
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
-		assertThat(theses).allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.SAIR_DA_TESE));
+		assertThat(theses).allSatisfy(thesis -> {
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.SAIR_DA_TESE);
+			assertThat(thesis.getScore()).isPositive();
+			assertThat(thesis.getScoreBreakdownJson()).contains("\"blockedByEliminatoryFilter\":true",
+					"\"scoreCalculated\":true", "LONG_TREND");
+		});
 	}
 
 	@Test
