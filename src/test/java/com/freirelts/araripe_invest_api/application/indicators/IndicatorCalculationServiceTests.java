@@ -142,27 +142,27 @@ class IndicatorCalculationServiceTests {
 		fundamentalSnapshotRepository.saveAndFlush(collector);
 		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
 				"""
-						{"totalRevenue":1200,"netIncome":180,"ebitda":300,"grossProfit":600,"operatingIncome":240}
+						{"totalRevenue":1200,"netIncome":180,"cleanEbitda":300,"grossProfit":600,"ebit":240}
 						""");
 		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL, LocalDate.of(2024, 12, 31),
 				"""
-						{"totalRevenue":1000,"netIncome":150,"ebitda":250,"grossProfit":500,"operatingIncome":200}
+						{"totalRevenue":1000,"netIncome":150,"cleanEbitda":250,"grossProfit":500,"cleanEbit":200}
 						""");
 		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.QUARTERLY, LocalDate.of(2026, 3, 31),
 				"""
-						{"totalRevenue":350,"netIncome":42,"ebitda":80}
+						{"totalRevenue":350,"netIncome":42,"cleanEbitda":80}
 						""");
 		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.QUARTERLY, LocalDate.of(2025, 12, 31),
 				"""
-						{"totalRevenue":300,"netIncome":35,"ebitda":70}
+						{"totalRevenue":300,"netIncome":35,"cleanEbitda":70}
 						""");
 		saveStatement(asset, StatementType.BALANCE_SHEET, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
 				"""
-						{"totalAssets":2000,"stockholdersEquity":900,"totalDebt":500,"cashAndCashEquivalents":200}
+						{"totalAssets":2000,"shareholdersEquity":900,"loansAndFinancing":100,"longTermLoansAndFinancing":400,"cash":200}
 						""");
 		saveStatement(asset, StatementType.CASH_FLOW, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
 				"""
-						{"operatingCashFlow":260,"capitalExpenditures":-60}
+						{"operatingCashFlow":260,"freeCashFlow":200}
 						""");
 
 		IndicatorCalculationResult result = service.calculateForAsset(asset, referenceDate);

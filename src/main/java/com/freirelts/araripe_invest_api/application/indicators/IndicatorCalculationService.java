@@ -168,7 +168,12 @@ public class IndicatorCalculationService {
 		BigDecimal totalDebt = value(latestBalance, "totalDebt", missingFields);
 		BigDecimal cash = value(latestBalance, "cash", missingFields);
 		BigDecimal operatingCashflow = value(latestCash, "operatingCashflow", missingFields);
-		BigDecimal capitalExpenditures = value(latestCash, "capitalExpenditures", missingFields);
+		BigDecimal freeCashflow = optionalValue(latestCash, "freeCashflow");
+		BigDecimal capitalExpenditures = optionalValue(latestCash, "capitalExpenditures");
+		BigDecimal calculatedFreeCashflow = freeCashflow(operatingCashflow, capitalExpenditures).orElse(null);
+		if (freeCashflow == null && calculatedFreeCashflow == null) {
+			missingFields.add("freeCashflow");
+		}
 
 		// Margens usam a receita como denominador para medir eficiência operacional em cada real vendido.
 		derived.setGrossMargin(ratio(grossProfit, revenue).orElse(nonNull(derived.getGrossMargin(), null)));
@@ -185,7 +190,7 @@ public class IndicatorCalculationService {
 		derived.setNetDebt(totalDebt == null || cash == null ? derived.getNetDebt()
 				: scaleMoney(totalDebt.subtract(cash)));
 		derived.setOperatingCashflow(nonNull(operatingCashflow, derived.getOperatingCashflow()));
-		derived.setFreeCashflow(freeCashflow(operatingCashflow, capitalExpenditures).orElse(derived.getFreeCashflow()));
+		derived.setFreeCashflow(nonNull(freeCashflow, nonNull(calculatedFreeCashflow, derived.getFreeCashflow())));
 		derived.setRevenueGrowth(nonNull(derived.getAnnualRevenueGrowth(), derived.getRevenueGrowth()));
 		derived.setEarningsGrowth(nonNull(derived.getAnnualEarningsGrowth(), derived.getEarningsGrowth()));
 
@@ -262,21 +267,46 @@ public class IndicatorCalculationService {
 	private StatementValues toStatementValues(FinancialStatementSnapshot snapshot) {
 		try {
 			JsonNode root = objectMapper.readTree(snapshot.getPayloadJson());
-			return new StatementValues(snapshot.getEndDate(), decimal(root, "totalRevenue", "revenue",
-					"operatingRevenue"), decimal(root, "netIncome", "netIncomeCommonStockholders"),
-					decimal(root, "ebitda", "EBITDA"), decimal(root, "grossProfit"),
-					decimal(root, "operatingIncome", "operatingProfit"), decimal(root, "totalAssets"),
-					decimal(root, "totalStockholderEquity", "stockholdersEquity", "shareholderEquity",
-							"totalEquityGrossMinorityInterest"),
-					decimal(root, "totalDebt", "shortLongTermDebtTotal", "longTermDebtAndFinanceLeaseObligation",
-							"longTermDebt"),
+			return new StatementValues(snapshot.getEndDate(),
+					decimal(root, "totalRevenue", "revenue", "operatingRevenue", "netRevenue"),
+					decimal(root, "netIncome", "cleanNetIncome", "netIncomeCommonStockholders",
+							"netIncomeApplicableToCommonShares"),
+					decimal(root, "cleanEbitda", "ebitda", "EBITDA"), decimal(root, "grossProfit"),
+					decimal(root, "operatingIncome", "operatingProfit", "cleanEbit", "ebit"),
+					decimal(root, "totalAssets"),
+					decimal(root, "shareholdersEquity", "totalStockholderEquity", "stockholdersEquity",
+							"shareholderEquity", "totalEquityGrossMinorityInterest",
+							"controllerShareholdersEquity"),
+					totalDebt(root),
 					decimal(root, "cash", "cashAndCashEquivalents", "cashAndShortTermInvestments", "totalCash"),
 					decimal(root, "operatingCashflow", "operatingCashFlow", "totalCashFromOperatingActivities"),
+					decimal(root, "freeCashflow", "freeCashFlow"),
 					decimal(root, "capitalExpenditures", "capitalExpenditure", "capex"));
 		}
 		catch (JsonProcessingException ex) {
 			throw new IllegalStateException("Could not parse financial statement snapshot.", ex);
 		}
+	}
+
+	private BigDecimal totalDebt(JsonNode root) {
+		BigDecimal directTotal = decimal(root, "totalDebt", "shortLongTermDebtTotal");
+		if (directTotal != null) {
+			return directTotal;
+		}
+		BigDecimal[] components = {
+				decimal(root, "shortLongTermDebt", "shortTermDebt", "loansAndFinancing"),
+				decimal(root, "longTermDebtAndFinanceLeaseObligation", "longTermDebt", "longTermLoansAndFinancing"),
+				decimal(root, "debentures"), decimal(root, "longTermDebentures"), decimal(root, "leaseFinancing"),
+				decimal(root, "longTermLeaseFinancing") };
+		boolean hasDebtComponent = false;
+		BigDecimal total = BigDecimal.ZERO;
+		for (BigDecimal component : components) {
+			if (component != null) {
+				hasDebtComponent = true;
+				total = total.add(component);
+			}
+		}
+		return hasDebtComponent ? total : null;
 	}
 
 	private Optional<BigDecimal> sma(List<BigDecimal> values, int window) {
@@ -451,6 +481,10 @@ public class IndicatorCalculationService {
 		return value;
 	}
 
+	private BigDecimal optionalValue(StatementValues values, String field) {
+		return values == null ? null : values.value(field);
+	}
+
 	private BigDecimal analysisClose(DailyCandle candle) {
 		return candle.getAdjustedClosePrice() != null && candle.getAdjustedClosePrice().signum() > 0
 				? candle.getAdjustedClosePrice() : candle.getClosePrice();
@@ -533,7 +567,8 @@ public class IndicatorCalculationService {
 
 	private record StatementValues(LocalDate endDate, BigDecimal revenue, BigDecimal netIncome, BigDecimal ebitda,
 			BigDecimal grossProfit, BigDecimal operatingIncome, BigDecimal totalAssets, BigDecimal equity,
-			BigDecimal totalDebt, BigDecimal cash, BigDecimal operatingCashflow, BigDecimal capitalExpenditures) {
+			BigDecimal totalDebt, BigDecimal cash, BigDecimal operatingCashflow, BigDecimal freeCashflow,
+			BigDecimal capitalExpenditures) {
 
 		private BigDecimal value(String field) {
 			return switch (field) {
@@ -547,6 +582,7 @@ public class IndicatorCalculationService {
 				case "totalDebt" -> totalDebt;
 				case "cash" -> cash;
 				case "operatingCashflow" -> operatingCashflow;
+				case "freeCashflow" -> freeCashflow;
 				case "capitalExpenditures" -> capitalExpenditures;
 				default -> null;
 			};
