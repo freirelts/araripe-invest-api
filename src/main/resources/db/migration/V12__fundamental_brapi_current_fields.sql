@@ -1,0 +1,18 @@
+ALTER TABLE fundamental_snapshots
+    ADD COLUMN forward_pe NUMERIC(19, 6),
+    ADD COLUMN peg_ratio NUMERIC(19, 6),
+    ADD COLUMN net_income_to_common NUMERIC(24, 6),
+    ADD COLUMN last_dividend_value NUMERIC(19, 6),
+    ADD COLUMN last_dividend_date DATE,
+    ADD COLUMN beta NUMERIC(19, 6),
+    ADD COLUMN float_shares NUMERIC(24, 6),
+    ADD COLUMN shares_outstanding NUMERIC(24, 6),
+    ADD COLUMN fifty_two_week_change NUMERIC(10, 6),
+    ADD COLUMN total_cash NUMERIC(24, 6),
+    ADD COLUMN total_cash_per_share NUMERIC(19, 6),
+    ADD COLUMN ebitda NUMERIC(24, 6),
+    ADD COLUMN total_debt NUMERIC(24, 6),
+    ADD COLUMN quick_ratio NUMERIC(19, 6),
+    ADD COLUMN current_ratio NUMERIC(19, 6),
+    ADD COLUMN total_revenue NUMERIC(24, 6),
+    ADD COLUMN gross_profits NUMERIC(24, 6);

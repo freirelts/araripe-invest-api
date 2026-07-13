@@ -388,16 +388,36 @@ public class MarketDataCollectionService {
 		setIfPresent(data, "priceToBook", snapshot::setPriceToBook);
 		setIfPresent(data, "enterpriseToRevenue", snapshot::setEnterpriseToRevenue);
 		setIfPresent(data, "enterpriseToEbitda", snapshot::setEnterpriseToEbitda);
+		setIfPresent(data, "forwardPE", snapshot::setForwardPe);
+		setIfPresent(data, "pegRatio", snapshot::setPegRatio);
 		setIfPresent(data, "earningsPerShare", snapshot::setEarningsPerShare);
 		setIfPresent(data, "trailingEps", snapshot::setEarningsPerShare);
+		setIfPresent(data, "netIncomeToCommon", snapshot::setNetIncomeToCommon);
 		setIfPresent(data, "bookValue", snapshot::setBookValue);
 		setIfPresent(data, "dividendYield", snapshot::setDividendYield);
 		setIfPresent(data, "yield", snapshot::setDividendYield);
+		setIfPresent(data, "lastDividendValue", snapshot::setLastDividendValue);
+		LocalDate lastDividendDate = date(data, "lastDividendDate");
+		if (lastDividendDate != null) {
+			snapshot.setLastDividendDate(lastDividendDate);
+		}
+		setIfPresent(data, "beta", snapshot::setBeta);
+		setIfPresent(data, "floatShares", snapshot::setFloatShares);
+		setIfPresent(data, "sharesOutstanding", snapshot::setSharesOutstanding);
+		setIfPresent(data, "52WeekChange", snapshot::setFiftyTwoWeekChange);
 		setIfPresent(data, "profitMargins", snapshot::setProfitMargin);
-		setIfPresent(data, "earningsQuarterlyGrowth", snapshot::setEarningsGrowth);
+		setIfPresent(data, "earningsQuarterlyGrowth", snapshot::setQuarterlyEarningsGrowth);
 	}
 
 	private void applyFinancialData(FundamentalSnapshot snapshot, JsonNode data) {
+		setIfPresent(data, "totalCash", snapshot::setTotalCash);
+		setIfPresent(data, "totalCashPerShare", snapshot::setTotalCashPerShare);
+		setIfPresent(data, "ebitda", snapshot::setEbitda);
+		setIfPresent(data, "totalDebt", snapshot::setTotalDebt);
+		setIfPresent(data, "quickRatio", snapshot::setQuickRatio);
+		setIfPresent(data, "currentRatio", snapshot::setCurrentRatio);
+		setIfPresent(data, "totalRevenue", snapshot::setTotalRevenue);
+		setIfPresent(data, "grossProfits", snapshot::setGrossProfits);
 		setIfPresent(data, "grossMargins", snapshot::setGrossMargin);
 		setIfPresent(data, "ebitdaMargins", snapshot::setEbitdaMargin);
 		setIfPresent(data, "operatingMargins", snapshot::setOperatingMargin);
@@ -405,12 +425,29 @@ public class MarketDataCollectionService {
 		setIfPresent(data, "returnOnEquity", snapshot::setRoe);
 		setIfPresent(data, "returnOnAssets", snapshot::setRoa);
 		setIfPresent(data, "debtToEquity", snapshot::setDebtToEquity);
-		setIfPresent(data, "revenueGrowth", snapshot::setRevenueGrowth);
-		setIfPresent(data, "earningsGrowth", snapshot::setEarningsGrowth);
+		BigDecimal revenueGrowth = decimal(data, "revenueGrowth");
+		if (revenueGrowth != null) {
+			snapshot.setRevenueGrowth(revenueGrowth);
+			snapshot.setQuarterlyRevenueGrowth(revenueGrowth);
+		}
+		BigDecimal earningsGrowth = decimal(data, "earningsGrowth");
+		if (earningsGrowth != null) {
+			snapshot.setEarningsGrowth(earningsGrowth);
+			if (snapshot.getQuarterlyEarningsGrowth() == null) {
+				snapshot.setQuarterlyEarningsGrowth(earningsGrowth);
+			}
+		}
+		setIfPresent(data, "revenueGrowthAnnual", snapshot::setAnnualRevenueGrowth);
+		setIfPresent(data, "earningsGrowthAnnual", snapshot::setAnnualEarningsGrowth);
 		setIfPresent(data, "freeCashflow", snapshot::setFreeCashflow);
 		setIfPresent(data, "freeCashFlow", snapshot::setFreeCashflow);
 		setIfPresent(data, "operatingCashflow", snapshot::setOperatingCashflow);
 		setIfPresent(data, "operatingCashFlow", snapshot::setOperatingCashflow);
+		BigDecimal totalDebt = decimal(data, "totalDebt");
+		BigDecimal totalCash = decimal(data, "totalCash");
+		if (totalDebt != null && totalCash != null) {
+			snapshot.setNetDebt(totalDebt.subtract(totalCash));
+		}
 	}
 
 	private void persistRecord(ProviderRawResponse response, DataCollectionCategory category, List<String> warnings) {

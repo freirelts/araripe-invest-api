@@ -145,18 +145,18 @@ public class IndicatorCalculationService {
 		StatementValues latestBalance = first(annualBalance);
 
 		derived.setAnnualRevenueGrowth(growth(value(latestAnnualIncome, "revenue", missingFields),
-				value(previousAnnualIncome, "revenue", missingFields)).orElse(null));
+				value(previousAnnualIncome, "revenue", missingFields)).orElse(derived.getAnnualRevenueGrowth()));
 		derived.setQuarterlyRevenueGrowth(growth(value(latestQuarterlyIncome, "revenue", missingFields),
-				value(previousQuarterlyIncome, "revenue", missingFields)).orElse(null));
+				value(previousQuarterlyIncome, "revenue", missingFields)).orElse(derived.getQuarterlyRevenueGrowth()));
 		derived.setAnnualEarningsGrowth(growth(value(latestAnnualIncome, "netIncome", missingFields),
-				value(previousAnnualIncome, "netIncome", missingFields)).orElse(null));
+				value(previousAnnualIncome, "netIncome", missingFields)).orElse(derived.getAnnualEarningsGrowth()));
 		derived.setQuarterlyEarningsGrowth(growth(value(latestQuarterlyIncome, "netIncome", missingFields),
-				value(previousQuarterlyIncome, "netIncome", missingFields)).orElse(null));
+				value(previousQuarterlyIncome, "netIncome", missingFields)).orElse(derived.getQuarterlyEarningsGrowth()));
 		derived.setEbitdaGrowth(growth(value(latestAnnualIncome, "ebitda", missingFields),
 				value(previousAnnualIncome, "ebitda", missingFields))
 			.or(() -> growth(value(latestQuarterlyIncome, "ebitda", missingFields),
 					value(previousQuarterlyIncome, "ebitda", missingFields)))
-			.orElse(null));
+			.orElse(derived.getEbitdaGrowth()));
 
 		BigDecimal revenue = value(latestAnnualIncome, "revenue", missingFields);
 		BigDecimal netIncome = value(latestAnnualIncome, "netIncome", missingFields);
@@ -182,7 +182,8 @@ public class IndicatorCalculationService {
 		derived.setDebtToEquity(ratio(totalDebt, equity).orElse(nonNull(derived.getDebtToEquity(), null)));
 
 		// Dívida líquida aproxima a obrigação financeira que sobra após caixa disponível.
-		derived.setNetDebt(totalDebt == null || cash == null ? null : scaleMoney(totalDebt.subtract(cash)));
+		derived.setNetDebt(totalDebt == null || cash == null ? derived.getNetDebt()
+				: scaleMoney(totalDebt.subtract(cash)));
 		derived.setOperatingCashflow(nonNull(operatingCashflow, derived.getOperatingCashflow()));
 		derived.setFreeCashflow(freeCashflow(operatingCashflow, capitalExpenditures).orElse(derived.getFreeCashflow()));
 		derived.setRevenueGrowth(nonNull(derived.getAnnualRevenueGrowth(), derived.getRevenueGrowth()));
@@ -209,9 +210,26 @@ public class IndicatorCalculationService {
 		target.setPriceToBook(source.getPriceToBook());
 		target.setEnterpriseToRevenue(source.getEnterpriseToRevenue());
 		target.setEnterpriseToEbitda(source.getEnterpriseToEbitda());
+		target.setForwardPe(source.getForwardPe());
+		target.setPegRatio(source.getPegRatio());
 		target.setEarningsPerShare(source.getEarningsPerShare());
+		target.setNetIncomeToCommon(source.getNetIncomeToCommon());
 		target.setBookValue(source.getBookValue());
 		target.setDividendYield(source.getDividendYield());
+		target.setLastDividendValue(source.getLastDividendValue());
+		target.setLastDividendDate(source.getLastDividendDate());
+		target.setBeta(source.getBeta());
+		target.setFloatShares(source.getFloatShares());
+		target.setSharesOutstanding(source.getSharesOutstanding());
+		target.setFiftyTwoWeekChange(source.getFiftyTwoWeekChange());
+		target.setTotalCash(source.getTotalCash());
+		target.setTotalCashPerShare(source.getTotalCashPerShare());
+		target.setEbitda(source.getEbitda());
+		target.setTotalDebt(source.getTotalDebt());
+		target.setQuickRatio(source.getQuickRatio());
+		target.setCurrentRatio(source.getCurrentRatio());
+		target.setTotalRevenue(source.getTotalRevenue());
+		target.setGrossProfits(source.getGrossProfits());
 		target.setProfitMargin(source.getProfitMargin());
 		target.setGrossMargin(source.getGrossMargin());
 		target.setEbitdaMargin(source.getEbitdaMargin());
@@ -221,8 +239,14 @@ public class IndicatorCalculationService {
 		target.setDebtToEquity(source.getDebtToEquity());
 		target.setRevenueGrowth(source.getRevenueGrowth());
 		target.setEarningsGrowth(source.getEarningsGrowth());
+		target.setAnnualRevenueGrowth(source.getAnnualRevenueGrowth());
+		target.setQuarterlyRevenueGrowth(source.getQuarterlyRevenueGrowth());
+		target.setAnnualEarningsGrowth(source.getAnnualEarningsGrowth());
+		target.setQuarterlyEarningsGrowth(source.getQuarterlyEarningsGrowth());
+		target.setEbitdaGrowth(source.getEbitdaGrowth());
 		target.setFreeCashflow(source.getFreeCashflow());
 		target.setOperatingCashflow(source.getOperatingCashflow());
+		target.setNetDebt(source.getNetDebt());
 	}
 
 	private List<StatementValues> statements(Asset asset, StatementType statementType, PeriodType periodType,
@@ -403,11 +427,12 @@ public class IndicatorCalculationService {
 
 	private DataQualityStatus fundamentalQuality(FundamentalSnapshot snapshot, BigDecimal revenue, BigDecimal netIncome,
 			BigDecimal operatingCashflow, List<String> missingFields) {
+		boolean hasRevenue = revenue != null || snapshot.getTotalRevenue() != null;
 		boolean hasValuation = snapshot.getTrailingPe() != null || snapshot.getPriceToBook() != null
 				|| snapshot.getEnterpriseToEbitda() != null;
 		boolean hasProfitability = netIncome != null || snapshot.getEarningsPerShare() != null;
 		boolean hasCash = operatingCashflow != null || snapshot.getOperatingCashflow() != null;
-		if (revenue == null || !hasProfitability || !hasCash || !hasValuation) {
+		if (!hasRevenue || !hasProfitability || !hasCash || !hasValuation) {
 			missingFields.add("minimumFundamentalSet");
 			return DataQualityStatus.INCOMPLETE;
 		}

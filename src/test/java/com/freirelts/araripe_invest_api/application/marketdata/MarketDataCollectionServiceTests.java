@@ -136,6 +136,64 @@ class MarketDataCollectionServiceTests {
 	}
 
 	@Test
+	void mapsBrapiStatisticsAndFinancialDataFieldsToCorrectFundamentalColumns() {
+		testProviders().useVale3RealFundamentalPayloads();
+		Asset asset = assetRepository.saveAndFlush(new Asset("VALE3", "Vale S.A.", "Materiais Básicos"));
+
+		MarketDataCollectionSummary summary = collectionService.collect(List.of("VALE3"),
+				HistoricalDataRequest.dailyAscending("1mo"), List.of());
+
+		assertThat(summary.fundamentalSnapshotsPersisted()).isEqualTo(2);
+		assertThat(summary.warnings()).isZero();
+		assertThat(fundamentalSnapshotRepository.findAll()).singleElement()
+				.satisfies(snapshot -> {
+					assertThat(snapshot.getAsset().getId()).isEqualTo(asset.getId());
+					assertThat(snapshot.getReferenceDate()).isEqualTo(LocalDate.of(2026, 7, 13));
+					assertThat(snapshot.getMostRecentQuarter()).isEqualTo(LocalDate.of(2026, 3, 31));
+					assertThat(snapshot.getMarketCap()).isEqualByComparingTo("329296900000");
+					assertThat(snapshot.getEnterpriseValue()).isEqualByComparingTo("496444900000");
+					assertThat(snapshot.getTrailingPe()).isEqualByComparingTo("23.798286");
+					assertThat(snapshot.getPriceToBook()).isEqualByComparingTo("1.7221198");
+					assertThat(snapshot.getEnterpriseToRevenue()).isEqualByComparingTo("2.3105075");
+					assertThat(snapshot.getEnterpriseToEbitda()).isEqualByComparingTo("9.660904");
+					assertThat(snapshot.getEarningsPerShare()).isEqualByComparingTo("3.117031");
+					assertThat(snapshot.getNetIncomeToCommon()).isEqualByComparingTo("13837000000");
+					assertThat(snapshot.getBookValue()).isEqualByComparingTo("43.074818");
+					assertThat(snapshot.getDividendYield()).isEqualByComparingTo("0.07");
+					assertThat(snapshot.getLastDividendDate()).isEqualTo(LocalDate.of(2025, 12, 11));
+					assertThat(snapshot.getBeta()).isEqualByComparingTo("0.7609478");
+					assertThat(snapshot.getFloatShares()).isEqualByComparingTo("4268646700");
+					assertThat(snapshot.getSharesOutstanding()).isEqualByComparingTo("4439160000");
+					assertThat(snapshot.getFiftyTwoWeekChange()).isEqualByComparingTo("0.4846645");
+					assertThat(snapshot.getTotalCash()).isEqualByComparingTo("27552000000");
+					assertThat(snapshot.getTotalCashPerShare()).isEqualByComparingTo("6.2065797");
+					assertThat(snapshot.getEbitda()).isEqualByComparingTo("51387000000");
+					assertThat(snapshot.getTotalDebt()).isEqualByComparingTo("194700000000");
+					assertThat(snapshot.getQuickRatio()).isEqualByComparingTo("0.78578115");
+					assertThat(snapshot.getCurrentRatio()).isEqualByComparingTo("1.2398882");
+					assertThat(snapshot.getTotalRevenue()).isEqualByComparingTo("214864000000");
+					assertThat(snapshot.getGrossProfits()).isEqualByComparingTo("75365000000");
+					assertThat(snapshot.getProfitMargin()).isEqualByComparingTo("0.06439888");
+					assertThat(snapshot.getQuarterlyEarningsGrowth()).isEqualByComparingTo("0.24788938");
+					assertThat(snapshot.getGrossMargin()).isEqualByComparingTo("0.35075676");
+					assertThat(snapshot.getEbitdaMargin()).isEqualByComparingTo("0.23916058");
+					assertThat(snapshot.getOperatingMargin()).isEqualByComparingTo("0.15708075");
+					assertThat(snapshot.getRoe()).isEqualByComparingTo("0.07236319");
+					assertThat(snapshot.getRoa()).isEqualByComparingTo("0.030266441");
+					assertThat(snapshot.getDebtToEquity()).isEqualByComparingTo("1.0182202");
+					assertThat(snapshot.getRevenueGrowth()).isEqualByComparingTo("0.015785368");
+					assertThat(snapshot.getQuarterlyRevenueGrowth()).isEqualByComparingTo("0.015785368");
+					assertThat(snapshot.getEarningsGrowth()).isEqualByComparingTo("-0.54291093");
+					assertThat(snapshot.getAnnualRevenueGrowth()).isEqualByComparingTo("0.036843766");
+					assertThat(snapshot.getAnnualEarningsGrowth()).isEqualByComparingTo("-0.5627374");
+					assertThat(snapshot.getFreeCashflow()).isEqualByComparingTo("9223999000");
+					assertThat(snapshot.getOperatingCashflow()).isEqualByComparingTo("48816000000");
+					assertThat(snapshot.getNetDebt()).isEqualByComparingTo("167148000000");
+					assertThat(snapshot.getQualityStatus()).isEqualTo(DataQualityStatus.VALID);
+				});
+	}
+
+	@Test
 	void secondCollectionRunUpdatesNaturalKeyRecordsWithoutDuplicatingPersistedData() {
 		assetRepository.saveAndFlush(new Asset("PETR4", "Petrobras PN", "Energia"));
 
@@ -222,6 +280,10 @@ class MarketDataCollectionServiceTests {
 			mode = Mode.FAILED_FINANCIAL_DATA;
 		}
 
+		void useVale3RealFundamentalPayloads() {
+			mode = Mode.VALE3_REAL_FUNDAMENTALS;
+		}
+
 		@Override
 		public ProviderRawResponse fetchCurrentQuotes(Collection<String> symbols) {
 			return success("/v2/stocks/quote", symbols, """
@@ -231,6 +293,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchDailyHistory(Collection<String> symbols, HistoricalDataRequest request) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/historical", symbols, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			if (mode == Mode.INCOMPLETE_HISTORY) {
 				return success("/v2/stocks/historical", symbols, """
 						{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":{"historicalDataPrice":[{"date":1780887600,"open":41.20,"high":40.00,"low":40.83,"close":41.22,"volume":34043600}]}}]}
@@ -256,6 +323,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchCompanyProfiles(Collection<String> symbols) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/profile", symbols, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/stocks/profile", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":{"sector":"Energia","industry":"Petróleo e Gás Integrado","name":"Petrobras PN"}}]}
 					""");
@@ -263,6 +335,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchStatistics(Collection<String> symbols) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/statistics", symbols, """
+						{"results":[{"requestedSymbol":"VALE3","symbol":"VALE3","changed":false,"data":{"priceHint":null,"enterpriseValue":496444900000,"forwardPE":null,"profitMargins":0.06439888,"floatShares":4268646700,"sharesOutstanding":4439160000,"sharesShort":null,"sharesShortPriorMonth":null,"sharesShortPreviousMonthDate":null,"dateShortInterest":null,"sharesPercentSharesOut":null,"heldPercentInsiders":null,"heldPercentInstitutions":null,"shortRatio":null,"shortPercentOfFloat":null,"beta":0.7609478,"impliedSharesOutstanding":null,"category":null,"bookValue":43.074818,"priceToBook":1.7221198,"fundFamily":null,"legalType":null,"lastFiscalYearEnd":null,"nextFiscalYearEnd":"2026-12-31 00:00:00+00","mostRecentQuarter":"2026-03-31","earningsQuarterlyGrowth":0.24788938,"netIncomeToCommon":13837000000,"trailingEps":3.117031,"forwardEps":null,"pegRatio":null,"lastSplitFactor":null,"lastSplitDate":null,"enterpriseToRevenue":2.3105075,"enterpriseToEbitda":9.660904,"52WeekChange":0.4846645,"SandP52WeekChange":null,"lastDividendValue":null,"lastDividendDate":"2025-12-11","ytdReturn":null,"beta3Year":null,"totalAssets":null,"yield":0.07,"fundInceptionDate":null,"threeYearAverageReturn":null,"fiveYearAverageReturn":null,"morningStarOverallRating":null,"morningStarRiskRating":null,"annualReportExpenseRatio":null,"lastCapGain":null,"annualHoldingsTurnover":null,"marketCap":329296900000,"trailingPE":23.798286,"earningsPerShare":3.117031,"dividendYield":0.07}}]}
+						""", Instant.parse("2026-07-13T16:10:45.597Z"));
+			}
 			return success("/v2/stocks/statistics", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":{"mostRecentQuarter":"2026-03-31","marketCap":486807440000,"enterpriseValue":1116184500000,"trailingPE":5.0137424,"priceToBook":1.0934849,"enterpriseToEbitda":4.834395,"earningsPerShare":8.347058,"bookValue":34.540943,"dividendYield":0.06}}]}
 					""");
@@ -276,6 +353,11 @@ class MarketDataCollectionServiceTests {
 						Instant.parse("2026-07-09T12:00:00Z"), 5, "BRAPI_HTTP_500",
 						"Brapi request failed with HTTP status 500.");
 			}
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/financial-data", symbols, """
+						{"results":[{"requestedSymbol":"VALE3","symbol":"VALE3","changed":false,"data":{"currentPrice":null,"targetHighPrice":null,"targetLowPrice":null,"targetMeanPrice":null,"targetMedianPrice":null,"recommendationMean":null,"recommendationKey":null,"numberOfAnalystOpinions":null,"totalCash":27552000000,"totalCashPerShare":6.2065797,"ebitda":51387000000,"totalDebt":194700000000,"quickRatio":0.78578115,"currentRatio":1.2398882,"totalRevenue":214864000000,"debtToEquity":1.0182202,"revenuePerShare":null,"returnOnAssets":0.030266441,"returnOnEquity":0.07236319,"grossProfits":75365000000,"freeCashflow":9223999000,"operatingCashflow":48816000000,"earningsGrowth":-0.54291093,"revenueGrowth":0.015785368,"earningsGrowthAnnual":-0.5627374,"revenueGrowthAnnual":0.036843766,"grossMargins":0.35075676,"ebitdaMargins":0.23916058,"operatingMargins":0.15708075,"profitMargins":0.06439888,"financialCurrency":null}}]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/stocks/financial-data", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":{"returnOnEquity":0.24267222,"returnOnAssets":0.08670072,"debtToEquity":1.5206507,"grossMargins":0.47359017,"ebitdaMargins":0.46353778,"operatingMargins":0.28881872,"profitMargins":0.21689811,"freeCashflow":80740000000,"operatingCashflow":194970000000,"earningsGrowth":1.2168349,"revenueGrowth":0.0037057786}}]}
 					""");
@@ -283,6 +365,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchBalanceSheets(Collection<String> symbols) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/balance-sheet", symbols, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/stocks/balance-sheet", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":[{"type":"yearly","endDate":"2025-12-31","cash":35608000000,"totalAssets":1223389000000}]}]}
 					""");
@@ -290,6 +377,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/income-statement", symbols, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/stocks/income-statement", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":[{"type":"yearly","endDate":"2025-12-31","totalRevenue":497549000000,"netIncome":110605000000}]}]}
 					""");
@@ -297,6 +389,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchCashFlows(Collection<String> symbols) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/cash-flow", symbols, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/stocks/cash-flow", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":[{"type":"yearly","endDate":"2025-12-31","operatingCashFlow":200333000000,"freeCashFlow":114219000000}]}]}
 					""");
@@ -304,6 +401,11 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchDividends(Collection<String> symbols) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/stocks/dividends", symbols, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/stocks/dividends", symbols, """
 					{"results":[{"requestedSymbol":"PETR4","symbol":"PETR4","data":{"cashDividends":[{"paymentDate":"2026-08-20T03:00:00.000Z","rate":0.350486,"isinCode":"BRPETRACNPR6","label":"JCP","lastDatePrior":"2026-06-01T03:00:00.000Z"}],"stockDividends":[{"factor":2,"approvedOn":"2008-04-25T03:00:00.000Z","isinCode":"BRPETRACNPR6","label":"DESDOBRAMENTO","lastDatePrior":"2008-04-25T03:00:00.000Z"}],"subscriptions":[]}}]}
 					""");
@@ -318,17 +420,26 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchSeries(Collection<String> slugs) {
+			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
+				return successAt("/v2/macro", slugs, """
+						{"results":[]}
+						""", Instant.parse("2026-07-13T15:35:36.125Z"));
+			}
 			return success("/v2/macro", slugs, """
 					{"results":[{"series":{"slug":"selic","name":"Taxa Selic","unit":"percentPerYear","frequency":"daily","category":"interestRate"},"observations":[{"date":"2026-04-30","value":14.5}]}]}
 					""");
 		}
 
 		private ProviderRawResponse success(String endpoint, Collection<String> requestedKeys, String payload) {
+			return successAt(endpoint, requestedKeys, payload, Instant.parse("2026-07-09T12:00:00Z"));
+		}
+
+		private ProviderRawResponse successAt(String endpoint, Collection<String> requestedKeys, String payload,
+				Instant requestedAt) {
 			try {
 				JsonNode json = objectMapper.readTree(payload);
 				List<String> keys = requestedKeys.stream().map(String::toUpperCase).toList();
-				return ProviderRawResponse.success("brapi", endpoint, keys, keys, Instant.parse(
-						"2026-07-09T12:00:00Z"), 5, json);
+				return ProviderRawResponse.success("brapi", endpoint, keys, keys, requestedAt, 5, json);
 			}
 			catch (Exception ex) {
 				throw new IllegalStateException(ex);
@@ -338,7 +449,8 @@ class MarketDataCollectionServiceTests {
 		private enum Mode {
 			NORMAL,
 			INCOMPLETE_HISTORY,
-			FAILED_FINANCIAL_DATA
+			FAILED_FINANCIAL_DATA,
+			VALE3_REAL_FUNDAMENTALS
 		}
 	}
 

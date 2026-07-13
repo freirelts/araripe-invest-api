@@ -72,14 +72,65 @@ public class FundamentalSnapshot {
 	@Column(name = "enterprise_to_ebitda", precision = 19, scale = 6)
 	private BigDecimal enterpriseToEbitda;
 
+	@Column(name = "forward_pe", precision = 19, scale = 6)
+	private BigDecimal forwardPe;
+
+	@Column(name = "peg_ratio", precision = 19, scale = 6)
+	private BigDecimal pegRatio;
+
 	@Column(name = "earnings_per_share", precision = 19, scale = 6)
 	private BigDecimal earningsPerShare;
+
+	@Column(name = "net_income_to_common", precision = 24, scale = 6)
+	private BigDecimal netIncomeToCommon;
 
 	@Column(name = "book_value", precision = 19, scale = 6)
 	private BigDecimal bookValue;
 
 	@Column(name = "dividend_yield", precision = 10, scale = 6)
 	private BigDecimal dividendYield;
+
+	@Column(name = "last_dividend_value", precision = 19, scale = 6)
+	private BigDecimal lastDividendValue;
+
+	@Column(name = "last_dividend_date")
+	private LocalDate lastDividendDate;
+
+	@Column(name = "beta", precision = 19, scale = 6)
+	private BigDecimal beta;
+
+	@Column(name = "float_shares", precision = 24, scale = 6)
+	private BigDecimal floatShares;
+
+	@Column(name = "shares_outstanding", precision = 24, scale = 6)
+	private BigDecimal sharesOutstanding;
+
+	@Column(name = "fifty_two_week_change", precision = 10, scale = 6)
+	private BigDecimal fiftyTwoWeekChange;
+
+	@Column(name = "total_cash", precision = 24, scale = 6)
+	private BigDecimal totalCash;
+
+	@Column(name = "total_cash_per_share", precision = 19, scale = 6)
+	private BigDecimal totalCashPerShare;
+
+	@Column(name = "ebitda", precision = 24, scale = 6)
+	private BigDecimal ebitda;
+
+	@Column(name = "total_debt", precision = 24, scale = 6)
+	private BigDecimal totalDebt;
+
+	@Column(name = "quick_ratio", precision = 19, scale = 6)
+	private BigDecimal quickRatio;
+
+	@Column(name = "current_ratio", precision = 19, scale = 6)
+	private BigDecimal currentRatio;
+
+	@Column(name = "total_revenue", precision = 24, scale = 6)
+	private BigDecimal totalRevenue;
+
+	@Column(name = "gross_profits", precision = 24, scale = 6)
+	private BigDecimal grossProfits;
 
 	@Column(name = "profit_margin", precision = 10, scale = 6)
 	private BigDecimal profitMargin;
