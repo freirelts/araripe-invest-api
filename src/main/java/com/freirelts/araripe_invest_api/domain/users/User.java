@@ -88,6 +88,11 @@ public class User {
 		return roles.stream().anyMatch(userRole -> userRole.getRole() == role);
 	}
 
+	public void replaceRoles(Set<UserRoleType> updatedRoles) {
+		roles.removeIf(userRole -> !updatedRoles.contains(userRole.getRole()));
+		updatedRoles.forEach(this::addRole);
+	}
+
 	public boolean hasValidAuthenticatedAccess() {
 		if (status != UserStatus.ACTIVE) {
 			return false;

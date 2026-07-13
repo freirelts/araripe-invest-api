@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -123,14 +124,29 @@ class AuthSecurityTests {
 	void customerCannotAccessAdminEndpointsButAdminCan() throws Exception {
 		String customerToken = login(saveUser("Customer", "customer-admin-denied@araripe.test", "senha-customer-123",
 				SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER), "senha-customer-123");
-		String adminToken = login(saveUser("Admin", "admin-allowed@araripe.test", "senha-admin-123",
-				SubscriptionStatus.NONE, UserRoleType.ADMIN), "senha-admin-123");
+		User admin = saveUser("Admin", "admin-allowed@araripe.test", "senha-admin-123",
+				SubscriptionStatus.NONE, UserRoleType.ADMIN);
+		String adminToken = login(admin, "senha-admin-123");
 
 		mockMvc.perform(get("/api/v1/admin/users").header("Authorization", bearer(customerToken)))
 				.andExpect(status().isForbidden());
 
 		mockMvc.perform(get("/api/v1/admin/users").header("Authorization", bearer(adminToken)))
 				.andExpect(status().isOk());
+
+		mockMvc.perform(put("/api/v1/admin/users/{userId}", admin.getId())
+						.header("Authorization", bearer(customerToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name":"Denied",
+								  "email":"denied@araripe.test",
+								  "status":"ACTIVE",
+								  "subscriptionStatus":"ACTIVE",
+								  "roles":["CUSTOMER"]
+								}
+								"""))
+				.andExpect(status().isForbidden());
 
 		mockMvc.perform(get("/api/v1/admin/assets").header("Authorization", bearer(adminToken)))
 				.andExpect(status().isOk());
@@ -152,6 +168,40 @@ class AuthSecurityTests {
 				.andExpect(jsonPath("$.referenceDate").value("2026-07-07"))
 				.andExpect(jsonPath("$.status").value("SUCCESS"))
 				.andExpect(jsonPath("$.requestedByUserId").isString());
+	}
+
+	@Test
+	void adminCanUpdateUserIncludingRolesAndRemovedRolesInvalidateOldJwt() throws Exception {
+		User target = saveUser("Role Target", "role-target@araripe.test", "senha-role-target-123",
+				SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
+		String oldCustomerToken = login(target, "senha-role-target-123");
+		String adminToken = login(saveUser("Role Admin", "role-admin@araripe.test", "senha-role-admin-123",
+				SubscriptionStatus.NONE, UserRoleType.ADMIN), "senha-role-admin-123");
+
+		mockMvc.perform(put("/api/v1/admin/users/{userId}", target.getId())
+						.header("Authorization", bearer(adminToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name":"Role Target Updated",
+								  "email":"ROLE-TARGET-UPDATED@ARARIPE.TEST",
+								  "status":"ACTIVE",
+								  "subscriptionStatus":"NONE",
+								  "roles":["ADMIN"]
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.name").value("Role Target Updated"))
+				.andExpect(jsonPath("$.email").value("role-target-updated@araripe.test"))
+				.andExpect(jsonPath("$.subscriptionStatus").value("NONE"))
+				.andExpect(jsonPath("$.roles[*]").value(containsInAnyOrder("ADMIN")));
+
+		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(oldCustomerToken)))
+				.andExpect(status().isUnauthorized());
+
+		String adminRoleToken = login(userRepository.findById(target.getId()).orElseThrow(), "senha-role-target-123");
+		mockMvc.perform(get("/api/v1/admin/users").header("Authorization", bearer(adminRoleToken)))
+				.andExpect(status().isOk());
 	}
 
 	@Test
