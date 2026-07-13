@@ -203,6 +203,7 @@ public class IndicatorCalculationService {
 			return;
 		}
 		target.setMarketCap(source.getMarketCap());
+		target.setMostRecentQuarter(source.getMostRecentQuarter());
 		target.setEnterpriseValue(source.getEnterpriseValue());
 		target.setTrailingPe(source.getTrailingPe());
 		target.setPriceToBook(source.getPriceToBook());

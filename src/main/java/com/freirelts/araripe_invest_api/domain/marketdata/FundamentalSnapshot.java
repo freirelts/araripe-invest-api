@@ -44,6 +44,9 @@ public class FundamentalSnapshot {
 	@Column(name = "reference_date", nullable = false)
 	private LocalDate referenceDate;
 
+	@Column(name = "most_recent_quarter")
+	private LocalDate mostRecentQuarter;
+
 	@Enumerated(EnumType.STRING)
 	@Column(name = "period_type", nullable = false, length = 32)
 	private PeriodType periodType;

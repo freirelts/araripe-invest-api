@@ -106,16 +106,13 @@ class MarketDataCollectionServiceTests {
 
 		assertThat(dailyCandleRepository.findAll()).hasSize(2)
 				.allSatisfy(candle -> assertThat(candle.getQualityStatus()).isEqualTo(DataQualityStatus.VALID));
-		assertThat(fundamentalSnapshotRepository.findAll()).hasSize(2)
-				.anySatisfy(snapshot -> {
+		assertThat(fundamentalSnapshotRepository.findAll()).singleElement()
+				.satisfies(snapshot -> {
 					assertThat(snapshot.getAsset().getId()).isEqualTo(asset.getId());
-					assertThat(snapshot.getReferenceDate()).isEqualTo(LocalDate.of(2026, 3, 31));
+					assertThat(snapshot.getReferenceDate()).isEqualTo(LocalDate.of(2026, 7, 9));
+					assertThat(snapshot.getMostRecentQuarter()).isEqualTo(LocalDate.of(2026, 3, 31));
 					assertThat(snapshot.getPeriodType()).isEqualTo(PeriodType.TTM);
 					assertThat(snapshot.getTrailingPe()).isEqualByComparingTo("5.0137424");
-					assertThat(snapshot.getQualityStatus()).isEqualTo(DataQualityStatus.VALID);
-				})
-				.anySatisfy(snapshot -> {
-					assertThat(snapshot.getReferenceDate()).isEqualTo(LocalDate.of(2026, 7, 9));
 					assertThat(snapshot.getRoe()).isEqualByComparingTo("0.24267222");
 					assertThat(snapshot.getQualityStatus()).isEqualTo(DataQualityStatus.VALID);
 				});
@@ -146,7 +143,7 @@ class MarketDataCollectionServiceTests {
 		collectionService.collect(List.of("PETR4"), HistoricalDataRequest.dailyAscending("1mo"), List.of("selic"));
 
 		assertThat(dailyCandleRepository.findAll()).hasSize(2);
-		assertThat(fundamentalSnapshotRepository.findAll()).hasSize(2);
+		assertThat(fundamentalSnapshotRepository.findAll()).hasSize(1);
 		assertThat(financialStatementSnapshotRepository.findAll()).hasSize(3);
 		assertThat(dividendEventRepository.findAll()).hasSize(2);
 		assertThat(macroIndicatorSnapshotRepository.findAll()).hasSize(1);

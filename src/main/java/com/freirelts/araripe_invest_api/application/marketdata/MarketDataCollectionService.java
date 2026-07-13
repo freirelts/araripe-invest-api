@@ -184,14 +184,16 @@ public class MarketDataCollectionService {
 					warnings.add(category + " returned empty data for " + asset.getSymbol() + ".");
 					continue;
 				}
-				LocalDate parsedReferenceDate = date(data, "mostRecentQuarter");
-				LocalDate referenceDate = parsedReferenceDate == null ? referenceDate(response.requestedAt())
-						: parsedReferenceDate;
+				LocalDate referenceDate = referenceDate(response.requestedAt());
 				FundamentalSnapshot snapshot = fundamentalSnapshotRepository
 						.findByAssetIdAndReferenceDateAndPeriodTypeAndSourceAndCalculationVersion(asset.getId(),
 								referenceDate, PeriodType.TTM, SOURCE, COLLECTOR_CALCULATION_VERSION)
 						.orElseGet(() -> new FundamentalSnapshot(asset, referenceDate, PeriodType.TTM, SOURCE));
 				snapshot.setCalculationVersion(COLLECTOR_CALCULATION_VERSION);
+				LocalDate mostRecentQuarter = date(data, "mostRecentQuarter");
+				if (mostRecentQuarter != null) {
+					snapshot.setMostRecentQuarter(mostRecentQuarter);
+				}
 				mapper.accept(snapshot, data);
 				snapshot.setQualityStatus(fundamentalQuality(snapshot));
 				fundamentalSnapshotRepository.save(snapshot);

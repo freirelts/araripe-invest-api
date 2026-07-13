@@ -133,6 +133,7 @@ class IndicatorCalculationServiceTests {
 		LocalDate referenceDate = LocalDate.of(2026, 3, 31);
 		FundamentalSnapshot collector = new FundamentalSnapshot(asset, referenceDate, PeriodType.TTM, "brapi");
 		collector.setCalculationVersion("collector-v1");
+		collector.setMostRecentQuarter(LocalDate.of(2025, 12, 31));
 		collector.setTrailingPe(new BigDecimal("9.500000"));
 		collector.setPriceToBook(new BigDecimal("1.800000"));
 		collector.setEnterpriseToEbitda(new BigDecimal("6.200000"));
@@ -171,6 +172,7 @@ class IndicatorCalculationServiceTests {
 						PeriodType.TTM, "araripe-indicators", IndicatorCalculationService.CALCULATION_VERSION)
 				.orElseThrow();
 		assertThat(result.fundamentalComplete()).isTrue();
+		assertThat(snapshot.getMostRecentQuarter()).isEqualTo(LocalDate.of(2025, 12, 31));
 		assertThat(snapshot.getTrailingPe()).isEqualByComparingTo("9.500000");
 		assertThat(snapshot.getAnnualRevenueGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getQuarterlyRevenueGrowth()).isEqualByComparingTo("0.166667");

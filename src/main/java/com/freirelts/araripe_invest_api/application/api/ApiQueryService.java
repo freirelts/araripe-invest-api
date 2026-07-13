@@ -400,18 +400,20 @@ public class ApiQueryService {
 		}
 	}
 
-	public record FundamentalResponse(UUID id, LocalDate referenceDate, PeriodType periodType, String source,
-			BigDecimal marketCap, BigDecimal enterpriseValue, BigDecimal trailingPe, BigDecimal priceToBook,
-			BigDecimal enterpriseToRevenue, BigDecimal enterpriseToEbitda, BigDecimal earningsPerShare,
-			BigDecimal bookValue, BigDecimal dividendYield, BigDecimal profitMargin, BigDecimal grossMargin,
-			BigDecimal ebitdaMargin, BigDecimal operatingMargin, BigDecimal roe, BigDecimal roa,
-			BigDecimal debtToEquity, BigDecimal revenueGrowth, BigDecimal earningsGrowth,
-			BigDecimal annualRevenueGrowth, BigDecimal quarterlyRevenueGrowth, BigDecimal annualEarningsGrowth,
-			BigDecimal quarterlyEarningsGrowth, BigDecimal ebitdaGrowth, BigDecimal freeCashflow,
-			BigDecimal operatingCashflow, BigDecimal netDebt, DataQualityStatus qualityStatus, String calculationVersion) {
+	public record FundamentalResponse(UUID id, LocalDate referenceDate, LocalDate mostRecentQuarter,
+			PeriodType periodType, String source, BigDecimal marketCap, BigDecimal enterpriseValue,
+			BigDecimal trailingPe, BigDecimal priceToBook, BigDecimal enterpriseToRevenue,
+			BigDecimal enterpriseToEbitda, BigDecimal earningsPerShare, BigDecimal bookValue,
+			BigDecimal dividendYield, BigDecimal profitMargin, BigDecimal grossMargin, BigDecimal ebitdaMargin,
+			BigDecimal operatingMargin, BigDecimal roe, BigDecimal roa, BigDecimal debtToEquity,
+			BigDecimal revenueGrowth, BigDecimal earningsGrowth, BigDecimal annualRevenueGrowth,
+			BigDecimal quarterlyRevenueGrowth, BigDecimal annualEarningsGrowth, BigDecimal quarterlyEarningsGrowth,
+			BigDecimal ebitdaGrowth, BigDecimal freeCashflow, BigDecimal operatingCashflow, BigDecimal netDebt,
+			DataQualityStatus qualityStatus, String calculationVersion) {
 		static FundamentalResponse from(FundamentalSnapshot snapshot) {
-			return new FundamentalResponse(snapshot.getId(), snapshot.getReferenceDate(), snapshot.getPeriodType(),
-					snapshot.getSource(), snapshot.getMarketCap(), snapshot.getEnterpriseValue(), snapshot.getTrailingPe(),
+			return new FundamentalResponse(snapshot.getId(), snapshot.getReferenceDate(),
+					snapshot.getMostRecentQuarter(), snapshot.getPeriodType(), snapshot.getSource(),
+					snapshot.getMarketCap(), snapshot.getEnterpriseValue(), snapshot.getTrailingPe(),
 					snapshot.getPriceToBook(), snapshot.getEnterpriseToRevenue(), snapshot.getEnterpriseToEbitda(),
 					snapshot.getEarningsPerShare(), snapshot.getBookValue(), snapshot.getDividendYield(),
 					snapshot.getProfitMargin(), snapshot.getGrossMargin(), snapshot.getEbitdaMargin(),
