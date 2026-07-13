@@ -84,7 +84,7 @@ public class MarketDataCollectionService {
 		List<String> symbols = monitoredAssetUniverse.findAllActiveAssets().stream()
 				.map(Asset::getSymbol)
 				.toList();
-		return collect(symbols, HistoricalDataRequest.dailyAscending("1y"), macroSlugs);
+		return collect(symbols, HistoricalDataRequest.dailyAscending("2y"), macroSlugs);
 	}
 
 	@Transactional

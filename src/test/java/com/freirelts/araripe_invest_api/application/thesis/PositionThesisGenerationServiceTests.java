@@ -239,6 +239,29 @@ class PositionThesisGenerationServiceTests {
 				.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.REDUZIR_EXPOSICAO));
 	}
 
+	@Test
+	void mapsStrongEarningsDeteriorationToReduceExposureWithoutExitThesis() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("LUCRO3", "Lucro Pressionado", "Energia"));
+		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
+		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY);
+		FundamentalSnapshot snapshot = saveStrongFundamental(asset, referenceDate);
+		snapshot.setRevenueGrowth(new BigDecimal("0.015785"));
+		snapshot.setAnnualRevenueGrowth(new BigDecimal("0.036844"));
+		snapshot.setEarningsGrowth(new BigDecimal("-0.542911"));
+		snapshot.setAnnualEarningsGrowth(new BigDecimal("-0.562737"));
+		snapshot.setProfitMargin(new BigDecimal("0.064399"));
+		fundamentalSnapshotRepository.saveAndFlush(snapshot);
+
+		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
+
+		assertThat(theses).allSatisfy(thesis -> {
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.REDUZIR_EXPOSICAO);
+			assertThat(thesis.getFailedFiltersJson()).contains("STRONG_EARNINGS_DETERIORATION")
+				.doesNotContain("STRONG_REVENUE_DETERIORATION", "NEGATIVE_PROFIT_MARGIN");
+		});
+	}
+
 	private void saveValidCandle(Asset asset, LocalDate referenceDate, BigDecimal close) {
 		DailyCandle candle = new DailyCandle(asset, referenceDate, close, close.add(BigDecimal.ONE),
 				close.subtract(BigDecimal.ONE), close, "brapi");
@@ -265,7 +288,7 @@ class PositionThesisGenerationServiceTests {
 		technicalIndicatorSnapshotRepository.saveAndFlush(snapshot);
 	}
 
-	private void saveStrongFundamental(Asset asset, LocalDate referenceDate) {
+	private FundamentalSnapshot saveStrongFundamental(Asset asset, LocalDate referenceDate) {
 		FundamentalSnapshot snapshot = new FundamentalSnapshot(asset, referenceDate, PeriodType.TTM,
 				"araripe-indicators");
 		snapshot.setCalculationVersion(IndicatorCalculationService.CALCULATION_VERSION);
@@ -292,7 +315,7 @@ class PositionThesisGenerationServiceTests {
 		snapshot.setEbitdaGrowth(new BigDecimal("0.180000"));
 		snapshot.setOperatingCashflow(new BigDecimal("500.000000"));
 		snapshot.setFreeCashflow(new BigDecimal("300.000000"));
-		fundamentalSnapshotRepository.saveAndFlush(snapshot);
+		return fundamentalSnapshotRepository.saveAndFlush(snapshot);
 	}
 
 	private void saveDividend(Asset asset, LocalDate lastDatePrior) {

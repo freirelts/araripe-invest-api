@@ -114,14 +114,22 @@ public class EliminatoryFilterEvaluator {
 
 	private void evaluateFundamentalDeterioration(EliminatoryFilterInput input,
 			List<EliminatoryFilterReason> reasons) {
-		// Quedas fortes de receita, lucro ou margem indicam deterioracao antes de qualquer pontuacao de oportunidade.
-		if (lessOrEqual(any(input.getRevenueGrowth(), input.getAnnualRevenueGrowth(), input.getQuarterlyRevenueGrowth()),
-				STRONG_REVENUE_DROP)
-				|| lessOrEqual(any(input.getEarningsGrowth(), input.getAnnualEarningsGrowth(),
-						input.getQuarterlyEarningsGrowth()), STRONG_EARNINGS_DROP)
-				|| lessOrEqual(input.getProfitMargin(), NEGATIVE_MARGIN_LIMIT)) {
-			reasons.add(reason(EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION,
-					"Deterioracao forte de receita, lucro ou margem."));
+		// A deterioracao fundamental e registrada por dimensao para nao tratar queda de lucro isolada como queda de
+		// receita ou margem. Qualquer periodo disponivel pode acionar o bloqueio, evitando mascarar um trimestre ruim
+		// quando o crescimento anual generico esta preenchido.
+		if (lessOrEqualAny(STRONG_REVENUE_DROP, input.getRevenueGrowth(), input.getAnnualRevenueGrowth(),
+				input.getQuarterlyRevenueGrowth())) {
+			reasons.add(reason(EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION,
+					"Receita apresentou queda forte em pelo menos um periodo analisado."));
+		}
+		if (lessOrEqualAny(STRONG_EARNINGS_DROP, input.getEarningsGrowth(), input.getAnnualEarningsGrowth(),
+				input.getQuarterlyEarningsGrowth())) {
+			reasons.add(reason(EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION,
+					"Lucro apresentou queda forte em pelo menos um periodo analisado."));
+		}
+		if (lessOrEqual(input.getProfitMargin(), NEGATIVE_MARGIN_LIMIT)) {
+			reasons.add(reason(EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN,
+					"Margem liquida negativa abaixo do limite conservador."));
 		}
 	}
 
@@ -190,6 +198,15 @@ public class EliminatoryFilterEvaluator {
 
 	private boolean lessOrEqual(BigDecimal value, BigDecimal limit) {
 		return value != null && value.compareTo(limit) <= 0;
+	}
+
+	private boolean lessOrEqualAny(BigDecimal limit, BigDecimal... values) {
+		for (BigDecimal value : values) {
+			if (lessOrEqual(value, limit)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private boolean greaterThan(BigDecimal value, BigDecimal limit) {

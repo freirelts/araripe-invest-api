@@ -103,7 +103,7 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 					"No macroeconomic series were requested.");
 		}
 		String joinedSlugs = String.join(",", normalizedSlugs);
-		return fetchMacro("/v2/macro", query -> query.queryParam("slugs", joinedSlugs), normalizedSlugs);
+		return fetchMacro("/v2/macro", query -> query.queryParam("symbols", joinedSlugs), normalizedSlugs);
 	}
 
 	private ProviderRawResponse fetchForSymbols(String endpoint, Collection<String> symbols,

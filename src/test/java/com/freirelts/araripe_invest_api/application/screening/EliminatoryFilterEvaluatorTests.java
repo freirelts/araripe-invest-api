@@ -58,9 +58,38 @@ class EliminatoryFilterEvaluatorTests {
 	}
 
 	@Test
-	void filtersStrongFundamentalDeterioration() {
+	void filtersStrongRevenueDeterioration() {
 		assertCodes(validInput().revenueGrowth(new BigDecimal("-0.16")).build())
-				.containsExactly(EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION);
+				.containsExactly(EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION);
+	}
+
+	@Test
+	void filtersStrongEarningsDeteriorationWithoutBlamingRevenueOrMargin() {
+		assertThat(evaluator.evaluate(validInput()
+				.revenueGrowth(new BigDecimal("0.015785"))
+				.annualRevenueGrowth(new BigDecimal("0.036844"))
+				.earningsGrowth(new BigDecimal("-0.542911"))
+				.annualEarningsGrowth(new BigDecimal("-0.562737"))
+				.profitMargin(new BigDecimal("0.064399"))
+				.build())).satisfiesExactly(reason -> {
+					assertThat(reason.code()).isEqualTo(EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION);
+					assertThat(reason.message()).contains("Lucro");
+				});
+	}
+
+	@Test
+	void filtersQuarterlyDeteriorationEvenWhenGenericGrowthIsPositive() {
+		assertCodes(validInput()
+				.revenueGrowth(new BigDecimal("0.05"))
+				.annualRevenueGrowth(new BigDecimal("0.04"))
+				.quarterlyRevenueGrowth(new BigDecimal("-0.35"))
+				.build()).containsExactly(EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION);
+	}
+
+	@Test
+	void filtersNegativeProfitMarginSeparately() {
+		assertCodes(validInput().profitMargin(new BigDecimal("-0.06")).build())
+				.containsExactly(EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN);
 	}
 
 	@Test

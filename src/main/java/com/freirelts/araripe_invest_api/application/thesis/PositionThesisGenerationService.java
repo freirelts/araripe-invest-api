@@ -459,6 +459,8 @@ public class PositionThesisGenerationService {
 				.anyMatch(code -> code == EliminatoryFilterCode.RECURRING_LOSSES
 						|| code == EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW
 						|| code == EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION
+						|| code == EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION
+						|| code == EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN
 						|| code == EliminatoryFilterCode.LONG_TREND_DETERIORATED);
 		if (thesisInvalidated) {
 			return ThesisStatus.SAIR_DA_TESE;
@@ -467,6 +469,7 @@ public class PositionThesisGenerationService {
 				.map(EliminatoryFilterReason::code)
 				.anyMatch(code -> code == EliminatoryFilterCode.EXCESSIVE_DEBT
 						|| code == EliminatoryFilterCode.EXTREME_VALUATION_WITHOUT_GROWTH
+						|| code == EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION
 						|| code == EliminatoryFilterCode.EXTREME_VOLATILITY);
 		if (exposureRisk) {
 			return ThesisStatus.REDUZIR_EXPOSICAO;
@@ -510,6 +513,9 @@ public class PositionThesisGenerationService {
 		return context.failedFilters().stream()
 				.map(EliminatoryFilterReason::code)
 				.anyMatch(code -> code == EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION
+						|| code == EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION
+						|| code == EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION
+						|| code == EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN
 						|| code == EliminatoryFilterCode.RECURRING_LOSSES
 						|| code == EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW);
 	}
