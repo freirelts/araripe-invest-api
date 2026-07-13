@@ -26,6 +26,8 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunReposit
 import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,7 @@ import java.util.function.Supplier;
 @Service
 public class OperationalJobService {
 
+	private static final Logger log = LoggerFactory.getLogger(OperationalJobService.class);
 	private static final List<String> DEFAULT_MACRO_SLUGS = List.of("selic", "ipca", "usdbrl");
 	private static final String AI_SOURCE_NAME = "Araripe Invest deterministic engine";
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
@@ -82,6 +85,7 @@ public class OperationalJobService {
 	@Transactional
 	public JobRunResult execute(JobName jobName, LocalDate referenceDate, JobRunTrigger trigger, UUID requestedByUserId) {
 		LocalDate effectiveDate = referenceDate == null ? LocalDate.now() : referenceDate;
+		long startedAtNanos = System.nanoTime();
 		User requester = requestedByUserId == null ? null
 				: userRepository.findById(requestedByUserId)
 					.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Requester not found."));
@@ -89,12 +93,18 @@ public class OperationalJobService {
 
 		JobRun run = jobRunRepository.saveAndFlush(new JobRun(jobName, effectiveDate, trigger, requester,
 				json(Map.of("referenceDate", effectiveDate.toString()))));
+		log.info("Job {} started for referenceDate={} trigger={} runId={} requestedByUserId={}", jobName,
+				effectiveDate, trigger, run.getId(), requestedByUserId);
 		try {
 			Map<String, Object> summary = executeJob(jobName, effectiveDate, trigger, requestedByUserId);
 			finish(run, statusFromSummary(summary), summary, null);
+			log.info("Job {} finished with status={} referenceDate={} runId={} durationMs={} summary={}", jobName,
+					run.getStatus(), effectiveDate, run.getId(), elapsedMs(startedAtNanos), summary);
 		}
 		catch (RuntimeException ex) {
 			finish(run, JobRunStatus.FAILED, Map.of("failed", true), summarize(ex));
+			log.warn("Job {} failed for referenceDate={} runId={} durationMs={} error={}", jobName, effectiveDate,
+					run.getId(), elapsedMs(startedAtNanos), summarize(ex));
 		}
 		return toResult(run);
 	}
@@ -127,19 +137,36 @@ public class OperationalJobService {
 		boolean failed = false;
 		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses,
 		// contexto de IA apenas depois da tese deterministica e varredura de carteira antes de qualquer notificacao.
-		for (JobName step : List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
+		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
 				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.AI_CONTEXT_ENRICHMENT, JobName.PORTFOLIO_SCAN,
-				JobName.DAILY_NOTIFICATION_DIGEST)) {
+				JobName.DAILY_NOTIFICATION_DIGEST);
+		log.info("Daily operational flow started for referenceDate={} steps={}", referenceDate, orderedSteps.size());
+		for (JobName step : orderedSteps) {
+			log.info("Daily operational flow executing step={} referenceDate={}", step, referenceDate);
 			JobRunResult result = execute(step, referenceDate, trigger, requestedByUserId);
 			steps.add(Map.of("runId", result.runId().toString(), "jobName", result.jobName().name(), "status",
 					result.status().name(), "summary", result.summary()));
 			failed = failed || result.status() == JobRunStatus.FAILED;
+			log.info("Daily operational flow step={} finished with status={} referenceDate={} runId={}", step,
+					result.status(), referenceDate, result.runId());
+		}
+		if (failed) {
+			log.warn("Daily operational flow finished with failed steps for referenceDate={}", referenceDate);
+		}
+		else {
+			log.info("Daily operational flow finished successfully for referenceDate={}", referenceDate);
 		}
 		return Map.of("steps", steps, "failed", failed);
 	}
 
 	private Map<String, Object> collectMarketAndFundamentalData() {
+		log.info("Collecting market, fundamental and macro data macroSlugs={}", DEFAULT_MACRO_SLUGS);
 		MarketDataCollectionSummary summary = marketDataCollectionService.collectActiveAssetData(DEFAULT_MACRO_SLUGS);
+		log.info(
+				"Data collection finished candlesPersisted={} fundamentalSnapshotsPersisted={} financialStatementsPersisted={} dividendEventsPersisted={} macroSnapshotsPersisted={} collectionRecordsPersisted={} warnings={}",
+				summary.candlesPersisted(), summary.fundamentalSnapshotsPersisted(),
+				summary.financialStatementsPersisted(), summary.dividendEventsPersisted(),
+				summary.macroSnapshotsPersisted(), summary.collectionRecordsPersisted(), summary.warnings());
 		return Map.of("candlesPersisted", summary.candlesPersisted(), "fundamentalSnapshotsPersisted",
 				summary.fundamentalSnapshotsPersisted(), "financialStatementsPersisted",
 				summary.financialStatementsPersisted(), "dividendEventsPersisted", summary.dividendEventsPersisted(),
@@ -148,19 +175,28 @@ public class OperationalJobService {
 	}
 
 	private Map<String, Object> filtersAndTheses(LocalDate referenceDate) {
+		log.info("Running screening filters for referenceDate={}", referenceDate);
 		int diagnostics = assetScreeningService.screenActiveAssets(referenceDate).size();
+		log.info("Screening filters finished for referenceDate={} diagnostics={}", referenceDate, diagnostics);
+		log.info("Generating position trade theses for referenceDate={}", referenceDate);
 		int theses = thesisGenerationService.generateForActiveAssets(referenceDate).size();
+		log.info("Position trade theses generated for referenceDate={} thesesGenerated={}", referenceDate, theses);
 		return Map.of("screeningDiagnostics", diagnostics, "thesesGenerated", theses);
 	}
 
 	private Map<String, Object> ranking(LocalDate referenceDate) {
+		log.info("Building thesis ranking for referenceDate={} ruleVersion={}", referenceDate,
+				PositionThesisGenerationService.RULE_VERSION);
 		List<PositionThesis> ranking = positionThesisRepository
 				.findByReferenceDateAndRuleVersionOrderByScoreDesc(referenceDate,
 						PositionThesisGenerationService.RULE_VERSION);
-		return Map.of("rankedTheses", ranking.size(), "topSymbols", ranking.stream()
+		List<String> topSymbols = ranking.stream()
 				.limit(10)
 				.map(thesis -> thesis.getAsset().getSymbol())
-				.toList());
+				.toList();
+		log.info("Thesis ranking finished for referenceDate={} rankedTheses={} topSymbols={}", referenceDate,
+				ranking.size(), topSymbols);
+		return Map.of("rankedTheses", ranking.size(), "topSymbols", topSymbols);
 	}
 
 	private Map<String, Object> enrichAiContext(LocalDate referenceDate) {
@@ -170,11 +206,19 @@ public class OperationalJobService {
 				.stream()
 				.filter(this::eligibleForAiContext)
 				.toList();
+		log.info("AI context enrichment started for referenceDate={} candidateTheses={}", referenceDate,
+				theses.size());
 		int persisted = 0;
 		for (PositionThesis thesis : theses) {
 			economicContextAnalysisService.analyzeAndPersist(thesis.getAsset(), aiRequest(thesis));
 			persisted++;
+			if (persisted % 10 == 0 || persisted == theses.size()) {
+				log.info("AI context enrichment progress referenceDate={} persisted={} total={}", referenceDate,
+						persisted, theses.size());
+			}
 		}
+		log.info("AI context enrichment finished for referenceDate={} aiAnalysesPersisted={}", referenceDate,
+				persisted);
 		return Map.of("candidateTheses", theses.size(), "aiAnalysesPersisted", persisted);
 	}
 
@@ -206,17 +250,25 @@ public class OperationalJobService {
 				.findByReferenceDateAndChannelAndStatus(referenceDate, NotificationChannel.EMAIL_SNS,
 						NotificationStatus.PENDING)
 				.size();
+		log.info("Daily notification digest checked referenceDate={} pendingActionableEvents={}", referenceDate,
+				pendingEvents);
 		// O job de Fase 9 nao envia e-mail: ele preserva eventos acionaveis pendentes para a integracao SNS da Fase 12,
 		// evitando marcar alerta como entregue sem provider externo auditado.
 		if (pendingEvents == 0) {
+			log.info("Daily notification digest skipped for referenceDate={} because there are no pending events",
+					referenceDate);
 			return Map.of("pendingActionableEvents", 0, "snsPublishReady", false, "skipped", true);
 		}
+		log.info("Daily notification digest found pending events for referenceDate={} pendingActionableEvents={}",
+				referenceDate, pendingEvents);
 		return Map.of("pendingActionableEvents", pendingEvents, "snsPublishReady", false, "partial", true,
 				"reason", "SNS publication is implemented in phase 12; events remain pending and idempotent.");
 	}
 
 	private Map<String, Object> count(String key, Supplier<Integer> supplier) {
-		return Map.of(key, supplier.get());
+		int count = supplier.get();
+		log.info("Job counter calculated key={} count={}", key, count);
+		return Map.of(key, count);
 	}
 
 	private JobRunStatus statusFromSummary(Map<String, Object> summary) {
@@ -257,6 +309,10 @@ public class OperationalJobService {
 	private String summarize(RuntimeException ex) {
 		String message = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
 		return message.length() <= 1000 ? message : message.substring(0, 1000);
+	}
+
+	private long elapsedMs(long startedAtNanos) {
+		return (System.nanoTime() - startedAtNanos) / 1_000_000;
 	}
 
 	private String json(Object value) {
