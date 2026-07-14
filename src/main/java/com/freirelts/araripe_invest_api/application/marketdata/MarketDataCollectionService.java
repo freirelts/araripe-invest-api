@@ -44,6 +44,7 @@ public class MarketDataCollectionService {
 
 	private static final String SOURCE = "brapi";
 	private static final String COLLECTOR_CALCULATION_VERSION = "collector-v1";
+	private static final int ASSET_COLLECTION_BATCH_SIZE = 5;
 
 	private final MarketDataProvider marketDataProvider;
 	private final FundamentalDataProvider fundamentalDataProvider;
@@ -93,27 +94,47 @@ public class MarketDataCollectionService {
 		List<String> normalizedSymbols = monitoredAssetUniverse.normalizeSymbols(symbols);
 		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
 
-		summary = summary.plus(processDailyHistory(marketDataProvider.fetchDailyHistory(normalizedSymbols,
-				historicalDataRequest)));
-		summary = summary.plus(processProfiles(fundamentalDataProvider.fetchCompanyProfiles(normalizedSymbols)));
-		summary = summary.plus(processFundamentals(fundamentalDataProvider.fetchStatistics(normalizedSymbols),
-				DataCollectionCategory.STATISTICS, this::applyStatistics));
-		summary = summary.plus(processFundamentals(fundamentalDataProvider.fetchFinancialData(normalizedSymbols),
-				DataCollectionCategory.FINANCIAL_DATA, this::applyFinancialData));
-		summary = summary.plus(processStatements(fundamentalDataProvider.fetchBalanceSheets(normalizedSymbols),
-				DataCollectionCategory.BALANCE_SHEET, StatementType.BALANCE_SHEET));
-		summary = summary.plus(processStatements(
-				fundamentalDataProvider.fetchIncomeStatements(normalizedSymbols, PeriodType.ANNUAL),
-				DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL));
-		summary = summary.plus(processStatements(
-				fundamentalDataProvider.fetchIncomeStatements(normalizedSymbols, PeriodType.QUARTERLY),
-				DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT, PeriodType.QUARTERLY));
-		summary = summary.plus(processStatements(fundamentalDataProvider.fetchCashFlows(normalizedSymbols),
-				DataCollectionCategory.CASH_FLOW, StatementType.CASH_FLOW));
-		summary = summary.plus(processDividends(fundamentalDataProvider.fetchDividends(normalizedSymbols)));
+		List<List<String>> assetBatches = assetBatches(normalizedSymbols);
+		if (assetBatches.isEmpty()) {
+			summary = summary.plus(collectAssetBatch(normalizedSymbols, historicalDataRequest));
+		}
+		for (List<String> assetBatch : assetBatches) {
+			summary = summary.plus(collectAssetBatch(assetBatch, historicalDataRequest));
+		}
 		summary = summary.plus(processMacro(macroEconomicDataProvider.fetchSeries(macroSlugs)));
 
 		return summary;
+	}
+
+	private MarketDataCollectionSummary collectAssetBatch(List<String> symbols,
+			HistoricalDataRequest historicalDataRequest) {
+		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
+		summary = summary.plus(processDailyHistory(marketDataProvider.fetchDailyHistory(symbols, historicalDataRequest)));
+		summary = summary.plus(processProfiles(fundamentalDataProvider.fetchCompanyProfiles(symbols)));
+		summary = summary.plus(processFundamentals(fundamentalDataProvider.fetchStatistics(symbols),
+				DataCollectionCategory.STATISTICS, this::applyStatistics));
+		summary = summary.plus(processFundamentals(fundamentalDataProvider.fetchFinancialData(symbols),
+				DataCollectionCategory.FINANCIAL_DATA, this::applyFinancialData));
+		summary = summary.plus(processStatements(fundamentalDataProvider.fetchBalanceSheets(symbols),
+				DataCollectionCategory.BALANCE_SHEET, StatementType.BALANCE_SHEET));
+		summary = summary.plus(processStatements(fundamentalDataProvider.fetchIncomeStatements(symbols,
+				PeriodType.ANNUAL), DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT,
+				PeriodType.ANNUAL));
+		summary = summary.plus(processStatements(fundamentalDataProvider.fetchIncomeStatements(symbols,
+				PeriodType.QUARTERLY), DataCollectionCategory.INCOME_STATEMENT, StatementType.INCOME_STATEMENT,
+				PeriodType.QUARTERLY));
+		summary = summary.plus(processStatements(fundamentalDataProvider.fetchCashFlows(symbols),
+				DataCollectionCategory.CASH_FLOW, StatementType.CASH_FLOW));
+		summary = summary.plus(processDividends(fundamentalDataProvider.fetchDividends(symbols)));
+		return summary;
+	}
+
+	private static List<List<String>> assetBatches(List<String> symbols) {
+		List<List<String>> batches = new ArrayList<>();
+		for (int start = 0; start < symbols.size(); start += ASSET_COLLECTION_BATCH_SIZE) {
+			batches.add(symbols.subList(start, Math.min(start + ASSET_COLLECTION_BATCH_SIZE, symbols.size())));
+		}
+		return batches;
 	}
 
 	private MarketDataCollectionSummary processDailyHistory(ProviderRawResponse response) {
@@ -475,6 +496,7 @@ public class MarketDataCollectionService {
 	private DataCollectionStatus collectionStatus(ProviderRawResponse response, List<String> warnings) {
 		return switch (response.status()) {
 			case SUCCESS -> warnings.isEmpty() ? DataCollectionStatus.SUCCESS : DataCollectionStatus.PARTIAL_SUCCESS;
+			case PARTIAL -> DataCollectionStatus.PARTIAL_SUCCESS;
 			case FAILED -> DataCollectionStatus.FAILED;
 			case SKIPPED -> DataCollectionStatus.SKIPPED;
 		};

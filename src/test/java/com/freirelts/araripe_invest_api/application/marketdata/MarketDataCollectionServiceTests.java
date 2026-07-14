@@ -34,8 +34,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -214,6 +217,33 @@ class MarketDataCollectionServiceTests {
 	}
 
 	@Test
+	void collectionSplitsAssetEndpointCallsIntoBatchesOfFiveSymbols() {
+		testProviders().useEmptyAssetPayloads();
+		List<String> symbols = List.of("PETR4", "VALE3", "ITUB4", "BBDC4", "ABEV3", "WEGE3", "BBAS3", "MGLU3",
+				"RENT3", "LREN3", "SUZB3", "RAIL3");
+		symbols.forEach(symbol -> assetRepository.save(new Asset(symbol, symbol, "Setor")));
+		assetRepository.flush();
+
+		MarketDataCollectionSummary summary = collectionService.collect(symbols,
+				HistoricalDataRequest.dailyAscending("1mo"), List.of());
+
+		List<String> firstBatch = List.of("PETR4", "VALE3", "ITUB4", "BBDC4", "ABEV3");
+		List<String> secondBatch = List.of("WEGE3", "BBAS3", "MGLU3", "RENT3", "LREN3");
+		List<String> thirdBatch = List.of("SUZB3", "RAIL3");
+		assertThat(summary.collectionRecordsPersisted()).isEqualTo(28);
+		assertThat(testProviders().requestedSymbols("/v2/stocks/historical"))
+				.containsExactly(firstBatch, secondBatch, thirdBatch);
+		assertThat(testProviders().requestedSymbols("/v2/stocks/statistics"))
+				.containsExactly(firstBatch, secondBatch, thirdBatch);
+		assertThat(testProviders().requestedSymbols("/v2/stocks/financial-data"))
+				.containsExactly(firstBatch, secondBatch, thirdBatch);
+		assertThat(testProviders().requestedSymbols("/v2/stocks/income-statement"))
+				.containsExactly(firstBatch, firstBatch, secondBatch, secondBatch, thirdBatch, thirdBatch);
+		assertThat(testProviders().requestedSymbols("/v2/stocks/dividends"))
+				.containsExactly(firstBatch, secondBatch, thirdBatch);
+	}
+
+	@Test
 	void incompleteOhlcvCreatesPartialCollectionRecordWithoutPersistingInvalidCandle() {
 		testProviders().useIncompleteHistory();
 		assetRepository.saveAndFlush(new Asset("PETR4", "Petrobras PN", "Energia"));
@@ -252,6 +282,7 @@ class MarketDataCollectionServiceTests {
 
 		private final ObjectMapper objectMapper = new ObjectMapper();
 		private Mode mode = Mode.NORMAL;
+		private final Map<String, List<List<String>>> requestedSymbolsByEndpoint = new LinkedHashMap<>();
 
 		@Bean
 		ObjectMapper objectMapper() {
@@ -275,6 +306,7 @@ class MarketDataCollectionServiceTests {
 
 		void reset() {
 			mode = Mode.NORMAL;
+			requestedSymbolsByEndpoint.clear();
 		}
 
 		void useIncompleteHistory() {
@@ -289,8 +321,17 @@ class MarketDataCollectionServiceTests {
 			mode = Mode.VALE3_REAL_FUNDAMENTALS;
 		}
 
+		void useEmptyAssetPayloads() {
+			mode = Mode.EMPTY_ASSET_PAYLOADS;
+		}
+
+		List<List<String>> requestedSymbols(String endpoint) {
+			return requestedSymbolsByEndpoint.getOrDefault(endpoint, List.of());
+		}
+
 		@Override
 		public ProviderRawResponse fetchCurrentQuotes(Collection<String> symbols) {
+			recordRequest("/v2/stocks/quote", symbols);
 			return success("/v2/stocks/quote", symbols, """
 					{"results":[]}
 					""");
@@ -298,6 +339,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchDailyHistory(Collection<String> symbols, HistoricalDataRequest request) {
+			recordRequest("/v2/stocks/historical", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/historical", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/historical", symbols, """
 						{"results":[]}
@@ -328,6 +375,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchCompanyProfiles(Collection<String> symbols) {
+			recordRequest("/v2/stocks/profile", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/profile", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/profile", symbols, """
 						{"results":[]}
@@ -340,6 +393,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchStatistics(Collection<String> symbols) {
+			recordRequest("/v2/stocks/statistics", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/statistics", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/statistics", symbols, """
 						{"results":[{"requestedSymbol":"VALE3","symbol":"VALE3","changed":false,"data":{"priceHint":null,"enterpriseValue":496444900000,"forwardPE":null,"profitMargins":0.06439888,"floatShares":4268646700,"sharesOutstanding":4439160000,"sharesShort":null,"sharesShortPriorMonth":null,"sharesShortPreviousMonthDate":null,"dateShortInterest":null,"sharesPercentSharesOut":null,"heldPercentInsiders":null,"heldPercentInstitutions":null,"shortRatio":null,"shortPercentOfFloat":null,"beta":0.7609478,"impliedSharesOutstanding":null,"category":null,"bookValue":43.074818,"priceToBook":1.7221198,"fundFamily":null,"legalType":null,"lastFiscalYearEnd":null,"nextFiscalYearEnd":"2026-12-31 00:00:00+00","mostRecentQuarter":"2026-03-31","earningsQuarterlyGrowth":0.24788938,"netIncomeToCommon":13837000000,"trailingEps":3.117031,"forwardEps":null,"pegRatio":null,"lastSplitFactor":null,"lastSplitDate":null,"enterpriseToRevenue":2.3105075,"enterpriseToEbitda":9.660904,"52WeekChange":0.4846645,"SandP52WeekChange":null,"lastDividendValue":null,"lastDividendDate":"2025-12-11","ytdReturn":null,"beta3Year":null,"totalAssets":null,"yield":0.07,"fundInceptionDate":null,"threeYearAverageReturn":null,"fiveYearAverageReturn":null,"morningStarOverallRating":null,"morningStarRiskRating":null,"annualReportExpenseRatio":null,"lastCapGain":null,"annualHoldingsTurnover":null,"marketCap":329296900000,"trailingPE":23.798286,"earningsPerShare":3.117031,"dividendYield":0.07}}]}
@@ -352,6 +411,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchFinancialData(Collection<String> symbols) {
+			recordRequest("/v2/stocks/financial-data", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/financial-data", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.FAILED_FINANCIAL_DATA) {
 				List<String> keys = symbols.stream().map(String::toUpperCase).toList();
 				return ProviderRawResponse.failed("brapi", "/v2/stocks/financial-data", keys, keys,
@@ -370,6 +435,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchBalanceSheets(Collection<String> symbols) {
+			recordRequest("/v2/stocks/balance-sheet", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/balance-sheet", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/balance-sheet", symbols, """
 						{"results":[]}
@@ -382,6 +453,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols, PeriodType periodType) {
+			recordRequest("/v2/stocks/income-statement", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/income-statement", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/income-statement", symbols, """
 						{"results":[]}
@@ -399,6 +476,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchCashFlows(Collection<String> symbols) {
+			recordRequest("/v2/stocks/cash-flow", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/cash-flow", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/cash-flow", symbols, """
 						{"results":[]}
@@ -411,6 +494,12 @@ class MarketDataCollectionServiceTests {
 
 		@Override
 		public ProviderRawResponse fetchDividends(Collection<String> symbols) {
+			recordRequest("/v2/stocks/dividends", symbols);
+			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
+				return success("/v2/stocks/dividends", symbols, """
+						{"results":[]}
+						""");
+			}
 			if (mode == Mode.VALE3_REAL_FUNDAMENTALS) {
 				return successAt("/v2/stocks/dividends", symbols, """
 						{"results":[]}
@@ -456,11 +545,17 @@ class MarketDataCollectionServiceTests {
 			}
 		}
 
+		private void recordRequest(String endpoint, Collection<String> symbols) {
+			List<String> keys = symbols.stream().map(String::toUpperCase).toList();
+			requestedSymbolsByEndpoint.computeIfAbsent(endpoint, ignored -> new ArrayList<>()).add(keys);
+		}
+
 		private enum Mode {
 			NORMAL,
 			INCOMPLETE_HISTORY,
 			FAILED_FINANCIAL_DATA,
-			VALE3_REAL_FUNDAMENTALS
+			VALE3_REAL_FUNDAMENTALS,
+			EMPTY_ASSET_PAYLOADS
 		}
 	}
 

@@ -25,9 +25,6 @@ public class ScoringService {
 
 	public ScoreResult score(ScoringInput input) {
 		List<EliminatoryFilterReason> failedFilters = failedFilters(input);
-		if (hasUnscorableFilter(failedFilters)) {
-			return blockedScore(input, failedFilters);
-		}
 		List<ScoreComponent> components = List.of(
 				component("FUNDAMENTAL_QUALITY", "Qualidade fundamentalista", 30,
 						fundamentalQuality(input), "Lucro, margens e retorno sobre capital sustentam a tese."),
@@ -48,31 +45,12 @@ public class ScoringService {
 				.reduce(BigDecimal.ZERO, BigDecimal::add)
 				.setScale(0, RoundingMode.HALF_UP)
 				.intValue();
-		return new ScoreResult(clamp(finalScore), input.thesisType(), RULE_VERSION, !failedFilters.isEmpty(), true,
+		return new ScoreResult(clamp(finalScore), input.thesisType(), RULE_VERSION, true,
 				failedFilters, components);
-	}
-
-	private ScoreResult blockedScore(ScoringInput input, List<EliminatoryFilterReason> failedFilters) {
-		// Dados ou fundamentos minimos ausentes tornam a nota artificial. Nesses casos o motor registra o bloqueio sem
-		// calcular subscores; outros filtros continuam bloqueando recomendacao, mas preservam score diagnostico.
-		List<String> evidence = failedFilters.stream()
-				.map(reason -> reason.code().name())
-				.toList();
-		ScoreComponent blocked = new ScoreComponent("ELIMINATORY_FILTER_BLOCK", "Bloqueio por filtro eliminatorio",
-				100, 0, BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP),
-				"Score zerado porque filtros obrigatorios falharam antes da pontuacao.", evidence);
-		return new ScoreResult(0, input.thesisType(), RULE_VERSION, true, false, failedFilters, List.of(blocked));
 	}
 
 	private List<EliminatoryFilterReason> failedFilters(ScoringInput input) {
 		return input.failedFilters() == null ? List.of() : input.failedFilters();
-	}
-
-	private boolean hasUnscorableFilter(List<EliminatoryFilterReason> failedFilters) {
-		return failedFilters.stream()
-				.map(EliminatoryFilterReason::code)
-				.anyMatch(code -> code == EliminatoryFilterCode.DATA_QUALITY_BLOCKED
-						|| code == EliminatoryFilterCode.MINIMUM_FUNDAMENTALS_MISSING);
 	}
 
 	private ScoreComponent component(String code, String label, int weightPercent, ScoreRuleEvaluation evaluation,

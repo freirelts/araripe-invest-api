@@ -3,12 +3,15 @@ package com.freirelts.araripe_invest_api.adapters.outbound.brapi;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.freirelts.araripe_invest_api.application.assets.MonitoredAssetUniverseService;
 import com.freirelts.araripe_invest_api.application.marketdata.FundamentalDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.HistoricalDataRequest;
 import com.freirelts.araripe_invest_api.application.marketdata.MacroEconomicDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.ProviderRawResponse;
+import com.freirelts.araripe_invest_api.application.marketdata.ProviderResponseStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import org.springframework.stereotype.Component;
@@ -17,6 +20,7 @@ import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Function;
@@ -27,6 +31,7 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 	static final String PROVIDER = "brapi";
 	static final String TOKEN_MISSING = "BRAPI_TOKEN_MISSING";
 	static final String NO_ACTIVE_ASSETS = "NO_ACTIVE_MONITORED_ASSETS";
+	static final int SYMBOL_BATCH_SIZE = 5;
 
 	private final RestClient restClient;
 	private final BrapiProperties properties;
@@ -120,7 +125,78 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 			return ProviderRawResponse.skipped(PROVIDER, endpoint, requestedSymbols, NO_ACTIVE_ASSETS,
 					"No active monitored assets were found for the requested symbols.");
 		}
-		return fetch(endpoint, requestedSymbols, activeSymbols, queryCustomizer.apply(new Query(endpoint, activeSymbols)));
+		if (activeSymbols.size() <= SYMBOL_BATCH_SIZE) {
+			return fetch(endpoint, requestedSymbols, activeSymbols,
+					queryCustomizer.apply(new Query(endpoint, activeSymbols)));
+		}
+		if (!properties.hasToken()) {
+			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, activeSymbols, Instant.now(), 0,
+					TOKEN_MISSING, "Brapi token is not configured for protected endpoint access.");
+		}
+
+		List<ProviderRawResponse> responses = new ArrayList<>();
+		for (List<String> batch : batches(activeSymbols, SYMBOL_BATCH_SIZE)) {
+			responses.add(fetch(endpoint, requestedSymbols, batch, queryCustomizer.apply(new Query(endpoint, batch))));
+		}
+		return aggregateBatchResponses(endpoint, requestedSymbols, activeSymbols, responses);
+	}
+
+	private ProviderRawResponse aggregateBatchResponses(String endpoint, List<String> requestedSymbols,
+			List<String> queriedSymbols, List<ProviderRawResponse> responses) {
+		List<ProviderRawResponse> successfulResponses = responses.stream()
+				.filter(response -> response.status() == ProviderResponseStatus.SUCCESS)
+				.toList();
+		if (successfulResponses.isEmpty()) {
+			ProviderRawResponse firstFailure = responses.getFirst();
+			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, queriedSymbols,
+					firstFailure.requestedAt(), totalTookMillis(responses), firstFailure.errorCode(),
+					firstFailure.errorMessage());
+		}
+
+		ProviderRawResponse firstSuccess = successfulResponses.getFirst();
+		ObjectNode aggregatedPayload = objectMapper.createObjectNode();
+		ArrayNode results = aggregatedPayload.putArray("results");
+		ArrayNode batches = aggregatedPayload.putArray("batches");
+		for (ProviderRawResponse response : responses) {
+			ObjectNode batch = batches.addObject();
+			batch.putPOJO("symbols", response.queriedSymbols());
+			batch.put("status", response.status().name());
+			batch.put("requestedAt", response.requestedAt().toString());
+			batch.put("took", response.tookMillis());
+			if (response.errorCode() != null) {
+				batch.put("errorCode", response.errorCode());
+			}
+			if (response.payload() == null) {
+				continue;
+			}
+			for (JsonNode result : response.payload().path("results")) {
+				results.add(result);
+			}
+		}
+
+		long tookMillis = totalTookMillis(responses);
+		boolean hasFailure = responses.stream().anyMatch(response -> response.status() == ProviderResponseStatus.FAILED);
+		if (!hasFailure) {
+			return ProviderRawResponse.success(PROVIDER, endpoint, requestedSymbols, queriedSymbols,
+					firstSuccess.requestedAt(), tookMillis, aggregatedPayload);
+		}
+		return new ProviderRawResponse(PROVIDER, endpoint, List.copyOf(requestedSymbols), List.copyOf(queriedSymbols),
+				firstSuccess.requestedAt(), tookMillis, ProviderResponseStatus.PARTIAL, aggregatedPayload,
+				"BRAPI_PARTIAL_FAILURE", "At least one brapi batch failed while other batches returned data.");
+	}
+
+	private static List<List<String>> batches(List<String> symbols, int batchSize) {
+		List<List<String>> batches = new ArrayList<>();
+		for (int start = 0; start < symbols.size(); start += batchSize) {
+			batches.add(symbols.subList(start, Math.min(start + batchSize, symbols.size())));
+		}
+		return batches;
+	}
+
+	private static long totalTookMillis(List<ProviderRawResponse> responses) {
+		return responses.stream()
+				.mapToLong(ProviderRawResponse::tookMillis)
+				.sum();
 	}
 
 	private ProviderRawResponse fetchMacro(String endpoint, Function<Query, Query> queryCustomizer) {

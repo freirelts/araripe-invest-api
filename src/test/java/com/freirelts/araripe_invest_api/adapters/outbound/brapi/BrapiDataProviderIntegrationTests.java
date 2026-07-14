@@ -162,6 +162,25 @@ class BrapiDataProviderIntegrationTests {
 	}
 
 	@Test
+	void providerSplitsQuoteRequestsIntoBatchesOfFiveSymbols() {
+		List<String> symbols = List.of("PETR4", "VALE3", "ITUB4", "BBDC4", "ABEV3", "WEGE3", "BBAS3", "MGLU3",
+				"RENT3", "LREN3", "SUZB3", "RAIL3");
+		symbols.forEach(symbol -> assetRepository.save(new Asset(symbol, symbol, "Setor")));
+		assetRepository.flush();
+
+		ProviderRawResponse response = marketDataProvider.fetchCurrentQuotes(symbols);
+
+		assertThat(response.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(response.requestedSymbols()).containsExactlyElementsOf(symbols);
+		assertThat(response.queriedSymbols()).containsExactlyElementsOf(symbols);
+		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getRawQuery)
+				.containsExactly("symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3",
+						"symbols=WEGE3,BBAS3,MGLU3,RENT3,LREN3", "symbols=SUZB3,RAIL3");
+		assertThat(BRAPI_SERVER.authorizationHeaders()).containsExactly("Bearer test-brapi-token",
+				"Bearer test-brapi-token", "Bearer test-brapi-token");
+	}
+
+	@Test
 	void providerAddsPeriodWhenFetchingAnnualAndQuarterlyIncomeStatements() {
 		assetRepository.saveAndFlush(new Asset("PETR4", "Petrobras PN", "Energia"));
 
@@ -175,6 +194,20 @@ class BrapiDataProviderIntegrationTests {
 		assertThat(BRAPI_SERVER.requestUris()).hasSize(2);
 		assertThat(BRAPI_SERVER.requestUris().get(0).getRawQuery()).isEqualTo("symbols=PETR4&period=annual");
 		assertThat(BRAPI_SERVER.requestUris().get(1).getRawQuery()).isEqualTo("symbols=PETR4&period=quarterly");
+	}
+
+	@Test
+	void providerSplitsIncomeStatementRequestsAndKeepsPeriodInEveryBatch() {
+		List<String> symbols = List.of("PETR4", "VALE3", "ITUB4", "BBDC4", "ABEV3", "WEGE3");
+		symbols.forEach(symbol -> assetRepository.save(new Asset(symbol, symbol, "Setor")));
+		assetRepository.flush();
+
+		ProviderRawResponse response = fundamentalDataProvider.fetchIncomeStatements(symbols, PeriodType.QUARTERLY);
+
+		assertThat(response.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getRawQuery)
+				.containsExactly("symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3&period=quarterly",
+						"symbols=WEGE3&period=quarterly");
 	}
 
 	@Test

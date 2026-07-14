@@ -9,7 +9,6 @@ public record ScoreResult(
 		int finalScore,
 		ThesisType thesisType,
 		String ruleVersion,
-		boolean blockedByEliminatoryFilter,
 		boolean scoreCalculated,
 		List<EliminatoryFilterReason> failedFilters,
 		List<ScoreComponent> components) {
