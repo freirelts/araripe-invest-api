@@ -66,10 +66,10 @@ public class AllocationPlan {
 	@Column(name = "fair_price_estimate", precision = 19, scale = 6)
 	private BigDecimal fairPriceEstimate;
 
-	@Column(name = "safety_margin_percent", precision = 10, scale = 6)
+	@Column(name = "safety_margin_percent", precision = 19, scale = 6)
 	private BigDecimal safetyMarginPercent;
 
-	@Column(name = "estimated_upside_percent", precision = 10, scale = 6)
+	@Column(name = "estimated_upside_percent", precision = 19, scale = 6)
 	private BigDecimal estimatedUpsidePercent;
 
 	@Column(name = "suggested_quantity", nullable = false)

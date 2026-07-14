@@ -71,7 +71,7 @@ public class CustomerPositionThesis {
 	@Column(name = "accepted_price_ceiling", precision = 19, scale = 6)
 	private BigDecimal acceptedPriceCeiling;
 
-	@Column(name = "accepted_safety_margin_percent", precision = 10, scale = 6)
+	@Column(name = "accepted_safety_margin_percent", precision = 19, scale = 6)
 	private BigDecimal acceptedSafetyMarginPercent;
 
 	@Column(name = "rule_version", nullable = false, length = 40)

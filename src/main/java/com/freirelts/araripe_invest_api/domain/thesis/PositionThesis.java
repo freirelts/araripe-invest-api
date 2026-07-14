@@ -74,7 +74,7 @@ public class PositionThesis {
 	@Column(name = "fair_price_estimate", precision = 19, scale = 6)
 	private BigDecimal fairPriceEstimate;
 
-	@Column(name = "safety_margin_percent", precision = 10, scale = 6)
+	@Column(name = "safety_margin_percent", precision = 19, scale = 6)
 	private BigDecimal safetyMarginPercent;
 
 	@Column(name = "stop_price", precision = 19, scale = 6)

@@ -232,6 +232,26 @@ class PositionThesisGenerationServiceTests {
 		});
 	}
 
+	@Test
+	void persistsThesisWhenTinyFairPriceCreatesExtremeNegativeSafetyMargin() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("MICRO3", "Preco Justo Residual", "Consumo"));
+		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
+		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY);
+		FundamentalSnapshot snapshot = saveStrongFundamental(asset, referenceDate);
+		snapshot.setEarningsPerShare(new BigDecimal("0.000083"));
+		snapshot.setBookValue(new BigDecimal("0.000500"));
+		fundamentalSnapshotRepository.saveAndFlush(snapshot);
+
+		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
+
+		assertThat(theses).hasSize(3);
+		assertThat(theses)
+				.anySatisfy(thesis -> assertThat(thesis.getSafetyMarginPercent())
+						.isLessThan(new BigDecimal("-9999.999999")));
+		assertThat(allocationPlanRepository.findAll()).hasSize(3);
+	}
+
 	private void saveValidCandle(Asset asset, LocalDate referenceDate, BigDecimal close) {
 		DailyCandle candle = new DailyCandle(asset, referenceDate, close, close.add(BigDecimal.ONE),
 				close.subtract(BigDecimal.ONE), close, "brapi");
