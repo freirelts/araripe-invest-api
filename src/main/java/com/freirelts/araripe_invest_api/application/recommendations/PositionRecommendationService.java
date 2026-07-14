@@ -99,9 +99,10 @@ public class PositionRecommendationService {
 				.flatMap(association -> thesisRepository
 						.findTopByAssetIdAndThesisTypeAndReferenceDateLessThanEqualOrderByReferenceDateDescCreatedAtDesc(
 								position.getAsset().getId(), association.getThesisType(), referenceDate));
-		Optional<AiContextAnalysis> aiContext = aiContextAnalysisRepository
-				.findTopByAssetIdAndReferenceDateLessThanEqualAndValidationStatusOrderByReferenceDateDescCreatedAtDesc(
-						position.getAsset().getId(), referenceDate, AiValidationStatus.VALID);
+		Optional<AiContextAnalysis> aiContext = currentThesis
+				.flatMap(thesis -> aiContextAnalysisRepository
+						.findTopByThesisIdAndReferenceDateLessThanEqualAndValidationStatusOrderByReferenceDateDescCreatedAtDesc(
+								thesis.getId(), referenceDate, AiValidationStatus.VALID));
 
 		Decision decision = decide(position, activeAssociation.orElse(null), currentThesis.orElse(null),
 				latestCandle.orElse(null), aiContext.orElse(null));

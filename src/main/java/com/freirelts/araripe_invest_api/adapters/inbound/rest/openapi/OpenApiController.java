@@ -44,8 +44,11 @@ class OpenApiController {
 		add(paths, "/api/v1/recommendations/{recommendationId}", "get", "Detalhe de recomendacao por posicao.");
 		add(paths, "/api/v1/notifications", "get", "Eventos de notificacao do usuario.");
 		add(paths, "/api/v1/notifications/{notificationId}/read", "patch", "Marca notificacao como lida na web.");
+		add(paths, "/api/v1/ai/context-analyses", "get", "Lista analises economicas de IA persistidas.");
+		add(paths, "/api/v1/ai/context-analyses/{analysisId}", "get", "Detalhe e status da analise economica de IA.");
 		add(paths, "/api/v1/jobs/status", "get", "Status de coleta e jobs por data.");
 		add(paths, "/api/v1/admin/jobs/{jobName}/runs", "post", "Execucao manual de job ou fluxo operacional.");
+		add(paths, "/api/v1/admin/ai/context-analyses", "post", "Solicita analise economica de IA a partir de uma tese.");
 		add(paths, "/api/v1/admin/users", "get", "Administracao de usuarios.");
 		add(paths, "/api/v1/admin/users", "post", "Cadastro administrativo de usuario.");
 		add(paths, "/api/v1/admin/users/{userId}", "put", "Edicao administrativa de usuario.");
@@ -82,6 +85,10 @@ class OpenApiController {
 		}
 		if (path.contains("notifications")) {
 			return Map.of("eventType", "REASSESSMENT_REQUIRED", "status", "PENDING", "readAt", "");
+		}
+		if (path.contains("context-analyses")) {
+			return Map.of("analysisId", "uuid", "validationStatus", "VALID", "processingStatus", "COMPLETED",
+					"sources", List.of("OpenAI Web Search"));
 		}
 		if (path.contains("theses")) {
 			return Map.of("status", "OPORTUNIDADE", "score", 82, "priceCeiling", 42.0,

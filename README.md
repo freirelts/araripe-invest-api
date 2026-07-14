@@ -10,7 +10,7 @@ Backend Spring Boot do Araripe Invest. Este projeto concentra dados de mercado, 
 - Flyway
 - Spring Data JPA
 - Spring Security
-- Spring AI/OpenAI
+- OpenAI Responses API via adapter proprio
 - AWS SDK SNS
 - Maven Wrapper
 
@@ -46,18 +46,12 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `BRAPI_API_TOKEN` | Token da brapi, usado somente no backend e nunca registrado em logs. |
 | `BRAPI_TIMEOUT_SECONDS` | Timeout por chamada externa. |
 | `BRAPI_RETRY_MAX_ATTEMPTS` | Limite de tentativas para brapi. |
-| `OPENAI_API_KEY` | Chave OpenAI para Spring AI. |
-| `OPENAI_ENABLED` | Habilita o adapter OpenAI quando houver `ChatClient`; sem modelo configurado o backend usa fallback deterministico auditavel. |
+| `OPENAI_API_KEY` | Chave OpenAI usada somente no backend. |
+| `OPENAI_ENABLED` | Habilita o adapter OpenAI Responses API; sem chave o backend usa fallback deterministico auditavel. |
 | `OPENAI_MODEL` | Modelo usado para enriquecimento contextual. Default: `gpt-5.6-luna`. |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout da chamada de IA. |
 | `OPENAI_MAX_TOKENS` | Limite de tokens de saida para o contexto estruturado. |
 | `OPENAI_PROMPT_VERSION` | Versao do prompt macro/setorial persistida na auditoria. |
-| `SPRING_AI_MODEL_CHAT` | Provider do modelo de chat. Default: `openai`. Em testes automatizados fica desabilitado. |
-| `SPRING_AI_MODEL_EMBEDDING` | Provider de embeddings. Default local: `none`. |
-| `SPRING_AI_MODEL_IMAGE` | Provider de imagem. Default local: `none`. |
-| `SPRING_AI_MODEL_AUDIO_SPEECH` | Provider de audio speech. Default local: `none`. |
-| `SPRING_AI_MODEL_AUDIO_TRANSCRIPTION` | Provider de transcricao. Default local: `none`. |
-| `SPRING_AI_MODEL_MODERATION` | Provider de moderacao. Default local: `none`. |
 | `AWS_REGION` | Regiao AWS para SNS. |
 | `AWS_SNS_TOPIC_ARN` | Topico SNS para e-mails consolidados. |
 | `SNS_EMAIL_SENDER` | Identificacao operacional do remetente/configuracao. |

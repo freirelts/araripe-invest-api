@@ -181,7 +181,7 @@ class PositionRecommendationServiceTests {
 	void validAiContextIsAttachedAndConflictIsAuditedWithoutChangingDeterministicDecision() {
 		Scenario scenario = scenario("ai-conflict@araripe.test", "TAEE11", "35.00", "30.00", "45.00", "36.00",
 				ThesisStatus.OPORTUNIDADE, 82);
-		saveValidAiContext(scenario.asset(), true);
+		saveValidAiContext(scenario.currentThesis(), true);
 
 		RecommendationSummary summary = service.recommendPosition(scenario.position().getId(), REFERENCE_DATE);
 
@@ -194,7 +194,7 @@ class PositionRecommendationServiceTests {
 	void unavailableAiDoesNotBlockDeterministicRecommendation() {
 		Scenario scenario = scenario("ai-failed@araripe.test", "BBAS3", "28.00", "24.00", "35.00", "35.10",
 				ThesisStatus.OPORTUNIDADE, 82);
-		saveUnavailableAiContext(scenario.asset());
+		saveUnavailableAiContext(scenario.currentThesis());
 
 		RecommendationSummary summary = service.recommendPosition(scenario.position().getId(), REFERENCE_DATE);
 
@@ -280,9 +280,10 @@ class PositionRecommendationServiceTests {
 		return allocationPlanRepository.saveAndFlush(plan);
 	}
 
-	private AiContextAnalysis saveValidAiContext(Asset asset, boolean conflict) {
-		AiContextAnalysis analysis = new AiContextAnalysis(asset, REFERENCE_DATE, "mock-ai", "mock-model",
-				"macro-sector-context-v1", "hash-" + asset.getSymbol());
+	private AiContextAnalysis saveValidAiContext(PositionThesis thesis, boolean conflict) {
+		AiContextAnalysis analysis = new AiContextAnalysis(thesis.getAsset(), REFERENCE_DATE, "mock-ai", "mock-model",
+				"macro-sector-context-v1", "hash-" + thesis.getAsset().getSymbol());
+		analysis.setThesis(thesis);
 		analysis.setInputSummaryJson("{}");
 		analysis.setSourcesJson("[{\"name\":\"Banco Central SGS\"}]");
 		analysis.setOutputJson("{\"contextSummary\":\"Contexto neutro\",\"conflictsWithDeterministicRecommendation\":"
@@ -291,9 +292,10 @@ class PositionRecommendationServiceTests {
 		return aiContextAnalysisRepository.saveAndFlush(analysis);
 	}
 
-	private AiContextAnalysis saveUnavailableAiContext(Asset asset) {
-		AiContextAnalysis analysis = new AiContextAnalysis(asset, REFERENCE_DATE, "mock-ai", "mock-model",
-				"macro-sector-context-v1", "failed-" + asset.getSymbol());
+	private AiContextAnalysis saveUnavailableAiContext(PositionThesis thesis) {
+		AiContextAnalysis analysis = new AiContextAnalysis(thesis.getAsset(), REFERENCE_DATE, "mock-ai", "mock-model",
+				"macro-sector-context-v1", "failed-" + thesis.getAsset().getSymbol());
+		analysis.setThesis(thesis);
 		analysis.setInputSummaryJson("{}");
 		analysis.setSourcesJson("[]");
 		analysis.setValidationStatus(AiValidationStatus.UNAVAILABLE);

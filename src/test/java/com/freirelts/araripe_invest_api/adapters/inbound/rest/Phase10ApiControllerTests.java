@@ -154,6 +154,8 @@ class Phase10ApiControllerTests {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 7);
 		User customer = saveUser("Phase 10 Customer", "phase10-customer@araripe.test", "senha-phase10-123",
 				SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
+		User admin = saveUser("Phase 10 Admin", "phase10-admin@araripe.test", "senha-phase10-admin-123",
+				SubscriptionStatus.ACTIVE, UserRoleType.ADMIN);
 		User other = saveUser("Phase 10 Other", "phase10-other@araripe.test", "senha-phase10-other-123",
 				SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
 		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG S.A.", "Bens Industriais"));
@@ -177,6 +179,7 @@ class Phase10ApiControllerTests {
 		saveJobStatus(customer, referenceDate);
 
 		String token = login(customer, "senha-phase10-123");
+		String adminToken = login(admin, "senha-phase10-admin-123");
 		String otherToken = login(other, "senha-phase10-other-123");
 
 		mockMvc.perform(get("/api/v1/theses/ranking?date=2026-07-07"))
@@ -258,6 +261,33 @@ class Phase10ApiControllerTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.collectionRecords[0].category").value("DAILY_HISTORY"))
 				.andExpect(jsonPath("$.jobRuns[0].jobName").value("RANKING"));
+
+		String aiResponse = mockMvc.perform(post("/api/v1/admin/ai/context-analyses")
+						.header("Authorization", bearer(adminToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"thesisId":"%s","forceRefresh":false}
+								""".formatted(thesis.getId())))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.thesisId").value(thesis.getId().toString()))
+				.andExpect(jsonPath("$.validationStatus").value("UNAVAILABLE"))
+				.andExpect(jsonPath("$.processingStatus").value("FAILED"))
+				.andReturn()
+				.getResponse()
+				.getContentAsString();
+		String analysisId = objectMapper.readTree(aiResponse).get("analysisId").asText();
+
+		mockMvc.perform(get("/api/v1/ai/context-analyses?thesisId={thesisId}&referenceDate=2026-07-07&symbol=wege3",
+						thesis.getId())
+						.header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[0].analysisId").value(analysisId));
+
+		mockMvc.perform(get("/api/v1/ai/context-analyses/{analysisId}", analysisId)
+						.header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.symbol").value("WEGE3"))
+				.andExpect(jsonPath("$.model").isString());
 	}
 
 	private String login(User user, String password) throws Exception {

@@ -181,8 +181,7 @@ class OperationalJobServiceTests {
 
 		assertThat(result.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(steps).extracting(step -> step.get("jobName")).containsExactly("DAILY_MARKET_DATA_COLLECTION",
-				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "RANKING", "AI_CONTEXT_ENRICHMENT", "PORTFOLIO_SCAN",
-				"DAILY_NOTIFICATION_DIGEST");
+				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "RANKING", "PORTFOLIO_SCAN", "DAILY_NOTIFICATION_DIGEST");
 		verify(marketDataCollectionService, times(1)).collectActiveAssetData(DEFAULT_MACRO_SLUGS);
 	}
 

@@ -99,6 +99,21 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		}
 	}
 
+	@Override
+	public String provider() {
+		return PROVIDER;
+	}
+
+	@Override
+	public String model() {
+		return properties.webSearchModel();
+	}
+
+	@Override
+	public String promptVersion() {
+		return properties.promptVersion();
+	}
+
 	private Map<String, Object> requestBody(String systemPrompt, String userPrompt) {
 		Map<String, Object> body = new LinkedHashMap<>();
 		body.put("model", properties.webSearchModel());

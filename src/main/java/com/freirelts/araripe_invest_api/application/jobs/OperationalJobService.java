@@ -3,10 +3,6 @@ package com.freirelts.araripe_invest_api.application.jobs;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.freirelts.araripe_invest_api.application.ai.AiAssetContext;
-import com.freirelts.araripe_invest_api.application.ai.AiContextSource;
-import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiRequest;
-import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisService;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
@@ -20,7 +16,6 @@ import com.freirelts.araripe_invest_api.domain.jobs.JobRunTrigger;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
-import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
@@ -36,7 +31,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,8 +41,6 @@ public class OperationalJobService {
 
 	private static final Logger log = LoggerFactory.getLogger(OperationalJobService.class);
 	private static final List<String> DEFAULT_MACRO_SLUGS = List.of("selic", "ipca", "usdbrl");
-	private static final String AI_SOURCE_NAME = "Araripe Invest deterministic engine";
-	private static final String WEB_SEARCH_SOURCE_NAME = "OpenAI Web Search";
 	private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
 	};
 
@@ -60,7 +52,6 @@ public class OperationalJobService {
 	private final IndicatorCalculationService indicatorCalculationService;
 	private final AssetScreeningService assetScreeningService;
 	private final PositionThesisGenerationService thesisGenerationService;
-	private final EconomicContextAnalysisService economicContextAnalysisService;
 	private final PositionRecommendationService positionRecommendationService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -69,7 +60,6 @@ public class OperationalJobService {
 			MarketDataCollectionService marketDataCollectionService,
 			IndicatorCalculationService indicatorCalculationService, AssetScreeningService assetScreeningService,
 			PositionThesisGenerationService thesisGenerationService,
-			EconomicContextAnalysisService economicContextAnalysisService,
 			PositionRecommendationService positionRecommendationService) {
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
@@ -79,7 +69,6 @@ public class OperationalJobService {
 		this.indicatorCalculationService = indicatorCalculationService;
 		this.assetScreeningService = assetScreeningService;
 		this.thesisGenerationService = thesisGenerationService;
-		this.economicContextAnalysisService = economicContextAnalysisService;
 		this.positionRecommendationService = positionRecommendationService;
 	}
 
@@ -124,7 +113,6 @@ public class OperationalJobService {
 					() -> indicatorCalculationService.calculateForActiveAssets(referenceDate).size());
 			case FILTERS_AND_THESES -> filtersAndTheses(referenceDate);
 			case RANKING -> ranking(referenceDate);
-			case AI_CONTEXT_ENRICHMENT -> enrichAiContext(referenceDate);
 			case PORTFOLIO_SCAN -> count("recommendations",
 					() -> positionRecommendationService.recommendOpenPositions(referenceDate).size());
 			case DAILY_NOTIFICATION_DIGEST -> notificationDigest(referenceDate);
@@ -136,11 +124,10 @@ public class OperationalJobService {
 			UUID requestedByUserId) {
 		List<Map<String, Object>> steps = new ArrayList<>();
 		boolean failed = false;
-		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses,
-		// contexto de IA apenas depois da tese deterministica e varredura de carteira antes de qualquer notificacao.
+		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses
+		// e varredura de carteira antes de qualquer notificacao.
 		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
-				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.AI_CONTEXT_ENRICHMENT, JobName.PORTFOLIO_SCAN,
-				JobName.DAILY_NOTIFICATION_DIGEST);
+				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
 		log.info("Daily operational flow started for referenceDate={} steps={}", referenceDate, orderedSteps.size());
 		for (JobName step : orderedSteps) {
 			log.info("Daily operational flow executing step={} referenceDate={}", step, referenceDate);
@@ -198,54 +185,6 @@ public class OperationalJobService {
 		log.info("Thesis ranking finished for referenceDate={} rankedTheses={} topSymbols={}", referenceDate,
 				ranking.size(), topSymbols);
 		return Map.of("rankedTheses", ranking.size(), "topSymbols", topSymbols);
-	}
-
-	private Map<String, Object> enrichAiContext(LocalDate referenceDate) {
-		List<PositionThesis> theses = positionThesisRepository
-				.findByReferenceDateAndRuleVersionOrderByScoreDesc(referenceDate,
-						PositionThesisGenerationService.RULE_VERSION)
-				.stream()
-				.filter(this::eligibleForAiContext)
-				.toList();
-		log.info("AI context enrichment started for referenceDate={} candidateTheses={}", referenceDate,
-				theses.size());
-		int persisted = 0;
-//		for (PositionThesis thesis : theses) {
-//			economicContextAnalysisService.analyzeAndPersist(thesis.getAsset(), aiRequest(thesis));
-//			persisted++;
-//			if (persisted % 10 == 0 || persisted == theses.size()) {
-//				log.info("AI context enrichment progress referenceDate={} persisted={} total={}", referenceDate,
-//						persisted, theses.size());
-//			}
-//		}
-		log.info("AI context enrichment finished for referenceDate={} aiAnalysesPersisted={}", referenceDate,
-				persisted);
-		return Map.of("candidateTheses", theses.size(), "aiAnalysesPersisted", persisted);
-	}
-
-	private boolean eligibleForAiContext(PositionThesis thesis) {
-		return thesis.getStatus() == ThesisStatus.MONITORAR || thesis.getStatus() == ThesisStatus.OPORTUNIDADE
-				|| thesis.getStatus() == ThesisStatus.APORTE_PLANEJADO || thesis.getStatus() == ThesisStatus.REAVALIAR
-				|| thesis.getStatus() == ThesisStatus.REDUZIR_EXPOSICAO || thesis.getStatus() == ThesisStatus.SAIR_DA_TESE;
-	}
-
-	private EconomicContextAiRequest aiRequest(PositionThesis thesis) {
-		Map<String, Object> data = new LinkedHashMap<>();
-		data.put("status", thesis.getStatus().name());
-		data.put("score", thesis.getScore());
-		data.put("priceCeiling", thesis.getPriceCeiling());
-		data.put("fairPriceEstimate", thesis.getFairPriceEstimate());
-		data.put("safetyMarginPercent", thesis.getSafetyMarginPercent());
-		data.put("stopPrice", thesis.getStopPrice());
-		data.put("targetPrice", thesis.getTargetPrice());
-		return new EconomicContextAiRequest(AiAssetContext.from(thesis.getAsset()), thesis.getReferenceDate(),
-				thesis.getThesisType(), null, thesis.getScore(), data,
-				List.of(new AiContextSource(AI_SOURCE_NAME, "internal://position-theses/" + thesis.getId(),
-						"Tese deterministica, score, valuation, stop, objetivo e margem de seguranca."),
-						new AiContextSource(WEB_SEARCH_SOURCE_NAME, "openai://web_search",
-								"Busca web obrigatoria por noticias economicas, institucionais e setoriais recentes.")),
-				List.of("IA nao aprova ativo bloqueado por filtro deterministico.",
-						"IA nao altera preco teto, stop, objetivo ou alocacao."));
 	}
 
 	private Map<String, Object> notificationDigest(LocalDate referenceDate) {

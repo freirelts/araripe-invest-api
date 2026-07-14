@@ -23,4 +23,6 @@ public interface PositionRecommendationRepository extends JpaRepository<Position
 	@EntityGraph(attributePaths = { "asset", "position", "customerPositionThesis", "currentThesis", "aiContextAnalysis" })
 	java.util.List<PositionRecommendation> findByUserIdAndReferenceDateOrderByCreatedAtDesc(UUID userId,
 			LocalDate referenceDate);
+
+	Optional<PositionRecommendation> findFirstByCurrentThesisIdOrderByCreatedAtDesc(UUID currentThesisId);
 }
