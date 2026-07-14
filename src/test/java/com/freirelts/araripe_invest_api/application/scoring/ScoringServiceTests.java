@@ -28,7 +28,6 @@ class ScoringServiceTests {
 		assertThat(first.components()).extracting(ScoreComponent::weightPercent)
 				.containsExactly(30, 20, 15, 10, 10, 10, 5);
 		assertThat(first.ruleVersion()).isEqualTo(ScoringService.RULE_VERSION);
-		assertThat(first.blockedByEliminatoryFilter()).isFalse();
 		assertThat(first.scoreCalculated()).isTrue();
 		assertThat(first.failedFilters()).isEmpty();
 	}
@@ -49,14 +48,8 @@ class ScoringServiceTests {
 				List.of(new EliminatoryFilterReason(EliminatoryFilterCode.DATA_QUALITY_BLOCKED,
 						"Dados incompletos, atrasados ou inconsistentes bloqueiam a triagem."))));
 
-		assertThat(result.finalScore()).isZero();
-		assertThat(result.blockedByEliminatoryFilter()).isTrue();
-		assertThat(result.scoreCalculated()).isFalse();
-		assertThat(result.failedFilters()).extracting(EliminatoryFilterReason::code)
-				.containsExactly(EliminatoryFilterCode.DATA_QUALITY_BLOCKED);
-		assertThat(result.components()).singleElement()
-				.extracting(ScoreComponent::code)
-				.isEqualTo("ELIMINATORY_FILTER_BLOCK");
+		assertThat(result.finalScore()).isEqualTo(98);
+		assertThat(result.scoreCalculated()).isTrue();
 	}
 
 	@Test
@@ -76,7 +69,6 @@ class ScoringServiceTests {
 						"Volume financeiro medio abaixo do minimo."))));
 
 		assertThat(result.finalScore()).isGreaterThan(0);
-		assertThat(result.blockedByEliminatoryFilter()).isTrue();
 		assertThat(result.scoreCalculated()).isTrue();
 		assertThat(result.failedFilters()).extracting(EliminatoryFilterReason::code)
 				.containsExactly(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY);

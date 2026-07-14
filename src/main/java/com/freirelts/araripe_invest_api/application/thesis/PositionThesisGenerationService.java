@@ -404,12 +404,6 @@ public class PositionThesisGenerationService {
 	private ThesisDraft draft(ThesisMarketContext context, ThesisType thesisType, ThesisStatus status, int score,
 			BigDecimal fairPrice, BigDecimal priceCeiling, BigDecimal safetyMargin, List<ThesisReason> reasons,
 			ScoreResult scoreResult) {
-		if (!context.failedFilters().isEmpty()) {
-			reasons.add(new ThesisReason("dados", "ELIMINATORY_FILTER_BLOCK",
-					"Ativo bloqueado pelos filtros eliminatorios; tese nao pode virar recomendacao acionavel."));
-			status = blockedStatus(context.failedFilters());
-			score = scoreResult.finalScore();
-		}
 		if (priceCeiling != null && context.currentPrice() != null) {
 			reasons.add(new ThesisReason("valuation", "ENTRY_ZONE",
 					"Zona de entrada calculada ate o preco teto de R$ " + priceCeiling.setScale(2,

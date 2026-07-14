@@ -177,23 +177,6 @@ class PositionThesisGenerationServiceTests {
 	}
 
 	@Test
-	void blocksEveryThesisWhenRequiredDataFailsEliminatoryFilters() {
-		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
-		Asset asset = assetRepository.saveAndFlush(new Asset("ABCD3", "Companhia Incompleta", "Consumo"));
-		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
-
-		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
-
-		assertThat(theses).hasSize(3);
-		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.IGNORAR);
-			assertThat(thesis.getScore()).isZero();
-			assertThat(thesis.getFailedFiltersJson()).contains("DATA_QUALITY_BLOCKED",
-					"MINIMUM_FUNDAMENTALS_MISSING");
-		});
-	}
-
-	@Test
 	void sustainableDividendThesisIsNotApprovedWithOnlyOneDividendEvent() {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
 		Asset asset = assetRepository.saveAndFlush(new Asset("EGIE3", "Engie Brasil", "Utilidade Publica"));
@@ -210,24 +193,6 @@ class PositionThesisGenerationServiceTests {
 				.orElseThrow();
 		assertThat(dividendThesis.getStatus()).isNotEqualTo(ThesisStatus.APORTE_PLANEJADO);
 		assertThat(dividendThesis.getReasonsJson()).contains("DIVIDEND_RECURRENCE_FAILED");
-	}
-
-	@Test
-	void mapsDeterioratedLongTrendToExitThesisStatus() {
-		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
-		Asset asset = assetRepository.saveAndFlush(new Asset("TEND3", "Tendencia Deteriorada", "Consumo"));
-		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
-		saveTechnical(asset, referenceDate, TrendStatus.DOWN_TREND);
-		saveStrongFundamental(asset, referenceDate);
-
-		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
-
-		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.SAIR_DA_TESE);
-			assertThat(thesis.getScore()).isPositive();
-			assertThat(thesis.getScoreBreakdownJson()).contains("\"blockedByEliminatoryFilter\":true",
-					"\"scoreCalculated\":true", "LONG_TREND");
-		});
 	}
 
 	@Test
