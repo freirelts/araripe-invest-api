@@ -28,8 +28,6 @@ class ScoringServiceTests {
 		assertThat(first.components()).extracting(ScoreComponent::weightPercent)
 				.containsExactly(30, 20, 15, 10, 10, 10, 5);
 		assertThat(first.ruleVersion()).isEqualTo(ScoringService.RULE_VERSION);
-		assertThat(first.scoreCalculated()).isTrue();
-		assertThat(first.failedFilters()).isEmpty();
 	}
 
 	@Test
@@ -49,7 +47,6 @@ class ScoringServiceTests {
 						"Dados incompletos, atrasados ou inconsistentes bloqueiam a triagem."))));
 
 		assertThat(result.finalScore()).isEqualTo(98);
-		assertThat(result.scoreCalculated()).isTrue();
 	}
 
 	@Test
@@ -69,9 +66,6 @@ class ScoringServiceTests {
 						"Volume financeiro medio abaixo do minimo."))));
 
 		assertThat(result.finalScore()).isGreaterThan(0);
-		assertThat(result.scoreCalculated()).isTrue();
-		assertThat(result.failedFilters()).extracting(EliminatoryFilterReason::code)
-				.containsExactly(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY);
 		assertThat(result.components()).extracting(ScoreComponent::code)
 				.containsExactly("FUNDAMENTAL_QUALITY", "VALUATION_SAFETY_MARGIN", "CASH_GENERATION",
 						"QUALITY_RESILIENCE_SCORE", "LONG_TREND", "RISK_VOLATILITY", "MACRO_SECTOR_CONTEXT");

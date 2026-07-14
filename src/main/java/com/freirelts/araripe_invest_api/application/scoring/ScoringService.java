@@ -24,7 +24,6 @@ public class ScoringService {
 	private static final BigDecimal MIN_GROWTH = new BigDecimal("0.080000");
 
 	public ScoreResult score(ScoringInput input) {
-		List<EliminatoryFilterReason> failedFilters = failedFilters(input);
 		List<ScoreComponent> components = List.of(
 				component("FUNDAMENTAL_QUALITY", "Qualidade fundamentalista", 30,
 						fundamentalQuality(input), "Lucro, margens e retorno sobre capital sustentam a tese."),
@@ -45,12 +44,7 @@ public class ScoringService {
 				.reduce(BigDecimal.ZERO, BigDecimal::add)
 				.setScale(0, RoundingMode.HALF_UP)
 				.intValue();
-		return new ScoreResult(clamp(finalScore), input.thesisType(), RULE_VERSION, true,
-				failedFilters, components);
-	}
-
-	private List<EliminatoryFilterReason> failedFilters(ScoringInput input) {
-		return input.failedFilters() == null ? List.of() : input.failedFilters();
+		return new ScoreResult(clamp(finalScore), input.thesisType(), RULE_VERSION, components);
 	}
 
 	private ScoreComponent component(String code, String label, int weightPercent, ScoreRuleEvaluation evaluation,
