@@ -233,6 +233,50 @@ class PositionThesisGenerationServiceTests {
 	}
 
 	@Test
+	void keepsHighScoreThesisMonitorableWhenOnlyEntryFilterFails() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("LIQ3", "Liquidez Baixa", "Consumo"));
+		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
+		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY, new BigDecimal("0.250000"),
+				new BigDecimal("4999999.99"));
+		saveStrongFundamental(asset, referenceDate);
+		saveDividend(asset, LocalDate.of(2025, 4, 1));
+		saveDividend(asset, LocalDate.of(2026, 4, 1));
+
+		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
+
+		assertThat(theses).allSatisfy(thesis -> {
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.MONITORAR);
+			assertThat(thesis.getScore()).isGreaterThanOrEqualTo(80);
+			assertThat(thesis.getFailedFiltersJson()).contains("INSUFFICIENT_LIQUIDITY");
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().isValid()).isFalse();
+			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getInvalidReason())
+					.contains("Status da tese");
+		});
+	}
+
+	@Test
+	void acceptsLatestMarketSessionWithinReferenceDateTolerance() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 13);
+		LocalDate lastMarketSession = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("SESS3", "Sessao Anterior", "Bens Industriais"));
+		saveValidCandle(asset, lastMarketSession, new BigDecimal("20.00"));
+		saveTechnical(asset, lastMarketSession, TrendStatus.HEALTHY);
+		saveStrongFundamental(asset, lastMarketSession);
+		saveDividend(asset, LocalDate.of(2025, 4, 1));
+		saveDividend(asset, LocalDate.of(2026, 4, 1));
+
+		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
+
+		assertThat(theses).hasSize(3)
+				.allSatisfy(thesis -> {
+					assertThat(thesis.getReferenceDate()).isEqualTo(referenceDate);
+					assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.APORTE_PLANEJADO);
+					assertThat(thesis.getFailedFiltersJson()).isEqualTo("[]");
+				});
+	}
+
+	@Test
 	void persistsThesisWhenTinyFairPriceCreatesExtremeNegativeSafetyMargin() {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
 		Asset asset = assetRepository.saveAndFlush(new Asset("MICRO3", "Preco Justo Residual", "Consumo"));
@@ -267,9 +311,14 @@ class PositionThesisGenerationServiceTests {
 
 	private void saveTechnical(Asset asset, LocalDate referenceDate, TrendStatus trendStatus,
 			BigDecimal historicalVolatility) {
+		saveTechnical(asset, referenceDate, trendStatus, historicalVolatility, new BigDecimal("10000000"));
+	}
+
+	private void saveTechnical(Asset asset, LocalDate referenceDate, TrendStatus trendStatus,
+			BigDecimal historicalVolatility, BigDecimal averageFinancialVolume60) {
 		TechnicalIndicatorSnapshot snapshot = new TechnicalIndicatorSnapshot(asset, referenceDate,
 				IndicatorCalculationService.CALCULATION_VERSION);
-		snapshot.setAvgVolume60(new BigDecimal("10000000"));
+		snapshot.setAvgVolume60(averageFinancialVolume60);
 		snapshot.setSma200(new BigDecimal("18.00"));
 		snapshot.setReturn12m(new BigDecimal("0.120000"));
 		snapshot.setHistoricalVolatility(historicalVolatility);

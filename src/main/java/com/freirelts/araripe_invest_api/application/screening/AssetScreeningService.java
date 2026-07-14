@@ -161,10 +161,12 @@ public class AssetScreeningService {
 				.candleMissing(candle == null)
 				.technicalMissing(technical == null)
 				.fundamentalMissing(fundamental == null)
-				.candleStale(candle != null && !referenceDate.equals(candle.getTradeDate()))
-				.technicalStale(technical != null && !referenceDate.equals(technical.getTradeDate()))
+				.candleStale(candle != null
+						&& DataFreshnessPolicy.marketDataStale(referenceDate, candle.getTradeDate()))
+				.technicalStale(technical != null
+						&& DataFreshnessPolicy.marketDataStale(referenceDate, technical.getTradeDate()))
 				.fundamentalStale(fundamental != null
-						&& fundamental.getReferenceDate().isBefore(referenceDate.minusMonths(6)))
+						&& DataFreshnessPolicy.fundamentalDataStale(referenceDate, fundamental.getReferenceDate()))
 				.build();
 	}
 

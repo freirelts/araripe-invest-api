@@ -10,6 +10,7 @@ import com.freirelts.araripe_invest_api.application.risk.RiskAllocationSettings;
 import com.freirelts.araripe_invest_api.application.scoring.ScoreResult;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringInput;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
+import com.freirelts.araripe_invest_api.application.screening.DataFreshnessPolicy;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterCode;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterInput;
@@ -394,10 +395,12 @@ public class PositionThesisGenerationService {
 				.candleMissing(candle == null)
 				.technicalMissing(technical == null)
 				.fundamentalMissing(fundamental == null)
-				.candleStale(candle != null && !referenceDate.equals(candle.getTradeDate()))
-				.technicalStale(technical != null && !referenceDate.equals(technical.getTradeDate()))
+				.candleStale(candle != null
+						&& DataFreshnessPolicy.marketDataStale(referenceDate, candle.getTradeDate()))
+				.technicalStale(technical != null
+						&& DataFreshnessPolicy.marketDataStale(referenceDate, technical.getTradeDate()))
 				.fundamentalStale(fundamental != null
-						&& fundamental.getReferenceDate().isBefore(referenceDate.minusMonths(6)))
+						&& DataFreshnessPolicy.fundamentalDataStale(referenceDate, fundamental.getReferenceDate()))
 				.build();
 	}
 
@@ -428,8 +431,24 @@ public class PositionThesisGenerationService {
 
 	private ThesisStatus status(ThesisMarketContext context, int score, boolean mandatory, BigDecimal priceCeiling,
 			boolean priceAttractive) {
-		if (!context.failedFilters().isEmpty()) {
-			return blockedStatus(context.failedFilters());
+		List<EliminatoryFilterReason> failedFilters = context.failedFilters();
+		if (hasFilter(failedFilters, EliminatoryFilterCode.RECURRING_LOSSES,
+				EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW,
+				EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION,
+				EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION,
+				EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN,
+				EliminatoryFilterCode.LONG_TREND_DETERIORATED)) {
+			return ThesisStatus.SAIR_DA_TESE;
+		}
+		if (hasFilter(failedFilters, EliminatoryFilterCode.EXCESSIVE_DEBT,
+				EliminatoryFilterCode.EXTREME_VALUATION_WITHOUT_GROWTH,
+				EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION,
+				EliminatoryFilterCode.EXTREME_VOLATILITY)) {
+			return ThesisStatus.REDUZIR_EXPOSICAO;
+		}
+		if (hasFilter(failedFilters, EliminatoryFilterCode.DATA_QUALITY_BLOCKED,
+				EliminatoryFilterCode.MINIMUM_FUNDAMENTALS_MISSING)) {
+			return score >= 60 ? ThesisStatus.REAVALIAR : ThesisStatus.IGNORAR;
 		}
 		if (!mandatory) {
 			return score >= 60 ? ThesisStatus.MONITORAR : ThesisStatus.IGNORAR;
@@ -437,6 +456,10 @@ public class PositionThesisGenerationService {
 		if (priceCeiling != null && context.currentPrice() != null
 				&& context.currentPrice().compareTo(priceCeiling.multiply(PRICE_REVIEW_PREMIUM)) > 0) {
 			return ThesisStatus.REAVALIAR;
+		}
+		if (hasFilter(failedFilters, EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY,
+				EliminatoryFilterCode.PRICE_BELOW_MINIMUM)) {
+			return score >= 60 ? ThesisStatus.MONITORAR : ThesisStatus.IGNORAR;
 		}
 		if (priceAttractive && score >= 80) {
 			return ThesisStatus.APORTE_PLANEJADO;
@@ -447,28 +470,15 @@ public class PositionThesisGenerationService {
 		return score >= 60 ? ThesisStatus.MONITORAR : ThesisStatus.IGNORAR;
 	}
 
-	private ThesisStatus blockedStatus(List<EliminatoryFilterReason> failedFilters) {
-		boolean thesisInvalidated = failedFilters.stream()
-				.map(EliminatoryFilterReason::code)
-				.anyMatch(code -> code == EliminatoryFilterCode.RECURRING_LOSSES
-						|| code == EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW
-						|| code == EliminatoryFilterCode.STRONG_FUNDAMENTAL_DETERIORATION
-						|| code == EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION
-						|| code == EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN
-						|| code == EliminatoryFilterCode.LONG_TREND_DETERIORATED);
-		if (thesisInvalidated) {
-			return ThesisStatus.SAIR_DA_TESE;
+	private boolean hasFilter(List<EliminatoryFilterReason> failedFilters, EliminatoryFilterCode... codes) {
+		for (EliminatoryFilterReason reason : failedFilters) {
+			for (EliminatoryFilterCode code : codes) {
+				if (reason.code() == code) {
+					return true;
+				}
+			}
 		}
-		boolean exposureRisk = failedFilters.stream()
-				.map(EliminatoryFilterReason::code)
-				.anyMatch(code -> code == EliminatoryFilterCode.EXCESSIVE_DEBT
-						|| code == EliminatoryFilterCode.EXTREME_VALUATION_WITHOUT_GROWTH
-						|| code == EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION
-						|| code == EliminatoryFilterCode.EXTREME_VOLATILITY);
-		if (exposureRisk) {
-			return ThesisStatus.REDUZIR_EXPOSICAO;
-		}
-		return ThesisStatus.IGNORAR;
+		return false;
 	}
 
 	private boolean priceAttractive(BigDecimal currentPrice, BigDecimal priceCeiling, BigDecimal safetyMargin) {

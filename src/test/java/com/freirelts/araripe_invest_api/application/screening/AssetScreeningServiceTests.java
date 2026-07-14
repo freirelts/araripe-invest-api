@@ -90,6 +90,26 @@ class AssetScreeningServiceTests {
 				.isEmpty();
 	}
 
+	@Test
+	void treatsLatestMarketSessionWithinToleranceAsFreshForReferenceDate() {
+		LocalDate referenceDate = LocalDate.of(2026, 7, 13);
+		LocalDate lastMarketSession = LocalDate.of(2026, 7, 10);
+		Asset asset = assetRepository.saveAndFlush(new Asset("RADL3", "Raia Drogasil", "Saude"));
+		saveValidCandle(asset, lastMarketSession, new BigDecimal("20.00"));
+		saveTechnical(asset, lastMarketSession, new BigDecimal("10000000.00"));
+		saveFundamental(asset, lastMarketSession);
+
+		AssetScreeningDiagnostic diagnostic = service.diagnoseAsset("radl3", referenceDate);
+
+		assertThat(diagnostic.status()).isEqualTo(ScreeningStatus.ELIGIBLE);
+		assertThat(diagnostic.failedFilters()).isEmpty();
+		assertThat(assetScreeningResultRepository
+				.findByAssetIdAndReferenceDateAndRuleVersion(asset.getId(), referenceDate,
+						AssetScreeningService.RULE_VERSION)
+				.orElseThrow()
+				.getFailedFiltersJson()).isEqualTo("[]");
+	}
+
 	private void saveValidCandle(Asset asset, LocalDate referenceDate, BigDecimal close) {
 		DailyCandle candle = new DailyCandle(asset, referenceDate, close, close.add(BigDecimal.ONE),
 				close.subtract(BigDecimal.ONE), close, "brapi");
