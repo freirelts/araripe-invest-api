@@ -6,6 +6,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.risk.RiskAllocationSettings;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
+import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
+import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
+import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.assets.AssetType;
 import com.freirelts.araripe_invest_api.domain.assets.Market;
@@ -36,6 +39,7 @@ import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AllocationPlanRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.AiContextAnalysisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DataCollectionRecordRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
@@ -83,6 +87,7 @@ public class ApiQueryService {
 	private final JobRunRepository jobRunRepository;
 	private final UserRepository userRepository;
 	private final UserRiskAllocationSettingsRepository riskSettingsRepository;
+	private final AiContextAnalysisRepository aiContextAnalysisRepository;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public ApiQueryService(AssetRepository assetRepository, PositionThesisRepository thesisRepository,
@@ -93,7 +98,8 @@ public class ApiQueryService {
 			DividendEventRepository dividendEventRepository, PositionRecommendationRepository recommendationRepository,
 			NotificationEventRepository notificationEventRepository,
 			DataCollectionRecordRepository dataCollectionRecordRepository, JobRunRepository jobRunRepository,
-			UserRepository userRepository, UserRiskAllocationSettingsRepository riskSettingsRepository) {
+			UserRepository userRepository, UserRiskAllocationSettingsRepository riskSettingsRepository,
+			AiContextAnalysisRepository aiContextAnalysisRepository) {
 		this.assetRepository = assetRepository;
 		this.thesisRepository = thesisRepository;
 		this.allocationPlanRepository = allocationPlanRepository;
@@ -107,6 +113,7 @@ public class ApiQueryService {
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
 		this.riskSettingsRepository = riskSettingsRepository;
+		this.aiContextAnalysisRepository = aiContextAnalysisRepository;
 	}
 
 	@Transactional(readOnly = true)
@@ -136,11 +143,16 @@ public class ApiQueryService {
 						thesis.getAsset().getId(), thesis.getReferenceDate(), IndicatorCalculationService.CALCULATION_VERSION)
 				.orElse(null);
 		FundamentalSnapshot fundamental = latestFundamental(thesis.getAsset().getId(), thesis.getReferenceDate());
+		AiContextAnalysis aiContext = aiContextAnalysisRepository
+				.findTopByThesisIdAndReferenceDateLessThanEqualAndValidationStatusOrderByReferenceDateDescCreatedAtDesc(
+						thesis.getId(), thesis.getReferenceDate(), AiValidationStatus.VALID)
+				.orElse(null);
 		return new ThesisDetailResponse(thesisSummary(thesis, allocationPlan), map(thesis.getScoreBreakdownJson()),
 				list(thesis.getReasonsJson()), list(thesis.getFailedFiltersJson()), list(thesis.getReviewPointsJson()),
 				technical == null ? null : TechnicalIndicatorResponse.from(technical),
 				fundamental == null ? null : FundamentalResponse.from(fundamental),
 				allocationPlan == null ? null : AllocationPlanResponse.from(allocationPlan),
+				aiContext == null ? null : AiContextAnalysisSummaryResponse.from(aiContext, this::jsonValue),
 				"Recomendacao de position trade sujeita a risco; o sistema nao executa ordens e nao garante retorno.");
 	}
 
@@ -365,6 +377,18 @@ public class ApiQueryService {
 		}
 	}
 
+	private Object jsonValue(String json) {
+		if (json == null || json.isBlank()) {
+			return null;
+		}
+		try {
+			return objectMapper.readValue(json, Object.class);
+		}
+		catch (JsonProcessingException ex) {
+			return json;
+		}
+	}
+
 	public record AssetResponse(UUID id, String symbol, String name, String sector, String industry, Market market,
 			AssetType assetType, boolean active, String monitoringReason) {
 		static AssetResponse from(Asset asset) {
@@ -384,7 +408,19 @@ public class ApiQueryService {
 	public record ThesisDetailResponse(ThesisSummaryResponse thesis, Map<String, Object> scoreBreakdown,
 			List<Object> reasons, List<Object> failedFilters, List<Object> reviewPoints,
 			TechnicalIndicatorResponse technicalIndicators, FundamentalResponse fundamentals,
-			AllocationPlanResponse allocationPlan, String riskNotice) {
+			AllocationPlanResponse allocationPlan, AiContextAnalysisSummaryResponse aiContext, String riskNotice) {
+	}
+
+	public record AiContextAnalysisSummaryResponse(UUID analysisId, String model, String promptVersion,
+			Object output, Object sources, AiValidationStatus validationStatus, AiProcessingStatus processingStatus,
+			Instant createdAt, Instant finishedAt) {
+		static AiContextAnalysisSummaryResponse from(AiContextAnalysis analysis,
+				java.util.function.Function<String, Object> jsonReader) {
+			return new AiContextAnalysisSummaryResponse(analysis.getId(), analysis.getModel(),
+					analysis.getPromptVersion(), jsonReader.apply(analysis.getOutputJson()),
+					jsonReader.apply(analysis.getSourcesJson()), analysis.getValidationStatus(),
+					analysis.getProcessingStatus(), analysis.getCreatedAt(), analysis.getFinishedAt());
+		}
 	}
 
 	public record TechnicalIndicatorResponse(LocalDate tradeDate, BigDecimal sma50, BigDecimal sma100, BigDecimal sma200,

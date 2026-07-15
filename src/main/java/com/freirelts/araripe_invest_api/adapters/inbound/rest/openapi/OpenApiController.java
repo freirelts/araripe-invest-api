@@ -26,7 +26,8 @@ class OpenApiController {
 		add(paths, "/api/v1/auth/login", "post", "Login com JWT assinado.");
 		add(paths, "/api/v1/auth/me", "get", "Usuario autenticado.");
 		add(paths, "/api/v1/theses/ranking", "get", "Ranking diario de teses com score, valuation e risco.");
-		add(paths, "/api/v1/theses/{thesisId}", "get", "Detalhe da tese com filtros, score, fundamentos e alocacao.");
+		add(paths, "/api/v1/theses/{thesisId}", "get",
+				"Detalhe da tese com filtros, score, fundamentos, alocacao e contexto de IA validado quando existir.");
 		add(paths, "/api/v1/theses/history", "get", "Historico de teses por ativo.");
 		add(paths, "/api/v1/assets", "get", "Ativos monitorados ativos.");
 		add(paths, "/api/v1/assets/{symbol}/fundamentals", "get",

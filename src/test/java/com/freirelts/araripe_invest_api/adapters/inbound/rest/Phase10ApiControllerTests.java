@@ -5,6 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
+import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
+import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
+import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.jobs.JobName;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRun;
@@ -38,6 +41,7 @@ import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.AiContextAnalysisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DataCollectionRecordRepository;
@@ -133,6 +137,9 @@ class Phase10ApiControllerTests {
 	@Autowired
 	private JobRunRepository jobRunRepository;
 
+	@Autowired
+	private AiContextAnalysisRepository aiContextAnalysisRepository;
+
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -160,6 +167,7 @@ class Phase10ApiControllerTests {
 				SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
 		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG S.A.", "Bens Industriais"));
 		PositionThesis thesis = thesisRepository.saveAndFlush(thesis(asset, referenceDate));
+		AiContextAnalysis validAiContext = saveValidAiContext(asset, thesis, referenceDate);
 		saveFundamentals(asset, referenceDate);
 		saveTechnical(asset, referenceDate);
 		FinancialStatementSnapshot statement = new FinancialStatementSnapshot(asset, StatementType.BALANCE_SHEET,
@@ -198,6 +206,11 @@ class Phase10ApiControllerTests {
 		mockMvc.perform(get("/api/v1/theses/{thesisId}", thesis.getId()).header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.thesis.asset.symbol").value("WEGE3"))
+				.andExpect(jsonPath("$.aiContext.analysisId").value(validAiContext.getId().toString()))
+				.andExpect(jsonPath("$.aiContext.validationStatus").value("VALID"))
+				.andExpect(jsonPath("$.aiContext.processingStatus").value("COMPLETED"))
+				.andExpect(jsonPath("$.aiContext.output.summary").value("Contexto macro validado."))
+				.andExpect(jsonPath("$.aiContext.sources.webCitations[0].url").value("https://example.com/macro"))
 				.andExpect(jsonPath("$.riskNotice").isString());
 
 		mockMvc.perform(get("/api/v1/theses/history?symbol=WEGE3&from=2026-07-01&to=2026-07-12")
@@ -345,6 +358,18 @@ class Phase10ApiControllerTests {
 		snapshot.setAvgVolume60(new BigDecimal("8000000.00"));
 		snapshot.setTrendStatus(TrendStatus.HEALTHY);
 		technicalRepository.saveAndFlush(snapshot);
+	}
+
+	private AiContextAnalysis saveValidAiContext(Asset asset, PositionThesis thesis, LocalDate referenceDate) {
+		AiContextAnalysis analysis = new AiContextAnalysis(asset, referenceDate, "openai", "gpt-5-mini",
+				"economic-context-v1", "prompt-hash-valid", "input-hash-valid");
+		analysis.setThesis(thesis);
+		analysis.setOutputJson("{\"summary\":\"Contexto macro validado.\"}");
+		analysis.setSourcesJson("{\"webCitations\":[{\"url\":\"https://example.com/macro\",\"title\":\"Macro\"}]}");
+		analysis.setValidationStatus(AiValidationStatus.VALID);
+		analysis.setProcessingStatus(AiProcessingStatus.COMPLETED);
+		analysis.setFinishedAt(Instant.now());
+		return aiContextAnalysisRepository.saveAndFlush(analysis);
 	}
 
 	private PositionRecommendation recommendation(User user, CustomerPosition position, Asset asset,
