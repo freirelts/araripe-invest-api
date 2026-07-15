@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class ScoringService {
@@ -22,6 +23,9 @@ public class ScoringService {
 	private static final BigDecimal MIN_DIVIDEND_YIELD = new BigDecimal("0.040000");
 	private static final BigDecimal MAX_DIVIDEND_YIELD = new BigDecimal("0.150000");
 	private static final BigDecimal MIN_GROWTH = new BigDecimal("0.080000");
+	private static final BigDecimal HIGH_SELIC = new BigDecimal("0.100000");
+	private static final BigDecimal HIGH_IPCA = new BigDecimal("0.050000");
+	private static final BigDecimal PRESSURED_USD_BRL = new BigDecimal("5.500000");
 
 	public ScoreResult score(ScoringInput input) {
 		List<ScoreComponent> components = List.of(
@@ -38,7 +42,7 @@ public class ScoringService {
 				component("RISK_VOLATILITY", "Risco e volatilidade", 10,
 						risk(input), "Volatilidade e endividamento reduzem a nota quando elevam risco de position trade."),
 				component("MACRO_SECTOR_CONTEXT", "Contexto macro/setorial", 5,
-						macroSectorContext(), "Sem sinal macro/setorial estruturado nesta fase, a regra usa nota neutra auditavel."));
+						macroSectorContext(input), "Juros, inflacao e cambio penalizam setores sensiveis quando o contexto esta desfavoravel."));
 		int finalScore = components.stream()
 				.map(ScoreComponent::weightedPoints)
 				.reduce(BigDecimal.ZERO, BigDecimal::add)
@@ -174,10 +178,49 @@ public class ScoringService {
 		return new ScoreRuleEvaluation(points, evidence);
 	}
 
-	private ScoreRuleEvaluation macroSectorContext() {
-		// A integracao macro/setorial estruturada ainda nao escolhe setores sensiveis; nota neutra preserva reproducibilidade
-		// e impede que ausencia de IA ou noticia aprove ou bloqueie tese sozinha.
-		return new ScoreRuleEvaluation(50, List.of("contexto macro/setorial neutro por regra deterministica"));
+	private ScoreRuleEvaluation macroSectorContext(ScoringInput input) {
+		List<String> evidence = new ArrayList<>();
+		BigDecimal selic = normalizePercentRate(input.selicRate());
+		BigDecimal ipca = normalizePercentRate(input.ipcaRate());
+		boolean highRates = greaterOrEqual(selic, HIGH_SELIC);
+		boolean highInflation = greaterOrEqual(ipca, HIGH_IPCA);
+		boolean pressuredCurrency = greaterOrEqual(input.usdBrlRate(), PRESSURED_USD_BRL);
+		boolean sensitiveSector = interestSensitiveSector(input.sector());
+
+		if (selic == null && ipca == null && input.usdBrlRate() == null) {
+			return new ScoreRuleEvaluation(50, List.of("contexto macro/setorial neutro por ausencia de snapshot macro valido"));
+		}
+		if (sensitiveSector && (highRates || highInflation)) {
+			evidence.add("setor sensivel a juros/inflacao com ambiente macro pressionado");
+			if (pressuredCurrency) {
+				evidence.add("cambio acima do limite adiciona pressao de custo macro");
+			}
+			return new ScoreRuleEvaluation(25, evidence);
+		}
+		if (highRates || highInflation || pressuredCurrency) {
+			evidence.add("macro pressionado, mas sem sensibilidade setorial direta configurada");
+			return new ScoreRuleEvaluation(45, evidence);
+		}
+		evidence.add("juros, inflacao e cambio dentro dos limites determinísticos iniciais");
+		return new ScoreRuleEvaluation(70, evidence);
+	}
+
+	private boolean interestSensitiveSector(String sector) {
+		if (sector == null || sector.isBlank()) {
+			return false;
+		}
+		String normalized = sector.toLowerCase(Locale.ROOT);
+		return normalized.contains("consumo") || normalized.contains("varejo") || normalized.contains("construcao")
+				|| normalized.contains("construção") || normalized.contains("imobili") || normalized.contains("shopping")
+				|| normalized.contains("tecnologia") || normalized.contains("saude") || normalized.contains("saúde");
+	}
+
+	private BigDecimal normalizePercentRate(BigDecimal value) {
+		if (value == null) {
+			return null;
+		}
+		return value.compareTo(BigDecimal.ONE) > 0 ? value.divide(new BigDecimal("100.000000"), 6, RoundingMode.HALF_UP)
+				: value;
 	}
 
 	private String thesisSpecificCode(ThesisType thesisType) {

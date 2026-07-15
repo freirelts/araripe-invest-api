@@ -36,8 +36,12 @@ public record ScoringInput(
 		BigDecimal operatingCashflow,
 		BigDecimal sma200,
 		BigDecimal historicalVolatility,
-		BigDecimal recentDrawdown,
-		TrendStatus trendStatus,
-		long cashDividendEventsLastThreeYears,
-		List<EliminatoryFilterReason> failedFilters) {
-}
+			BigDecimal recentDrawdown,
+			TrendStatus trendStatus,
+			long cashDividendEventsLastThreeYears,
+			String sector,
+			BigDecimal selicRate,
+			BigDecimal ipcaRate,
+			BigDecimal usdBrlRate,
+			List<EliminatoryFilterReason> failedFilters) {
+	}

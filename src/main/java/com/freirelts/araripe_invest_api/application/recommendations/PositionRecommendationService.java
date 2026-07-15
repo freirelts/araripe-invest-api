@@ -18,6 +18,11 @@ import com.freirelts.araripe_invest_api.domain.portfolio.PositionStatus;
 import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
 import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationInput;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationResult;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationSettings;
+import com.freirelts.araripe_invest_api.domain.risk.UserRiskAllocationSettings;
 import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
@@ -29,6 +34,7 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRe
 import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRiskAllocationSettingsRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,22 +55,27 @@ public class PositionRecommendationService {
 	private final PositionThesisRepository thesisRepository;
 	private final DailyCandleRepository dailyCandleRepository;
 	private final AllocationPlanRepository allocationPlanRepository;
+	private final UserRiskAllocationSettingsRepository riskSettingsRepository;
+	private final RiskAllocationService riskAllocationService;
 	private final AiContextAnalysisRepository aiContextAnalysisRepository;
 	private final PositionRecommendationRepository recommendationRepository;
 	private final NotificationEventRepository notificationEventRepository;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public PositionRecommendationService(CustomerPositionRepository positionRepository,
-			CustomerPositionThesisRepository positionThesisRepository, PositionThesisRepository thesisRepository,
-			DailyCandleRepository dailyCandleRepository, AllocationPlanRepository allocationPlanRepository,
-			AiContextAnalysisRepository aiContextAnalysisRepository,
-			PositionRecommendationRepository recommendationRepository,
-			NotificationEventRepository notificationEventRepository) {
+				CustomerPositionThesisRepository positionThesisRepository, PositionThesisRepository thesisRepository,
+				DailyCandleRepository dailyCandleRepository, AllocationPlanRepository allocationPlanRepository,
+				UserRiskAllocationSettingsRepository riskSettingsRepository, RiskAllocationService riskAllocationService,
+				AiContextAnalysisRepository aiContextAnalysisRepository,
+				PositionRecommendationRepository recommendationRepository,
+				NotificationEventRepository notificationEventRepository) {
 		this.positionRepository = positionRepository;
 		this.positionThesisRepository = positionThesisRepository;
 		this.thesisRepository = thesisRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.allocationPlanRepository = allocationPlanRepository;
+		this.riskSettingsRepository = riskSettingsRepository;
+		this.riskAllocationService = riskAllocationService;
 		this.aiContextAnalysisRepository = aiContextAnalysisRepository;
 		this.recommendationRepository = recommendationRepository;
 		this.notificationEventRepository = notificationEventRepository;
@@ -193,23 +204,73 @@ public class PositionRecommendationService {
 					aiContext);
 		}
 
-		if (currentThesis.getScore() >= 75 && allowsIncrease(currentThesis)
-				&& allocationAllowsIncrease(position, currentThesis)) {
-			reasons.add("Tese principal segue valida, score atual e valuation permitem aumento planejado da posicao.");
-			return withAiContext(decision(RecommendationType.AUMENTAR_POSICAO, Severity.MEDIUM, currentPrice, reasons,
-					null), aiContext);
-		}
+			if (currentThesis.getScore() >= 75 && allowsIncrease(currentThesis)
+					&& allocationAllowsIncrease(position, currentThesis, currentPrice, latestCandle.getTradeDate())) {
+				reasons.add("Tese principal segue valida, score atual e valuation permitem aumento planejado da posicao.");
+				return withAiContext(decision(RecommendationType.AUMENTAR_POSICAO, Severity.MEDIUM, currentPrice, reasons,
+						null), aiContext);
+			}
 
 		reasons.add("Tese principal segue acompanhavel, mas sem gatilho deterministico para nova acao operacional.");
 		return withAiContext(decision(RecommendationType.MANTER, Severity.LOW, currentPrice, reasons, null), aiContext);
 	}
 
-	private boolean allocationAllowsIncrease(CustomerPosition position, PositionThesis currentThesis) {
-		return allocationPlanRepository.findByThesisId(currentThesis.getId())
-				.filter(AllocationPlan::isValid)
-				.filter(plan -> plan.getSuggestedQuantity() > 0)
-				.map(plan -> BigDecimal.valueOf(plan.getSuggestedQuantity()).compareTo(position.getQuantity()) > 0)
-				.orElse(false);
+	private boolean allocationAllowsIncrease(CustomerPosition position, PositionThesis currentThesis, BigDecimal currentPrice,
+			LocalDate referenceDate) {
+		AllocationPlan thesisPlan = allocationPlanRepository.findByThesisId(currentThesis.getId()).orElse(null);
+		BigDecimal targetAllocationPercent = thesisPlan == null ? null : thesisPlan.getTargetAllocationPercent();
+		RiskAllocationResult result = riskAllocationService.calculate(new RiskAllocationInput(
+				riskSettings(position.getUser().getId()), currentThesis.getStatus(), currentPrice,
+				currentThesis.getFairPriceEstimate(), currentThesis.getPriceCeiling(), currentThesis.getSafetyMarginPercent(),
+				targetAllocationPercent, assetExposure(position, referenceDate), sectorExposure(position, referenceDate),
+				position.getAveragePrice(), position.getStopPrice(), position.getTargetPrice(), null, null, false));
+		return result.valid() && result.suggestedQuantity() > 0;
+	}
+
+	private RiskAllocationSettings riskSettings(UUID userId) {
+		return riskSettingsRepository.findByUserId(userId)
+				.map(this::toSettings)
+				.orElseGet(RiskAllocationSettings::conservativeDefault);
+	}
+
+	private RiskAllocationSettings toSettings(UserRiskAllocationSettings settings) {
+		return new RiskAllocationSettings(settings.getCapitalBase(), settings.getMaxAllocationPerAssetPercent(),
+				settings.getMaxAllocationPerSectorPercent(), settings.getToleratedDrawdownPercent(),
+				settings.getMinimumCashReservePercent(), settings.getMinimumSafetyMarginPercent(),
+				settings.getFirstTranchePercent(), settings.getSecondTranchePercent(), settings.getThirdTranchePercent(),
+				settings.getDefaultStopPercent(), settings.getDefaultTargetReturnPercent());
+	}
+
+	private BigDecimal assetExposure(CustomerPosition position, LocalDate referenceDate) {
+		return positionRepository.findByUserIdOrderByCreatedAtDesc(position.getUser().getId()).stream()
+				.filter(CustomerPosition::isOpenAndValidForDailyScan)
+				.filter(openPosition -> openPosition.getAsset().getId().equals(position.getAsset().getId()))
+				.map(openPosition -> exposureValue(openPosition, referenceDate))
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
+
+	private BigDecimal sectorExposure(CustomerPosition position, LocalDate referenceDate) {
+		String sector = position.getAsset().getSector();
+		return positionRepository.findByUserIdOrderByCreatedAtDesc(position.getUser().getId()).stream()
+				.filter(CustomerPosition::isOpenAndValidForDailyScan)
+				.filter(openPosition -> sameSector(sector, openPosition.getAsset().getSector()))
+				.map(openPosition -> exposureValue(openPosition, referenceDate))
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
+
+	private BigDecimal exposureValue(CustomerPosition position, LocalDate referenceDate) {
+		BigDecimal price = dailyCandleRepository
+				.findTopByAssetIdAndTradeDateLessThanEqualOrderByTradeDateDescCollectedAtDesc(position.getAsset().getId(),
+						referenceDate)
+				.filter(candle -> candle.getQualityStatus() == DataQualityStatus.VALID)
+				.map(DailyCandle::getClosePrice)
+				.filter(this::positive)
+				.orElse(position.getAveragePrice());
+		return position.getQuantity().multiply(price);
+	}
+
+	private boolean sameSector(String left, String right) {
+		return left == null ? right == null : left.equalsIgnoreCase(right);
 	}
 
 	private boolean allowsIncrease(PositionThesis currentThesis) {

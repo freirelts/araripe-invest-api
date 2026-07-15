@@ -6,6 +6,7 @@ import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesisStatus;
 import com.freirelts.araripe_invest_api.domain.portfolio.PositionStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
+import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
@@ -152,6 +153,7 @@ public class PortfolioService {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
 					"The accepted thesis must reference the same asset as the position.");
 		}
+		validateAssociableThesis(thesis);
 		CustomerPositionThesis association = new CustomerPositionThesis(position.getUser(), position, thesis,
 				position.getAveragePrice());
 		association.setNotes(trimToNull(notes));
@@ -229,6 +231,32 @@ public class PortfolioService {
 	private boolean sameAsset(Asset left, Asset right) {
 		return left == right
 				|| (left != null && right != null && left.getId() != null && left.getId().equals(right.getId()));
+	}
+
+	private void validateAssociableThesis(PositionThesis thesis) {
+		if (thesis.getStatus() != ThesisStatus.MONITORAR && thesis.getStatus() != ThesisStatus.OPORTUNIDADE
+				&& thesis.getStatus() != ThesisStatus.APORTE_PLANEJADO) {
+			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+					"Only monitorable or actionable theses can be associated as a main thesis.");
+		}
+		if (thesis.getScore() < 60 || !positive(thesis.getFairPriceEstimate()) || !positive(thesis.getPriceCeiling())
+				|| thesis.getSafetyMarginPercent() == null || !positive(thesis.getStopPrice())
+				|| !positive(thesis.getTargetPrice()) || hasDataBlockingFilter(thesis.getFailedFiltersJson())) {
+			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+					"Main thesis requires complete data, valuation, risk controls and no data quality blockers.");
+		}
+	}
+
+	private boolean hasDataBlockingFilter(String failedFiltersJson) {
+		if (failedFiltersJson == null || failedFiltersJson.isBlank()) {
+			return false;
+		}
+		return failedFiltersJson.contains("DATA_QUALITY_BLOCKED")
+				|| failedFiltersJson.contains("MINIMUM_FUNDAMENTALS_MISSING");
+	}
+
+	private boolean positive(BigDecimal value) {
+		return value != null && value.signum() > 0;
 	}
 
 	private ResponseStatusException notFound(String message) {

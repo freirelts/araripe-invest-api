@@ -154,6 +154,29 @@ class PortfolioServiceTests {
 	}
 
 	@Test
+	void customerCannotAssociateInvalidOrDataBlockedMainThesis() {
+		User customer = saveCustomer("portfolio-invalid-thesis@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("BBAS3", "Banco do Brasil", "Financeiro"));
+		var position = portfolioService.createPosition(customer.getId(), input(asset, "100", "27.00"));
+		PositionThesis ignoredThesis = thesisRepository.saveAndFlush(thesis(asset, LocalDate.of(2026, 7, 7),
+				ThesisType.QUALITY_REASONABLE_PRICE, 55, "rules-v1", ThesisStatus.IGNORAR));
+			PositionThesis dataBlockedThesis = thesis(asset, LocalDate.of(2026, 7, 8),
+					ThesisType.SUSTAINABLE_DIVIDENDS, 75, "rules-v1");
+			dataBlockedThesis.setFailedFiltersJson("[{\"code\":\"DATA_QUALITY_BLOCKED\"}]");
+			PositionThesis savedDataBlockedThesis = thesisRepository.saveAndFlush(dataBlockedThesis);
+
+		assertThatThrownBy(() -> portfolioService.associateMainThesis(customer.getId(), position.id(),
+				ignoredThesis.getId(), "Tese ignorada"))
+				.isInstanceOf(ResponseStatusException.class)
+				.hasMessageContaining("422 UNPROCESSABLE_ENTITY");
+			assertThatThrownBy(() -> portfolioService.associateMainThesis(customer.getId(), position.id(),
+					savedDataBlockedThesis.getId(), "Tese com dados bloqueados"))
+				.isInstanceOf(ResponseStatusException.class)
+				.hasMessageContaining("422 UNPROCESSABLE_ENTITY");
+		assertThat(positionThesisRepository.findByPositionIdOrderByCreatedAtDesc(position.id())).isEmpty();
+	}
+
+	@Test
 	void replacingMainThesisClosesPreviousAssociationAndKeepsHistory() {
 		User customer = saveCustomer("portfolio-replace@araripe.test");
 		Asset asset = assetRepository.saveAndFlush(new Asset("EGIE3", "Engie Brasil", "Utilidade Publica"));
@@ -218,8 +241,12 @@ class PortfolioServiceTests {
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,
 			String ruleVersion) {
-		PositionThesis thesis = new PositionThesis(asset, referenceDate, thesisType, ThesisStatus.OPORTUNIDADE, score,
-				ruleVersion);
+		return thesis(asset, referenceDate, thesisType, score, ruleVersion, ThesisStatus.OPORTUNIDADE);
+	}
+
+	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,
+			String ruleVersion, ThesisStatus status) {
+		PositionThesis thesis = new PositionThesis(asset, referenceDate, thesisType, status, score, ruleVersion);
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));

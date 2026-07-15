@@ -41,10 +41,10 @@ class ScoringServiceTests {
 				new BigDecimal("0.120000"), new BigDecimal("0.150000"), new BigDecimal("0.150000"),
 				new BigDecimal("0.100000"), new BigDecimal("0.160000"), new BigDecimal("0.110000"),
 				new BigDecimal("0.180000"), new BigDecimal("300.000000"), new BigDecimal("500.000000"),
-				new BigDecimal("18.000000"), new BigDecimal("0.250000"), new BigDecimal("-0.100000"),
-				TrendStatus.HEALTHY, 2,
-				List.of(new EliminatoryFilterReason(EliminatoryFilterCode.DATA_QUALITY_BLOCKED,
-						"Dados incompletos, atrasados ou inconsistentes bloqueiam a triagem."))));
+					new BigDecimal("18.000000"), new BigDecimal("0.250000"), new BigDecimal("-0.100000"),
+					TrendStatus.HEALTHY, 2, null, null, null, null,
+					List.of(new EliminatoryFilterReason(EliminatoryFilterCode.DATA_QUALITY_BLOCKED,
+							"Dados incompletos, atrasados ou inconsistentes bloqueiam a triagem."))));
 
 		assertThat(result.finalScore()).isEqualTo(98);
 	}
@@ -60,10 +60,10 @@ class ScoringServiceTests {
 				new BigDecimal("0.120000"), new BigDecimal("0.150000"), new BigDecimal("0.150000"),
 				new BigDecimal("0.100000"), new BigDecimal("0.160000"), new BigDecimal("0.110000"),
 				new BigDecimal("0.180000"), new BigDecimal("300.000000"), new BigDecimal("500.000000"),
-				new BigDecimal("18.000000"), new BigDecimal("0.250000"), new BigDecimal("-0.100000"),
-				TrendStatus.HEALTHY, 2,
-				List.of(new EliminatoryFilterReason(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY,
-						"Volume financeiro medio abaixo do minimo."))));
+					new BigDecimal("18.000000"), new BigDecimal("0.250000"), new BigDecimal("-0.100000"),
+					TrendStatus.HEALTHY, 2, null, null, null, null,
+					List.of(new EliminatoryFilterReason(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY,
+							"Volume financeiro medio abaixo do minimo."))));
 
 		assertThat(result.finalScore()).isGreaterThan(0);
 		assertThat(result.components()).extracting(ScoreComponent::code)
@@ -79,8 +79,9 @@ class ScoringServiceTests {
 				null, null, new BigDecimal("-0.020000"), null, null, null, null, null, null,
 				new BigDecimal("-0.120000"), new BigDecimal("-0.200000"), new BigDecimal("-0.120000"),
 				new BigDecimal("-0.200000"), new BigDecimal("-0.200000"), new BigDecimal("-0.200000"),
-				null, new BigDecimal("-100.000000"), BigDecimal.ZERO, new BigDecimal("9.000000"),
-				new BigDecimal("0.250000"), new BigDecimal("-0.080000"), TrendStatus.HEALTHY, 0, List.of());
+					null, new BigDecimal("-100.000000"), BigDecimal.ZERO, new BigDecimal("9.000000"),
+					new BigDecimal("0.250000"), new BigDecimal("-0.080000"), TrendStatus.HEALTHY, 0, null, null, null,
+					null, List.of());
 
 		ScoreResult result = service.score(input);
 
@@ -89,10 +90,37 @@ class ScoringServiceTests {
 				.singleElement()
 				.extracting(ScoreComponent::rawScore)
 				.isEqualTo(100);
-		assertThat(result.components()).filteredOn(component -> component.code().equals("FUNDAMENTAL_QUALITY"))
+			assertThat(result.components()).filteredOn(component -> component.code().equals("FUNDAMENTAL_QUALITY"))
+					.singleElement()
+					.extracting(ScoreComponent::rawScore)
+					.isEqualTo(0);
+	}
+
+	@Test
+	void macroSectorContextPenalizesSensitiveSectorWhenRatesAndInflationAreHigh() {
+		ScoringInput benignMacro = strongInput(ThesisType.QUALITY_REASONABLE_PRICE);
+		ScoringInput pressuredMacro = new ScoringInput(benignMacro.thesisType(), benignMacro.currentPrice(),
+				benignMacro.fairPriceEstimate(), benignMacro.priceCeiling(), benignMacro.safetyMargin(),
+				benignMacro.trailingPe(), benignMacro.priceToBook(), benignMacro.enterpriseToEbitda(),
+				benignMacro.earningsPerShare(), benignMacro.dividendYield(), benignMacro.profitMargin(),
+				benignMacro.grossMargin(), benignMacro.ebitdaMargin(), benignMacro.operatingMargin(), benignMacro.roe(),
+				benignMacro.roa(), benignMacro.debtToEquity(), benignMacro.revenueGrowth(),
+				benignMacro.earningsGrowth(), benignMacro.annualRevenueGrowth(), benignMacro.quarterlyRevenueGrowth(),
+				benignMacro.annualEarningsGrowth(), benignMacro.quarterlyEarningsGrowth(), benignMacro.ebitdaGrowth(),
+				benignMacro.freeCashflow(), benignMacro.operatingCashflow(), benignMacro.sma200(),
+				benignMacro.historicalVolatility(), benignMacro.recentDrawdown(), benignMacro.trendStatus(),
+				benignMacro.cashDividendEventsLastThreeYears(), "Consumo", new BigDecimal("12.000000"),
+				new BigDecimal("6.000000"), new BigDecimal("5.750000"), List.of());
+
+		ScoreResult result = service.score(pressuredMacro);
+
+		assertThat(result.components()).filteredOn(component -> component.code().equals("MACRO_SECTOR_CONTEXT"))
 				.singleElement()
-				.extracting(ScoreComponent::rawScore)
-				.isEqualTo(0);
+				.satisfies(component -> {
+					assertThat(component.rawScore()).isEqualTo(25);
+					assertThat(component.evidence()).contains("setor sensivel a juros/inflacao com ambiente macro pressionado");
+				});
+		assertThat(result.finalScore()).isLessThan(service.score(benignMacro).finalScore());
 	}
 
 	private ScoringInput strongInput(ThesisType thesisType) {
@@ -104,7 +132,8 @@ class ScoringServiceTests {
 				new BigDecimal("0.100000"), new BigDecimal("0.500000"), new BigDecimal("0.120000"),
 				new BigDecimal("0.150000"), new BigDecimal("0.150000"), new BigDecimal("0.100000"),
 				new BigDecimal("0.160000"), new BigDecimal("0.110000"), new BigDecimal("0.180000"),
-				new BigDecimal("300.000000"), new BigDecimal("500.000000"), new BigDecimal("18.000000"),
-				new BigDecimal("0.250000"), new BigDecimal("-0.100000"), TrendStatus.HEALTHY, 2, List.of());
+					new BigDecimal("300.000000"), new BigDecimal("500.000000"), new BigDecimal("18.000000"),
+					new BigDecimal("0.250000"), new BigDecimal("-0.100000"), TrendStatus.HEALTHY, 2, null, null, null,
+					null, List.of());
 	}
 }

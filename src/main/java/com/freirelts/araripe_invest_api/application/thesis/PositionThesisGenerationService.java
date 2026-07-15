@@ -20,6 +20,7 @@ import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
 import com.freirelts.araripe_invest_api.domain.marketdata.DividendEventType;
 import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
+import com.freirelts.araripe_invest_api.domain.marketdata.MacroIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
@@ -32,6 +33,7 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetReposito
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.MacroIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,10 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class PositionThesisGenerationService {
@@ -59,6 +65,7 @@ public class PositionThesisGenerationService {
 	private final DailyCandleRepository dailyCandleRepository;
 	private final TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository;
 	private final FundamentalSnapshotRepository fundamentalSnapshotRepository;
+	private final MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository;
 	private final DividendEventRepository dividendEventRepository;
 	private final PositionThesisRepository positionThesisRepository;
 	private final AllocationPlanRepository allocationPlanRepository;
@@ -68,15 +75,17 @@ public class PositionThesisGenerationService {
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public PositionThesisGenerationService(AssetRepository assetRepository, DailyCandleRepository dailyCandleRepository,
-			TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
-			FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
+				TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
+				FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
+			MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository,
 			PositionThesisRepository positionThesisRepository, AllocationPlanRepository allocationPlanRepository,
-			EliminatoryFilterEvaluator eliminatoryFilterEvaluator, ScoringService scoringService,
-			RiskAllocationService riskAllocationService) {
+				EliminatoryFilterEvaluator eliminatoryFilterEvaluator, ScoringService scoringService,
+				RiskAllocationService riskAllocationService) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
 		this.fundamentalSnapshotRepository = fundamentalSnapshotRepository;
+		this.macroIndicatorSnapshotRepository = macroIndicatorSnapshotRepository;
 		this.dividendEventRepository = dividendEventRepository;
 		this.positionThesisRepository = positionThesisRepository;
 		this.allocationPlanRepository = allocationPlanRepository;
@@ -357,10 +366,16 @@ public class PositionThesisGenerationService {
 				.map(FundamentalSnapshot::getFreeCashflow)
 				.toList();
 		EliminatoryFilterInput input = buildInput(referenceDate, candle, technical, fundamental, fcfHistory);
-		long dividendEvents = dividendEventRepository.countByAssetIdAndEventTypeInAndLastDatePriorBetween(asset.getId(),
-				CASH_DIVIDEND_EVENTS, referenceDate.minusYears(3), referenceDate);
-		return new ThesisMarketContext(asset, referenceDate, analysisClose(candle), technical, fundamental,
-				eliminatoryFilterEvaluator.evaluate(input), dividendEvents);
+			long dividendEvents = dividendEventRepository.countByAssetIdAndEventTypeInAndLastDatePriorBetween(asset.getId(),
+					CASH_DIVIDEND_EVENTS, referenceDate.minusYears(3), referenceDate);
+			Map<String, MacroIndicatorSnapshot> latestMacro = macroIndicatorSnapshotRepository
+					.findLatestByReferenceDateLessThanEqual(referenceDate)
+					.stream()
+					.collect(Collectors.toMap(snapshot -> snapshot.getSlug().toLowerCase(Locale.ROOT), Function.identity(),
+							(left, right) -> left));
+			return new ThesisMarketContext(asset, referenceDate, analysisClose(candle), technical, fundamental,
+					eliminatoryFilterEvaluator.evaluate(input), dividendEvents, macroValue(latestMacro, "selic"),
+					macroValue(latestMacro, "ipca"), macroValue(latestMacro, "usdbrl"));
 	}
 
 	private EliminatoryFilterInput buildInput(LocalDate referenceDate, DailyCandle candle,
@@ -425,8 +440,14 @@ public class PositionThesisGenerationService {
 				context.revenueGrowth(), context.earningsGrowth(), context.annualRevenueGrowth(),
 				context.quarterlyRevenueGrowth(), context.annualEarningsGrowth(), context.quarterlyEarningsGrowth(),
 				context.ebitdaGrowth(), context.freeCashflow(), context.operatingCashflow(), context.sma200(),
-				context.historicalVolatility(), context.recentDrawdown(), context.trendStatus(),
-				context.cashDividendEventsLastThreeYears(), context.failedFilters()));
+					context.historicalVolatility(), context.recentDrawdown(), context.trendStatus(),
+					context.cashDividendEventsLastThreeYears(), context.asset().getSector(), context.selicRate(),
+					context.ipcaRate(), context.usdBrlRate(), context.failedFilters()));
+	}
+
+	private BigDecimal macroValue(Map<String, MacroIndicatorSnapshot> latestMacro, String slug) {
+		MacroIndicatorSnapshot snapshot = latestMacro.get(slug);
+		return snapshot == null ? null : snapshot.getValue();
 	}
 
 	private ThesisStatus status(ThesisMarketContext context, int score, boolean mandatory, BigDecimal priceCeiling,
@@ -625,8 +646,9 @@ public class PositionThesisGenerationService {
 	}
 
 	private record ThesisMarketContext(Asset asset, LocalDate referenceDate, BigDecimal currentPrice,
-			TechnicalIndicatorSnapshot technical, FundamentalSnapshot fundamental,
-			List<EliminatoryFilterReason> failedFilters, long cashDividendEventsLastThreeYears) {
+				TechnicalIndicatorSnapshot technical, FundamentalSnapshot fundamental,
+				List<EliminatoryFilterReason> failedFilters, long cashDividendEventsLastThreeYears, BigDecimal selicRate,
+				BigDecimal ipcaRate, BigDecimal usdBrlRate) {
 
 		BigDecimal trailingPe() {
 			return fundamental == null ? null : fundamental.getTrailingPe();

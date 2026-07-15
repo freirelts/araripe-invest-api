@@ -129,15 +129,21 @@ public class OperationalJobService {
 		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
 				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
 		log.info("Daily operational flow started for referenceDate={} steps={}", referenceDate, orderedSteps.size());
-		for (JobName step : orderedSteps) {
-			log.info("Daily operational flow executing step={} referenceDate={}", step, referenceDate);
-			JobRunResult result = execute(step, referenceDate, trigger, requestedByUserId);
-			steps.add(Map.of("runId", result.runId().toString(), "jobName", result.jobName().name(), "status",
-					result.status().name(), "summary", result.summary()));
-			failed = failed || result.status() == JobRunStatus.FAILED;
-			log.info("Daily operational flow step={} finished with status={} referenceDate={} runId={}", step,
-					result.status(), referenceDate, result.runId());
-		}
+			for (JobName step : orderedSteps) {
+				log.info("Daily operational flow executing step={} referenceDate={}", step, referenceDate);
+				JobRunResult result = execute(step, referenceDate, trigger, requestedByUserId);
+				steps.add(Map.of("runId", result.runId().toString(), "jobName", result.jobName().name(), "status",
+						result.status().name(), "summary", result.summary()));
+				failed = failed || result.status() == JobRunStatus.FAILED;
+				log.info("Daily operational flow step={} finished with status={} referenceDate={} runId={}", step,
+						result.status(), referenceDate, result.runId());
+				if (result.status() == JobRunStatus.FAILED && step != JobName.DAILY_NOTIFICATION_DIGEST) {
+					log.warn(
+							"Daily operational flow interrupted after failed prerequisite step={} referenceDate={} to avoid recommendations based on stale data",
+							step, referenceDate);
+					break;
+				}
+			}
 		if (failed) {
 			log.warn("Daily operational flow finished with failed steps for referenceDate={}", referenceDate);
 		}

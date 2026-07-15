@@ -193,6 +193,30 @@ class OperationalJobServiceTests {
 	}
 
 	@Test
+	@SuppressWarnings("unchecked")
+	void dailyOperationalFlowStopsBeforePortfolioScanWhenPrerequisiteFails() {
+		User admin = saveAdmin();
+
+		when(marketDataCollectionService.collectActiveAssetData(DEFAULT_MACRO_SLUGS))
+				.thenReturn(new MarketDataCollectionSummary(1, 1, 1, 1, 1, 8, 0));
+		when(indicatorCalculationService.calculateForActiveAssets(REFERENCE_DATE))
+				.thenThrow(new IllegalStateException("Indicator source unavailable."));
+
+		JobRunResult result = service.execute(JobName.DAILY_OPERATIONAL_FLOW, REFERENCE_DATE, JobRunTrigger.MANUAL,
+				admin.getId());
+
+		List<Map<String, Object>> steps = (List<Map<String, Object>>) result.summary().get("steps");
+
+		assertThat(result.status()).isEqualTo(JobRunStatus.FAILED);
+		assertThat(steps).extracting(step -> step.get("jobName"))
+				.containsExactly("DAILY_MARKET_DATA_COLLECTION", "INDICATOR_CALCULATION");
+		verify(assetScreeningService, never()).screenActiveAssets(any());
+		verify(thesisGenerationService, never()).generateForActiveAssets(any());
+		verify(positionRecommendationService, never()).recommendOpenPositions(any());
+		verify(notificationDigestService, never()).publishDailyDigest(any());
+	}
+
+	@Test
 	void rankingJobIsAuditedAndCanBeRerunWithoutDuplicatingFinancialRecords() {
 		User admin = saveAdmin();
 		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG ON", "Industrial"));

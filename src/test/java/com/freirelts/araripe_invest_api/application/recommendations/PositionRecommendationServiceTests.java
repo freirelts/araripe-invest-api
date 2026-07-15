@@ -1,6 +1,7 @@
 package com.freirelts.araripe_invest_api.application.recommendations;
 
 import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService.RecommendationSummary;
+import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
@@ -47,7 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @Testcontainers
 @DataJpaTest
-@Import(PositionRecommendationService.class)
+@Import({ PositionRecommendationService.class, RiskAllocationService.class })
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class PositionRecommendationServiceTests {
@@ -178,6 +179,19 @@ class PositionRecommendationServiceTests {
 	}
 
 	@Test
+	void increaseIsBlockedWhenCustomerCurrentExposureAlreadyExceedsAssetLimit() {
+		Scenario scenario = scenario("asset-limit@araripe.test", "CPFE3", "40.00", "34.00", "55.00", "41.00",
+				ThesisStatus.APORTE_PLANEJADO, 84, "30");
+		saveAllocationPlan(scenario.currentThesis(), 50);
+
+		RecommendationSummary summary = service.recommendPosition(scenario.position().getId(), REFERENCE_DATE);
+
+		assertThat(summary.recommendationType()).isEqualTo(RecommendationType.MANTER);
+		assertThat(summary.finalMessage()).contains("sem gatilho deterministico");
+		assertThat(notificationEventRepository.findAll()).isEmpty();
+	}
+
+	@Test
 	void validAiContextIsAttachedAndConflictIsAuditedWithoutChangingDeterministicDecision() {
 		Scenario scenario = scenario("ai-conflict@araripe.test", "TAEE11", "35.00", "30.00", "45.00", "36.00",
 				ThesisStatus.OPORTUNIDADE, 82);
@@ -218,9 +232,14 @@ class PositionRecommendationServiceTests {
 
 	private Scenario scenario(String email, String symbol, String averagePrice, String stopPrice, String targetPrice,
 			String closePrice, ThesisStatus thesisStatus, int score) {
+		return scenario(email, symbol, averagePrice, stopPrice, targetPrice, closePrice, thesisStatus, score, "10");
+	}
+
+	private Scenario scenario(String email, String symbol, String averagePrice, String stopPrice, String targetPrice,
+			String closePrice, ThesisStatus thesisStatus, int score, String quantity) {
 		User user = saveCustomer(email);
 		Asset asset = assetRepository.saveAndFlush(new Asset(symbol, symbol + " S.A.", "Financeiro"));
-		CustomerPosition position = savePosition(user, asset, "10", averagePrice, stopPrice, targetPrice);
+		CustomerPosition position = savePosition(user, asset, quantity, averagePrice, stopPrice, targetPrice);
 		PositionThesis acceptedThesis = saveThesis(asset, REFERENCE_DATE.minusDays(1), ThesisStatus.OPORTUNIDADE, 80);
 		PositionThesis currentThesis = saveThesis(asset, REFERENCE_DATE, thesisStatus, score);
 		CustomerPositionThesis association = positionThesisRepository.saveAndFlush(new CustomerPositionThesis(user,
