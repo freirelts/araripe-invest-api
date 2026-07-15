@@ -38,6 +38,8 @@ class OpenApiController {
 		add(paths, "/api/v1/portfolio/positions", "get", "Carteira do cliente.");
 		add(paths, "/api/v1/portfolio/positions", "post", "Cria posicao do cliente.");
 		add(paths, "/api/v1/portfolio/positions/{positionId}", "put", "Edita posicao aberta.");
+		add(paths, "/api/v1/portfolio/positions/{positionId}/contributions", "post",
+				"Registra aporte e recalcula quantidade e preco medio.");
 		add(paths, "/api/v1/portfolio/positions/{positionId}/close", "patch", "Encerra posicao mantendo historico.");
 		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "post", "Associa tese principal.");
 		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "patch", "Troca tese principal.");

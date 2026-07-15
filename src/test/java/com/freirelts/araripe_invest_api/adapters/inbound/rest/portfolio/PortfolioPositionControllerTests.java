@@ -118,6 +118,22 @@ class PortfolioPositionControllerTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.mainThesis.acceptedThesisId").value(thesis.getId().toString()));
 
+		mockMvc.perform(post("/api/v1/portfolio/positions/{positionId}/contributions", positionId)
+						.header("Authorization", bearer(token))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "quantity":5,
+								  "price":42.00,
+								  "contributionDate":"2026-07-08",
+								  "notes":"Aporte executado na corretora"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.quantity").value(15))
+				.andExpect(jsonPath("$.averagePrice").value(39.6))
+				.andExpect(jsonPath("$.notes").value("Aporte executado na corretora"));
+
 		mockMvc.perform(patch("/api/v1/portfolio/positions/{positionId}/close", positionId)
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())

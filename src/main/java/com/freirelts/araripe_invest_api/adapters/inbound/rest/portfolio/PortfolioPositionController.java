@@ -1,6 +1,7 @@
 package com.freirelts.araripe_invest_api.adapters.inbound.rest.portfolio;
 
 import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService;
+import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.ContributionInput;
 import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.PositionInput;
 import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.PositionSummary;
 import jakarta.validation.Valid;
@@ -61,6 +62,12 @@ class PortfolioPositionController {
 		return portfolioService.closePosition(userId(authentication), positionId);
 	}
 
+	@PostMapping("/{positionId}/contributions")
+	PositionSummary registerContribution(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
+			@Valid @RequestBody ContributionRequest request) {
+		return portfolioService.registerContribution(userId(authentication), positionId, request.toInput());
+	}
+
 	@PostMapping("/{positionId}/main-thesis")
 	@ResponseStatus(HttpStatus.CREATED)
 	PositionSummary associateMainThesis(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
@@ -113,5 +120,22 @@ class PortfolioPositionController {
 			UUID thesisId,
 			@Size(max = 1000)
 			String notes) {
+	}
+
+	record ContributionRequest(
+			@NotNull
+			@Positive
+			BigDecimal quantity,
+			@NotNull
+			@Positive
+			BigDecimal price,
+			@PastOrPresent
+			LocalDate contributionDate,
+			@Size(max = 1000)
+			String notes) {
+
+		ContributionInput toInput() {
+			return new ContributionInput(quantity, price, contributionDate, notes);
+		}
 	}
 }

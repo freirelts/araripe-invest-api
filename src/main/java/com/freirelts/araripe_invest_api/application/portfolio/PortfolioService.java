@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -30,6 +31,7 @@ public class PortfolioService {
 
 	private static final String REPLACED_BY_CUSTOMER = "Tese principal substituida pelo cliente.";
 	private static final String CLOSED_WITH_POSITION = "Posicao encerrada pelo cliente.";
+	private static final int PRICE_SCALE = 6;
 
 	private final UserRepository userRepository;
 	private final AssetRepository assetRepository;
@@ -77,6 +79,33 @@ public class PortfolioService {
 		position.setAveragePrice(input.averagePrice());
 		position.setEntryDate(input.entryDate());
 		applyEditableFields(position, input);
+		return summary(positionRepository.saveAndFlush(position));
+	}
+
+	@Transactional
+	public PositionSummary registerContribution(UUID userId, UUID positionId, ContributionInput input) {
+		requireCustomer(userId);
+		validateContributionInput(input);
+		CustomerPosition position = openOwnedPosition(userId, positionId);
+
+		BigDecimal currentQuantity = position.getQuantity();
+		BigDecimal currentAveragePrice = position.getAveragePrice();
+		BigDecimal contributionQuantity = input.quantity();
+		BigDecimal contributionPrice = input.price();
+		BigDecimal newQuantity = currentQuantity.add(contributionQuantity);
+		BigDecimal newAveragePrice = currentQuantity.multiply(currentAveragePrice)
+				.add(contributionQuantity.multiply(contributionPrice))
+				.divide(newQuantity, PRICE_SCALE, RoundingMode.HALF_UP);
+
+		position.setQuantity(newQuantity);
+		position.setAveragePrice(newAveragePrice);
+		if (input.contributionDate() != null && input.contributionDate().isBefore(position.getEntryDate())) {
+			position.setEntryDate(input.contributionDate());
+		}
+		if (trimToNull(input.notes()) != null) {
+			position.setNotes(trimToNull(input.notes()));
+		}
+		position.setUpdatedAt(Instant.now());
 		return summary(positionRepository.saveAndFlush(position));
 	}
 
@@ -170,6 +199,19 @@ public class PortfolioService {
 		validatePositiveOptional(input.targetReturnPercent(), "Target return percent");
 	}
 
+	private void validateContributionInput(ContributionInput input) {
+		if (input.quantity() == null || input.quantity().signum() <= 0) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Contribution quantity must be greater than zero.");
+		}
+		if (input.price() == null || input.price().signum() <= 0) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contribution price must be greater than zero.");
+		}
+		if (input.contributionDate() != null && input.contributionDate().isAfter(LocalDate.now())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Contribution date must not be in the future.");
+		}
+	}
+
 	private void applyEditableFields(CustomerPosition position, PositionInput input) {
 		position.setStopPrice(input.stopPrice());
 		position.setTargetPrice(input.targetPrice());
@@ -208,6 +250,13 @@ public class PortfolioService {
 			BigDecimal stopPrice,
 			BigDecimal targetPrice,
 			BigDecimal targetReturnPercent,
+			String notes) {
+	}
+
+	public record ContributionInput(
+			BigDecimal quantity,
+			BigDecimal price,
+			LocalDate contributionDate,
 			String notes) {
 	}
 

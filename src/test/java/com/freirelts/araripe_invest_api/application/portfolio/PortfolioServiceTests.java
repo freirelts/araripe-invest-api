@@ -98,6 +98,21 @@ class PortfolioServiceTests {
 	}
 
 	@Test
+	void registeringContributionUpdatesQuantityAndAveragePrice() {
+		User customer = saveCustomer("portfolio-contribution@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG S.A.", "Bens Industriais"));
+		var created = portfolioService.createPosition(customer.getId(), input(asset, "100", "20.00"));
+
+		var updated = portfolioService.registerContribution(customer.getId(), created.id(),
+				new PortfolioService.ContributionInput(new BigDecimal("50"), new BigDecimal("24.00"),
+						LocalDate.of(2026, 7, 8), "Aporte executado na corretora"));
+
+		assertThat(updated.quantity()).isEqualByComparingTo("150");
+		assertThat(updated.averagePrice()).isEqualByComparingTo("21.333333");
+		assertThat(updated.notes()).isEqualTo("Aporte executado na corretora");
+	}
+
+	@Test
 	void userCannotAccessPositionFromAnotherCustomer() {
 		User owner = saveCustomer("portfolio-owner-deny@araripe.test");
 		User other = saveCustomer("portfolio-other-deny@araripe.test");
