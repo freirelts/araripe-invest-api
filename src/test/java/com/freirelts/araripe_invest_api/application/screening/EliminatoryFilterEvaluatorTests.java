@@ -5,6 +5,7 @@ import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,8 +46,19 @@ class EliminatoryFilterEvaluatorTests {
 	@Test
 	void filtersPersistentlyNegativeFreeCashflow() {
 		assertCodes(validInput().freeCashflow(new BigDecimal("-20"))
-				.freeCashflowHistory(List.of(new BigDecimal("-20"), new BigDecimal("-10"), new BigDecimal("5")))
+				.freeCashflowHistory(List.of(fcfPeriod("2025-12-31", "-20"), fcfPeriod("2024-12-31", "-10"),
+						fcfPeriod("2023-12-31", "5")))
 				.build()).containsExactly(EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW);
+	}
+
+	@Test
+	void doesNotTreatDuplicateFreeCashflowSnapshotsFromSamePeriodAsPersistent() {
+		assertThat(evaluator.evaluate(validInput()
+				.freeCashflow(new BigDecimal("-20"))
+				.operatingCashflow(new BigDecimal("100"))
+				.freeCashflowHistory(List.of(fcfPeriod("2025-12-31", "-20"), fcfPeriod("2025-12-31", "-10"),
+						fcfPeriod("2025-12-31", "-5")))
+				.build())).isEmpty();
 	}
 
 	@Test
@@ -142,7 +154,7 @@ class EliminatoryFilterEvaluatorTests {
 				.profitMargin(new BigDecimal("0.12"))
 				.operatingCashflow(new BigDecimal("100"))
 				.freeCashflow(new BigDecimal("50"))
-				.freeCashflowHistory(List.of(new BigDecimal("50"), new BigDecimal("60")))
+				.freeCashflowHistory(List.of(fcfPeriod("2025-12-31", "50"), fcfPeriod("2024-12-31", "60")))
 				.debtToEquity(new BigDecimal("0.80"))
 				.netDebt(new BigDecimal("100"))
 				.revenueGrowth(new BigDecimal("0.05"))
@@ -158,5 +170,9 @@ class EliminatoryFilterEvaluatorTests {
 		return assertThat(evaluator.evaluate(input).stream()
 				.map(EliminatoryFilterReason::code)
 				.toList());
+	}
+
+	private EliminatoryFilterInput.FreeCashflowPeriod fcfPeriod(String periodEndDate, String value) {
+		return new EliminatoryFilterInput.FreeCashflowPeriod(LocalDate.parse(periodEndDate), new BigDecimal(value));
 	}
 }

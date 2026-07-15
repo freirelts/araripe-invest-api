@@ -43,6 +43,7 @@ public class AssetScreeningService {
 	private final AssetScreeningResultRepository assetScreeningResultRepository;
 	private final PositionThesisRepository positionThesisRepository;
 	private final EliminatoryFilterEvaluator evaluator;
+	private final FundamentalEvidenceService fundamentalEvidenceService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public AssetScreeningService(AssetRepository assetRepository, DailyCandleRepository dailyCandleRepository,
@@ -50,7 +51,7 @@ public class AssetScreeningService {
 			FundamentalSnapshotRepository fundamentalSnapshotRepository,
 			AssetScreeningResultRepository assetScreeningResultRepository,
 			PositionThesisRepository positionThesisRepository,
-			EliminatoryFilterEvaluator evaluator) {
+			EliminatoryFilterEvaluator evaluator, FundamentalEvidenceService fundamentalEvidenceService) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
@@ -58,6 +59,7 @@ public class AssetScreeningService {
 		this.assetScreeningResultRepository = assetScreeningResultRepository;
 		this.positionThesisRepository = positionThesisRepository;
 		this.evaluator = evaluator;
+		this.fundamentalEvidenceService = fundamentalEvidenceService;
 	}
 
 	@Transactional
@@ -88,15 +90,13 @@ public class AssetScreeningService {
 						asset.getId(), referenceDate, PeriodType.TTM, DERIVED_SOURCE,
 						IndicatorCalculationService.CALCULATION_VERSION)
 				.orElse(null);
-		List<BigDecimal> fcfHistory = fundamentalSnapshotRepository
-				.findTop4ByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionOrderByReferenceDateDescCreatedAtDesc(
-						asset.getId(), referenceDate, PeriodType.TTM, DERIVED_SOURCE,
-						IndicatorCalculationService.CALCULATION_VERSION)
-				.stream()
-				.map(FundamentalSnapshot::getFreeCashflow)
-				.toList();
+		List<EliminatoryFilterInput.FreeCashflowPeriod> fcfHistory = fundamentalEvidenceService
+				.freeCashflowHistory(asset.getId(), referenceDate);
+		LocalDate latestAnnualStatementEndDate = fundamentalEvidenceService.latestAnnualStatementEndDate(asset.getId(),
+				referenceDate);
 
-		EliminatoryFilterInput input = buildInput(referenceDate, candle, technical, fundamental, fcfHistory);
+		EliminatoryFilterInput input = buildInput(referenceDate, candle, technical, fundamental, fcfHistory,
+				latestAnnualStatementEndDate);
 		List<EliminatoryFilterReason> failedFilters = evaluator.evaluate(input);
 		ScreeningStatus status = failedFilters.isEmpty() ? ScreeningStatus.ELIGIBLE : ScreeningStatus.ELIMINATED;
 
@@ -130,7 +130,8 @@ public class AssetScreeningService {
 	}
 
 	private EliminatoryFilterInput buildInput(LocalDate referenceDate, DailyCandle candle,
-			TechnicalIndicatorSnapshot technical, FundamentalSnapshot fundamental, List<BigDecimal> fcfHistory) {
+			TechnicalIndicatorSnapshot technical, FundamentalSnapshot fundamental,
+			List<EliminatoryFilterInput.FreeCashflowPeriod> fcfHistory, LocalDate latestAnnualStatementEndDate) {
 		return EliminatoryFilterInput.builder()
 				.currentPrice(candle == null ? null : analysisClose(candle))
 				.averageFinancialVolume60(technical == null ? null : technical.getAvgVolume60())
@@ -166,7 +167,9 @@ public class AssetScreeningService {
 				.technicalStale(technical != null
 						&& DataFreshnessPolicy.marketDataStale(referenceDate, technical.getTradeDate()))
 				.fundamentalStale(fundamental != null
-						&& DataFreshnessPolicy.fundamentalDataStale(referenceDate, fundamental.getReferenceDate()))
+						&& DataFreshnessPolicy.fundamentalAccountingPeriodStale(referenceDate,
+								fundamental.getMostRecentQuarter(), latestAnnualStatementEndDate,
+								fundamental.getReferenceDate()))
 				.build();
 	}
 

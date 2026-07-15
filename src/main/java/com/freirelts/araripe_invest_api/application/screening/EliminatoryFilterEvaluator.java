@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Component
 public class EliminatoryFilterEvaluator {
@@ -92,9 +93,13 @@ public class EliminatoryFilterEvaluator {
 	}
 
 	private void evaluateFreeCashflow(EliminatoryFilterInput input, List<EliminatoryFilterReason> reasons) {
-		// Fluxo de caixa livre negativo em mais de um snapshot indica que o lucro pode nao virar caixa distribuivel.
+		// Fluxo de caixa livre negativo precisa aparecer em periodos contabeis distintos; snapshots diarios repetidos
+		// do mesmo demonstrativo nao caracterizam persistencia.
 		long negativePeriods = input.getFreeCashflowHistory().stream()
-				.filter(value -> value != null && value.signum() < 0)
+				.filter(period -> period != null && period.value() != null && period.value().signum() < 0)
+				.map(EliminatoryFilterInput.FreeCashflowPeriod::periodEndDate)
+				.filter(Objects::nonNull)
+				.distinct()
 				.count();
 		if (negativePeriods >= 2 || (negative(input.getFreeCashflow()) && nonPositive(input.getOperatingCashflow()))) {
 			reasons.add(reason(EliminatoryFilterCode.PERSISTENT_NEGATIVE_FREE_CASHFLOW,

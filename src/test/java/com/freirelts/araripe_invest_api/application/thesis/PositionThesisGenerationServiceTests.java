@@ -4,6 +4,7 @@ import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculat
 import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
+import com.freirelts.araripe_invest_api.application.screening.FundamentalEvidenceService;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
@@ -46,7 +47,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ PositionThesisGenerationService.class, EliminatoryFilterEvaluator.class, ScoringService.class,
-		RiskAllocationService.class })
+		FundamentalEvidenceService.class, RiskAllocationService.class })
 class PositionThesisGenerationServiceTests {
 
 	@Container

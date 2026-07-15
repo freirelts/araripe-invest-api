@@ -178,10 +178,10 @@ class IndicatorCalculationServiceTests {
 						PeriodType.TTM, "araripe-indicators", IndicatorCalculationService.CALCULATION_VERSION)
 				.orElseThrow();
 		assertThat(result.fundamentalComplete()).isTrue();
-		assertThat(snapshot.getMostRecentQuarter()).isEqualTo(LocalDate.of(2025, 12, 31));
+		assertThat(snapshot.getMostRecentQuarter()).isEqualTo(LocalDate.of(2026, 3, 31));
 		assertThat(snapshot.getTrailingPe()).isEqualByComparingTo("9.500000");
-		assertThat(snapshot.getRevenueGrowth()).isEqualByComparingTo("0.070000");
-		assertThat(snapshot.getEarningsGrowth()).isEqualByComparingTo("0.080000");
+		assertThat(snapshot.getRevenueGrowth()).isEqualByComparingTo("0.200000");
+		assertThat(snapshot.getEarningsGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getAnnualRevenueGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getQuarterlyRevenueGrowth()).isEqualByComparingTo("0.250000");
 		assertThat(snapshot.getAnnualEarningsGrowth()).isEqualByComparingTo("0.200000");
@@ -199,6 +199,46 @@ class IndicatorCalculationServiceTests {
 		assertThat(snapshot.getFreeCashflow()).isEqualByComparingTo("200.000000");
 		assertThat(snapshot.getQualityStatus()).isEqualTo(DataQualityStatus.VALID);
 		assertThat(snapshot.getAssumptionsJson()).contains("Fluxo de caixa livre");
+	}
+
+	@Test
+	void doesNotUseUnsafePercentageGrowthWhenPreviousResultWasNegative() {
+		Asset asset = assetRepository.saveAndFlush(new Asset("TURN3", "Turnaround S.A.", "Consumo"));
+		LocalDate referenceDate = LocalDate.of(2026, 3, 31);
+		FundamentalSnapshot collector = new FundamentalSnapshot(asset, referenceDate, PeriodType.TTM, "brapi");
+		collector.setCalculationVersion("collector-v1");
+		collector.setTrailingPe(new BigDecimal("9.500000"));
+		collector.setPriceToBook(new BigDecimal("1.800000"));
+		collector.setEnterpriseToEbitda(new BigDecimal("6.200000"));
+		collector.setEarningsPerShare(new BigDecimal("1.000000"));
+		collector.setQualityStatus(DataQualityStatus.VALID);
+		fundamentalSnapshotRepository.saveAndFlush(collector);
+		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
+				"""
+						{"totalRevenue":1200,"netIncome":20,"cleanEbitda":60,"grossProfit":600,"ebit":40}
+						""");
+		saveStatement(asset, StatementType.INCOME_STATEMENT, PeriodType.ANNUAL, LocalDate.of(2024, 12, 31),
+				"""
+						{"totalRevenue":1000,"netIncome":-100,"cleanEbitda":-80,"grossProfit":500,"ebit":-90}
+						""");
+		saveStatement(asset, StatementType.BALANCE_SHEET, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
+				"""
+						{"totalAssets":2000,"shareholdersEquity":900,"totalDebt":300,"cash":100}
+						""");
+		saveStatement(asset, StatementType.CASH_FLOW, PeriodType.ANNUAL, LocalDate.of(2025, 12, 31),
+				"""
+						{"operatingCashFlow":120,"freeCashFlow":80}
+						""");
+
+		service.calculateForAsset(asset, referenceDate);
+
+		FundamentalSnapshot snapshot = fundamentalSnapshotRepository
+				.findByAssetIdAndReferenceDateAndPeriodTypeAndSourceAndCalculationVersion(asset.getId(), referenceDate,
+						PeriodType.TTM, "araripe-indicators", IndicatorCalculationService.CALCULATION_VERSION)
+				.orElseThrow();
+		assertThat(snapshot.getAnnualEarningsGrowth()).isEqualByComparingTo("0.000000");
+		assertThat(snapshot.getEbitdaGrowth()).isEqualByComparingTo("0.000000");
+		assertThat(snapshot.getAssumptionsJson()).contains("base negativa");
 	}
 
 	@Test

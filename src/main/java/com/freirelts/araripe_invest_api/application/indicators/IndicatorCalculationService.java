@@ -143,6 +143,8 @@ public class IndicatorCalculationService {
 		StatementValues comparableQuarterlyIncome = sameQuarterPreviousYear(quarterlyIncome, latestQuarterlyIncome);
 		StatementValues latestCash = first(annualCash);
 		StatementValues latestBalance = first(annualBalance);
+		derived.setMostRecentQuarter(latestAccountingPeriod(derived.getMostRecentQuarter(), latestAnnualIncome,
+				latestQuarterlyIncome, latestCash, latestBalance));
 
 		derived.setAnnualRevenueGrowth(growth(value(latestAnnualIncome, "revenue", missingFields),
 				value(previousAnnualIncome, "revenue", missingFields)).orElse(derived.getAnnualRevenueGrowth()));
@@ -191,11 +193,12 @@ public class IndicatorCalculationService {
 				: scaleMoney(totalDebt.subtract(cash)));
 		derived.setOperatingCashflow(nonNull(operatingCashflow, derived.getOperatingCashflow()));
 		derived.setFreeCashflow(nonNull(freeCashflow, nonNull(calculatedFreeCashflow, derived.getFreeCashflow())));
-		derived.setRevenueGrowth(nonNull(derived.getRevenueGrowth(), derived.getAnnualRevenueGrowth()));
-		derived.setEarningsGrowth(nonNull(derived.getEarningsGrowth(), derived.getAnnualEarningsGrowth()));
+		derived.setRevenueGrowth(nonNull(derived.getAnnualRevenueGrowth(), derived.getRevenueGrowth()));
+		derived.setEarningsGrowth(nonNull(derived.getAnnualEarningsGrowth(), derived.getEarningsGrowth()));
 
 		assumptions.add("Crescimento anual compara a ultima demonstracao anual valida com a anual imediatamente anterior.");
 		assumptions.add("Crescimento trimestral compara o ultimo trimestre valido com o mesmo trimestre do ano anterior para reduzir ruido sazonal.");
+		assumptions.add("Crescimento com base negativa nao usa divisao percentual tradicional; viradas de prejuizo para lucro nao contam como crescimento normal.");
 		assumptions.add("Fluxo de caixa livre usa caixa operacional menos capex quando capex vem positivo, ou soma quando capex vem negativo.");
 		derived.setAssumptionsJson(json(assumptions));
 		derived.setQualityStatus(fundamentalQuality(derived, revenue, netIncome, operatingCashflow, missingFields));
@@ -433,11 +436,22 @@ public class IndicatorCalculationService {
 	}
 
 	private Optional<BigDecimal> growth(BigDecimal current, BigDecimal previous) {
-		if (current == null || previous == null || previous.signum() == 0) {
+		if (current == null || previous == null) {
 			return Optional.empty();
 		}
-		// Crescimento percentual padrao: valor atual dividido pelo periodo anterior menos 1.
-		return Optional.of(scaleRatio(current.divide(previous, 12, RoundingMode.HALF_UP).subtract(BigDecimal.ONE)));
+		if (previous.signum() > 0) {
+			// Crescimento percentual padrao so e valido quando a base anterior e positiva.
+			return Optional.of(scaleRatio(current.divide(previous, 12, RoundingMode.HALF_UP).subtract(BigDecimal.ONE)));
+		}
+		if (previous.signum() == 0) {
+			return current.signum() < 0 ? Optional.of(scaleRatio(BigDecimal.ONE.negate())) : Optional.empty();
+		}
+		if (current.compareTo(previous) < 0) {
+			return Optional.of(scaleRatio(current.subtract(previous)
+					.divide(previous.abs(), 12, RoundingMode.HALF_UP)));
+		}
+		// Melhora partindo de prejuizo ou virada para lucro e sinal qualitativo, nao crescimento percentual normal.
+		return Optional.of(scaleRatio(BigDecimal.ZERO));
 	}
 
 	private Optional<BigDecimal> ratio(BigDecimal numerator, BigDecimal denominator) {
@@ -545,6 +559,16 @@ public class IndicatorCalculationService {
 				.filter(statement -> targetEndDate.equals(statement.endDate()))
 				.findFirst()
 				.orElse(null);
+	}
+
+	private LocalDate latestAccountingPeriod(LocalDate collectorMostRecentQuarter, StatementValues... statements) {
+		LocalDate latest = collectorMostRecentQuarter;
+		for (StatementValues statement : statements) {
+			if (statement != null && (latest == null || statement.endDate().isAfter(latest))) {
+				latest = statement.endDate();
+			}
+		}
+		return latest;
 	}
 
 	private <T> T nonNull(T preferred, T fallback) {

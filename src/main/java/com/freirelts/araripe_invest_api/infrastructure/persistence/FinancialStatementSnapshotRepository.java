@@ -19,4 +19,7 @@ public interface FinancialStatementSnapshotRepository extends JpaRepository<Fina
 	List<FinancialStatementSnapshot> findByAssetIdAndStatementTypeAndPeriodTypeAndEndDateLessThanEqualAndQualityStatusOrderByEndDateDesc(
 			UUID assetId, StatementType statementType, PeriodType periodType, LocalDate endDate,
 			DataQualityStatus qualityStatus);
+
+	Optional<FinancialStatementSnapshot> findTopByAssetIdAndPeriodTypeAndEndDateLessThanEqualAndQualityStatusOrderByEndDateDesc(
+			UUID assetId, PeriodType periodType, LocalDate endDate, DataQualityStatus qualityStatus);
 }

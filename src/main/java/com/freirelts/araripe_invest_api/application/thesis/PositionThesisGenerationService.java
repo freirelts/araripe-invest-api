@@ -15,6 +15,7 @@ import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterC
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterInput;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterReason;
+import com.freirelts.araripe_invest_api.application.screening.FundamentalEvidenceService;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
@@ -70,17 +71,18 @@ public class PositionThesisGenerationService {
 	private final PositionThesisRepository positionThesisRepository;
 	private final AllocationPlanRepository allocationPlanRepository;
 	private final EliminatoryFilterEvaluator eliminatoryFilterEvaluator;
+	private final FundamentalEvidenceService fundamentalEvidenceService;
 	private final ScoringService scoringService;
 	private final RiskAllocationService riskAllocationService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public PositionThesisGenerationService(AssetRepository assetRepository, DailyCandleRepository dailyCandleRepository,
-				TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
-				FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
+			TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
+			FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
 			MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository,
 			PositionThesisRepository positionThesisRepository, AllocationPlanRepository allocationPlanRepository,
-				EliminatoryFilterEvaluator eliminatoryFilterEvaluator, ScoringService scoringService,
-				RiskAllocationService riskAllocationService) {
+			EliminatoryFilterEvaluator eliminatoryFilterEvaluator, FundamentalEvidenceService fundamentalEvidenceService,
+			ScoringService scoringService, RiskAllocationService riskAllocationService) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
@@ -90,6 +92,7 @@ public class PositionThesisGenerationService {
 		this.positionThesisRepository = positionThesisRepository;
 		this.allocationPlanRepository = allocationPlanRepository;
 		this.eliminatoryFilterEvaluator = eliminatoryFilterEvaluator;
+		this.fundamentalEvidenceService = fundamentalEvidenceService;
 		this.scoringService = scoringService;
 		this.riskAllocationService = riskAllocationService;
 	}
@@ -358,28 +361,27 @@ public class PositionThesisGenerationService {
 						asset.getId(), referenceDate, PeriodType.TTM, DERIVED_SOURCE,
 						IndicatorCalculationService.CALCULATION_VERSION)
 				.orElse(null);
-		List<BigDecimal> fcfHistory = fundamentalSnapshotRepository
-				.findTop4ByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionOrderByReferenceDateDescCreatedAtDesc(
-						asset.getId(), referenceDate, PeriodType.TTM, DERIVED_SOURCE,
-						IndicatorCalculationService.CALCULATION_VERSION)
+		List<EliminatoryFilterInput.FreeCashflowPeriod> fcfHistory = fundamentalEvidenceService
+				.freeCashflowHistory(asset.getId(), referenceDate);
+		LocalDate latestAnnualStatementEndDate = fundamentalEvidenceService.latestAnnualStatementEndDate(asset.getId(),
+				referenceDate);
+		EliminatoryFilterInput input = buildInput(referenceDate, candle, technical, fundamental, fcfHistory,
+				latestAnnualStatementEndDate);
+		long dividendEvents = dividendEventRepository.countByAssetIdAndEventTypeInAndLastDatePriorBetween(asset.getId(),
+				CASH_DIVIDEND_EVENTS, referenceDate.minusYears(3), referenceDate);
+		Map<String, MacroIndicatorSnapshot> latestMacro = macroIndicatorSnapshotRepository
+				.findLatestByReferenceDateLessThanEqual(referenceDate)
 				.stream()
-				.map(FundamentalSnapshot::getFreeCashflow)
-				.toList();
-		EliminatoryFilterInput input = buildInput(referenceDate, candle, technical, fundamental, fcfHistory);
-			long dividendEvents = dividendEventRepository.countByAssetIdAndEventTypeInAndLastDatePriorBetween(asset.getId(),
-					CASH_DIVIDEND_EVENTS, referenceDate.minusYears(3), referenceDate);
-			Map<String, MacroIndicatorSnapshot> latestMacro = macroIndicatorSnapshotRepository
-					.findLatestByReferenceDateLessThanEqual(referenceDate)
-					.stream()
-					.collect(Collectors.toMap(snapshot -> snapshot.getSlug().toLowerCase(Locale.ROOT), Function.identity(),
-							(left, right) -> left));
-			return new ThesisMarketContext(asset, referenceDate, analysisClose(candle), technical, fundamental,
-					eliminatoryFilterEvaluator.evaluate(input), dividendEvents, macroValue(latestMacro, "selic"),
-					macroValue(latestMacro, "ipca"), macroValue(latestMacro, "usdbrl"));
+				.collect(Collectors.toMap(snapshot -> snapshot.getSlug().toLowerCase(Locale.ROOT), Function.identity(),
+						(left, right) -> left));
+		return new ThesisMarketContext(asset, referenceDate, analysisClose(candle), technical, fundamental,
+				eliminatoryFilterEvaluator.evaluate(input), dividendEvents, macroValue(latestMacro, "selic"),
+				macroValue(latestMacro, "ipca"), macroValue(latestMacro, "usdbrl"));
 	}
 
 	private EliminatoryFilterInput buildInput(LocalDate referenceDate, DailyCandle candle,
-			TechnicalIndicatorSnapshot technical, FundamentalSnapshot fundamental, List<BigDecimal> fcfHistory) {
+			TechnicalIndicatorSnapshot technical, FundamentalSnapshot fundamental,
+			List<EliminatoryFilterInput.FreeCashflowPeriod> fcfHistory, LocalDate latestAnnualStatementEndDate) {
 		return EliminatoryFilterInput.builder()
 				.currentPrice(candle == null ? null : analysisClose(candle))
 				.averageFinancialVolume60(technical == null ? null : technical.getAvgVolume60())
@@ -415,7 +417,9 @@ public class PositionThesisGenerationService {
 				.technicalStale(technical != null
 						&& DataFreshnessPolicy.marketDataStale(referenceDate, technical.getTradeDate()))
 				.fundamentalStale(fundamental != null
-						&& DataFreshnessPolicy.fundamentalDataStale(referenceDate, fundamental.getReferenceDate()))
+						&& DataFreshnessPolicy.fundamentalAccountingPeriodStale(referenceDate,
+								fundamental.getMostRecentQuarter(), latestAnnualStatementEndDate,
+								fundamental.getReferenceDate()))
 				.build();
 	}
 

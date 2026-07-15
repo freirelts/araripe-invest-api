@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 @Getter
@@ -29,7 +30,7 @@ public class EliminatoryFilterInput {
 	private BigDecimal operatingCashflow;
 	private BigDecimal freeCashflow;
 	@Builder.Default
-	private List<BigDecimal> freeCashflowHistory = List.of();
+	private List<FreeCashflowPeriod> freeCashflowHistory = List.of();
 	private BigDecimal debtToEquity;
 	private BigDecimal netDebt;
 	private BigDecimal revenueGrowth;
@@ -45,4 +46,7 @@ public class EliminatoryFilterInput {
 	private boolean candleStale;
 	private boolean technicalStale;
 	private boolean fundamentalStale;
+
+	public record FreeCashflowPeriod(LocalDate periodEndDate, BigDecimal value) {
+	}
 }
