@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -39,8 +40,11 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 		server.expect(requestTo("https://api.openai.test/v1/responses"))
 				.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-key"))
 				.andExpect(jsonPath("$.model").value("gpt-5.5"))
+				.andExpect(jsonPath("$.reasoning.effort").value("high"))
 				.andExpect(jsonPath("$.tools[0].type").value("web_search"))
 				.andExpect(jsonPath("$.tool_choice").value("required"))
+				.andExpect(jsonPath("$.instructions").value(containsString("nao substitua Selic")))
+				.andExpect(jsonPath("$.input").value(containsString("Banco Central/SGS")))
 				.andRespond(withSuccess(openAiResponse(), MediaType.APPLICATION_JSON));
 
 		EconomicContextAiResult result = provider.analyze(request());
@@ -49,6 +53,11 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 		assertThat(result.validationStatus()).isEqualTo(AiValidationStatus.VALID);
 		assertThat(result.outputJson()).contains("https://valor.example/noticia-wege");
 		assertThat(result.sourcesJson()).contains("webCitations");
+		assertThat(result.tokenUsage()).isNotNull();
+		assertThat(result.tokenUsage().inputTokens()).isEqualTo(1200L);
+		assertThat(result.tokenUsage().outputTokens()).isEqualTo(450L);
+		assertThat(result.tokenUsage().totalTokens()).isEqualTo(1650L);
+		assertThat(result.tokenUsage().reasoningTokens()).isEqualTo(300L);
 		server.verify();
 	}
 
@@ -76,6 +85,11 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 				"conflictsWithDeterministicRecommendation", false));
 		return objectMapper.writeValueAsString(Map.of(
 				"status", "completed",
+				"usage", Map.of(
+						"input_tokens", 1200,
+						"output_tokens", 450,
+						"total_tokens", 1650,
+						"output_tokens_details", Map.of("reasoning_tokens", 300)),
 				"output", List.of(
 						Map.of("type", "web_search_call", "status", "completed", "action",
 								Map.of("type", "search", "query", "WEGE3 noticias economia Brasil", "sources",
@@ -105,6 +119,6 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 
 	private OpenAiProperties properties(String apiKey) {
 		return new OpenAiProperties(true, "gpt-5.6-luna", apiKey, "https://api.openai.test/v1", 30, 900,
-				"macro-sector-context-v1", "gpt-5.5", "medium");
+				"macro-sector-context-v1", "gpt-5.5", "high", "medium");
 	}
 }

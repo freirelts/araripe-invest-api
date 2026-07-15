@@ -50,8 +50,11 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `OPENAI_ENABLED` | Habilita o adapter OpenAI Responses API; sem chave o backend usa fallback deterministico auditavel. |
 | `OPENAI_MODEL` | Modelo usado para enriquecimento contextual. Default: `gpt-5.6-luna`. |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout da chamada de IA. |
-| `OPENAI_MAX_TOKENS` | Limite de tokens de saida para o contexto estruturado. |
+| `OPENAI_MAX_TOKENS` | Limite total de tokens gerados pela Responses API, incluindo raciocinio e saida estruturada. Default: `8000`. |
 | `OPENAI_PROMPT_VERSION` | Versao do prompt macro/setorial persistida na auditoria. |
+| `OPENAI_WEB_SEARCH_MODEL` | Modelo usado no adapter com `web_search` obrigatorio. Default: `gpt-5.4-mini`. |
+| `OPENAI_REASONING_EFFORT` | Esforco de raciocinio enviado em `reasoning.effort`. Valores: `none`, `low`, `medium`, `high`, `xhigh`. Default: `high`. |
+| `OPENAI_WEB_SEARCH_CONTEXT_SIZE` | Tamanho de contexto da ferramenta `web_search`. Valores: `low`, `medium`, `high`. |
 | `SPRING_MAIL_HOST` | Host SMTP para envio dos e-mails consolidados. |
 | `SPRING_MAIL_PORT` | Porta SMTP. Default local sugerido: `587`. |
 | `SPRING_MAIL_USERNAME` | Usuario SMTP, quando aplicavel. |

@@ -12,7 +12,15 @@ public record EconomicContextAiResult(
 		String sourcesJson,
 		AiValidationStatus validationStatus,
 		Long latencyMs,
-		String errorMessage) {
+		String errorMessage,
+		EconomicContextAiTokenUsage tokenUsage) {
+
+	public EconomicContextAiResult(String provider, String model, String promptVersion, String promptHash,
+			String inputSummaryJson, String outputJson, String sourcesJson, AiValidationStatus validationStatus,
+			Long latencyMs, String errorMessage) {
+		this(provider, model, promptVersion, promptHash, inputSummaryJson, outputJson, sourcesJson, validationStatus,
+				latencyMs, errorMessage, null);
+	}
 
 	public static EconomicContextAiResult unavailable(String provider, String model, String promptVersion,
 			String promptHash, String inputSummaryJson, String sourcesJson, String errorMessage) {

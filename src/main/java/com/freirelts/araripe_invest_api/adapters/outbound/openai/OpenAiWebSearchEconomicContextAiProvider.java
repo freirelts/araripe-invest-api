@@ -9,11 +9,11 @@ import com.freirelts.araripe_invest_api.application.ai.AiContextValidationResult
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiProvider;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiRequest;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiResult;
+import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiTokenUsage;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -43,19 +43,23 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 
 	@Autowired
 	public OpenAiWebSearchEconomicContextAiProvider(OpenAiProperties properties, AiContextResponseValidator validator,
-			ObjectProvider<RestClient.Builder> restClientBuilderProvider) {
-		this(properties, validator, new ObjectMapper(),
-				restClientBuilderProvider.getIfAvailable(RestClient::builder));
+			@Qualifier("openAiRestClient") RestClient openAiRestClient) {
+		this(properties, validator, new ObjectMapper(), openAiRestClient);
 	}
 
 	OpenAiWebSearchEconomicContextAiProvider(OpenAiProperties properties, AiContextResponseValidator validator,
 			ObjectMapper objectMapper, RestClient.Builder restClientBuilder) {
+		this(properties, validator, objectMapper, restClientBuilder.baseUrl(trimTrailingSlash(properties.baseUrl()))
+				.defaultHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+				.build());
+	}
+
+	OpenAiWebSearchEconomicContextAiProvider(OpenAiProperties properties, AiContextResponseValidator validator,
+			ObjectMapper objectMapper, RestClient restClient) {
 		this.properties = properties;
 		this.validator = validator;
 		this.objectMapper = objectMapper.findAndRegisterModules();
-		this.restClient = restClientBuilder.baseUrl(trimTrailingSlash(properties.baseUrl()))
-				.defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-				.build();
+		this.restClient = restClient;
 	}
 
 	@Override
@@ -63,7 +67,8 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		String inputSummaryJson = json(request);
 		String systemPrompt = systemPrompt();
 		String userPrompt = userPrompt(inputSummaryJson);
-		String promptHash = sha256(systemPrompt + "\n" + userPrompt + "\n" + properties.webSearchModel());
+		String promptHash = sha256(systemPrompt + "\n" + userPrompt + "\n" + properties.webSearchModel() + "\n"
+				+ properties.reasoningEffort());
 		Instant startedAt = Instant.now();
 
 		if (!properties.enabled()) {
@@ -119,6 +124,7 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		body.put("model", properties.webSearchModel());
 		body.put("instructions", systemPrompt);
 		body.put("input", userPrompt);
+		body.put("reasoning", Map.of("effort", properties.reasoningEffort()));
 		body.put("tools", List.of(Map.of("type", "web_search", "search_context_size",
 				properties.webSearchContextSize())));
 		body.put("tool_choice", "required");
@@ -172,14 +178,37 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 			AiContextValidationResult validation = validator.validate(request, output);
 			return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
 					promptHash, inputSummaryJson, json(output), sourcesJson(request, citations), validation.status(),
-					latencyMs(startedAt), validation.errorMessage());
+					latencyMs(startedAt), validation.errorMessage(), tokenUsage(response));
 		}
 		catch (JsonProcessingException ex) {
 			return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
 					promptHash, inputSummaryJson, outputText, sourcesJson(request, citations),
 					AiValidationStatus.INVALID, latencyMs(startedAt),
-					"OpenAI web search returned non-structured JSON output.");
+					"OpenAI web search returned non-structured JSON output.", tokenUsage(response));
 		}
+	}
+
+	private EconomicContextAiTokenUsage tokenUsage(JsonNode response) {
+		JsonNode usage = response.path("usage");
+		if (!usage.isObject()) {
+			return null;
+		}
+		return new EconomicContextAiTokenUsage(longValue(usage.path("input_tokens")),
+				longValue(usage.path("output_tokens")),
+				longValue(usage.path("total_tokens")),
+				reasoningTokens(usage));
+	}
+
+	private Long reasoningTokens(JsonNode usage) {
+		Long directValue = longValue(usage.path("reasoning_tokens"));
+		if (directValue != null) {
+			return directValue;
+		}
+		return longValue(usage.path("output_tokens_details").path("reasoning_tokens"));
+	}
+
+	private Long longValue(JsonNode node) {
+		return node != null && node.canConvertToLong() ? node.asLong() : null;
 	}
 
 	private AiContextStructuredOutput mergeCitationUrls(AiContextStructuredOutput output,
@@ -292,6 +321,10 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 				Regras obrigatorias:
 				- use a ferramenta web_search antes de responder;
 				- analise contexto economico, macro, setorial e noticias recentes relacionadas ao ativo, setor e Brasil;
+				- trate dados internos como fonte deterministica; nao substitua Selic, IPCA, CDI, cambio, valuation, score ou risco por memoria do modelo;
+				- para qualquer numero macroeconomico citado, confirme em fonte oficial ou fonte externa confiavel e inclua a URL em sourceUrls;
+				- se uma fonte externa divergir dos dados internos, descreva a divergencia como incerteza factual e nao invente um valor conciliado;
+				- se nao houver evidencia auditavel para um dado macro atual, diga que o dado nao foi confirmado e mantenha confidenceLevel baixo;
 				- inclua em sourceUrls as URLs externas efetivamente consultadas;
 				- inclua em sources o item "OpenAI Web Search" e os nomes das fontes citadas;
 				- nao aprove ativo bloqueado por regra deterministica;
@@ -306,6 +339,9 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 				Gere contexto macro/setorial estruturado para esta tese ou recomendacao.
 				Use os dados internos abaixo apenas como base deterministica e busque noticias/fontes recentes na web.
 				Priorize fontes institucionais, reguladores, empresas, B3/CVM/Banco Central e noticias economicas confiaveis.
+				Quando citar Selic, IPCA, CDI ou cambio, confira o dado contra Banco Central/SGS, B3, fonte oficial equivalente ou dado macro interno informado no Input.
+				Se o Input trouxer macroIndicators, use esses valores como referencia interna auditavel e cite a fonte/data de referencia.
+				Nao use conhecimento memorizado para preencher indicador macro ausente ou desatualizado.
 				Nao inclua segredo, dado pessoal nem texto livre fora do JSON.
 
 				Input:
@@ -347,7 +383,7 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		return false;
 	}
 
-	private String trimTrailingSlash(String value) {
+	private static String trimTrailingSlash(String value) {
 		if (value == null || value.isBlank()) {
 			return "https://api.openai.com/v1";
 		}

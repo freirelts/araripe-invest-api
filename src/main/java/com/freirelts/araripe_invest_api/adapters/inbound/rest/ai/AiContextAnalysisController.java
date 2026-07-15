@@ -2,6 +2,8 @@ package com.freirelts.araripe_invest_api.adapters.inbound.rest.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiTokenUsage;
+import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisExecution;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisService;
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
@@ -75,10 +77,16 @@ class AiContextAnalysisController {
 	@ResponseStatus(HttpStatus.CREATED)
 	AiContextAnalysisResponse analyze(@Valid @RequestBody AiContextAnalysisRequest request,
 			@AuthenticationPrincipal Jwt jwt) {
-		return response(analysisService.analyzeThesis(request.thesisId(), requesterId(jwt), request.forceRefresh()));
+		EconomicContextAnalysisExecution execution = analysisService.analyzeThesisWithExecution(request.thesisId(),
+				requesterId(jwt), request.forceRefresh());
+		return response(execution.analysis(), execution.tokenUsage());
 	}
 
 	private AiContextAnalysisResponse response(AiContextAnalysis analysis) {
+		return response(analysis, null);
+	}
+
+	private AiContextAnalysisResponse response(AiContextAnalysis analysis, EconomicContextAiTokenUsage tokenUsage) {
 		return new AiContextAnalysisResponse(analysis.getId(),
 				analysis.getThesis() == null ? null : analysis.getThesis().getId(),
 				analysis.getAsset().getId(), analysis.getAsset().getSymbol(), analysis.getReferenceDate(),
@@ -87,7 +95,7 @@ class AiContextAnalysisController {
 				jsonValue(analysis.getSourcesJson()), analysis.getValidationStatus(), analysis.getProcessingStatus(),
 				analysis.getLatencyMs(), analysis.getErrorMessage(),
 				analysis.getRequestedByUser() == null ? null : analysis.getRequestedByUser().getId(),
-				analysis.getCreatedAt(), analysis.getStartedAt(), analysis.getFinishedAt());
+				tokenUsage, analysis.getCreatedAt(), analysis.getStartedAt(), analysis.getFinishedAt());
 	}
 
 	private Object jsonValue(String json) {
@@ -158,6 +166,7 @@ class AiContextAnalysisController {
 			Long latencyMs,
 			String errorMessage,
 			UUID requestedByUserId,
+			EconomicContextAiTokenUsage tokenUsage,
 			Instant createdAt,
 			Instant startedAt,
 			Instant finishedAt) {

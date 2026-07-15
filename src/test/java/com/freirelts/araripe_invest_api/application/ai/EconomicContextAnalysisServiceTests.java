@@ -7,6 +7,7 @@ import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
 import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
+import com.freirelts.araripe_invest_api.domain.marketdata.MacroIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
@@ -19,6 +20,7 @@ import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AiContextAnalysisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.MacroIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
@@ -37,6 +39,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -75,6 +79,9 @@ class EconomicContextAnalysisServiceTests {
 	@Autowired
 	private TechnicalIndicatorSnapshotRepository technicalRepository;
 
+	@Autowired
+	private MacroIndicatorSnapshotRepository macroRepository;
+
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -98,6 +105,13 @@ class EconomicContextAnalysisServiceTests {
 		assertThat(analysis.getPromptHash()).isEqualTo("hash-valid");
 		assertThat(analysis.getInputHash()).isNotBlank();
 		assertThat(analysis.getOutputJson()).contains("Contexto macro neutro");
+		assertThat(aiProvider.lastRequest.deterministicData()).containsKey("macroIndicators");
+		assertThat((List<?>) aiProvider.lastRequest.deterministicData().get("macroIndicators"))
+				.hasSize(2)
+				.anySatisfy(indicator -> assertThat(((Map<?, ?>) indicator).get("slug")).isEqualTo("selic"));
+		assertThat(aiProvider.lastRequest.deterministicData().toString())
+				.contains("0.15000000")
+				.doesNotContain("0.13000000");
 		assertThat(aiContextAnalysisRepository.findAll()).hasSize(1);
 	}
 
@@ -162,6 +176,7 @@ class EconomicContextAnalysisServiceTests {
 		thesis = thesisRepository.saveAndFlush(thesis);
 		saveFundamentals(asset, thesis.getReferenceDate());
 		saveTechnical(asset, thesis.getReferenceDate());
+		saveMacro(thesis.getReferenceDate());
 		return thesis;
 	}
 
@@ -185,6 +200,23 @@ class EconomicContextAnalysisServiceTests {
 		snapshot.setAvgVolume60(new java.math.BigDecimal("8000000.00"));
 		snapshot.setTrendStatus(TrendStatus.HEALTHY);
 		technicalRepository.saveAndFlush(snapshot);
+	}
+
+	private void saveMacro(LocalDate referenceDate) {
+		MacroIndicatorSnapshot oldSelic = new MacroIndicatorSnapshot("selic", "Taxa Selic", referenceDate.minusDays(30),
+				new java.math.BigDecimal("0.13000000"), "brapi");
+		oldSelic.setUnit("percentual ao ano");
+		macroRepository.saveAndFlush(oldSelic);
+
+		MacroIndicatorSnapshot currentSelic = new MacroIndicatorSnapshot("selic", "Taxa Selic", referenceDate,
+				new java.math.BigDecimal("0.15000000"), "brapi");
+		currentSelic.setUnit("percentual ao ano");
+		macroRepository.saveAndFlush(currentSelic);
+
+		MacroIndicatorSnapshot ipca = new MacroIndicatorSnapshot("ipca12m", "IPCA 12 meses", referenceDate.minusDays(1),
+				new java.math.BigDecimal("0.04500000"), "brapi");
+		ipca.setUnit("percentual em 12 meses");
+		macroRepository.saveAndFlush(ipca);
 	}
 
 	private User admin() {
@@ -213,9 +245,11 @@ class EconomicContextAnalysisServiceTests {
 	static class MutableAiProvider implements EconomicContextAiProvider {
 
 		private EconomicContextAiResult result;
+		private EconomicContextAiRequest lastRequest;
 
 		@Override
 		public EconomicContextAiResult analyze(EconomicContextAiRequest request) {
+			this.lastRequest = request;
 			return result;
 		}
 

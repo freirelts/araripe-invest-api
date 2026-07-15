@@ -9,6 +9,7 @@ import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
 import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
+import com.freirelts.araripe_invest_api.domain.marketdata.MacroIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
@@ -18,6 +19,7 @@ import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AiContextAnalysisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AllocationPlanRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.MacroIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
@@ -53,6 +55,7 @@ public class EconomicContextAnalysisService {
 	private final FundamentalSnapshotRepository fundamentalRepository;
 	private final TechnicalIndicatorSnapshotRepository technicalIndicatorRepository;
 	private final PositionRecommendationRepository recommendationRepository;
+	private final MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository;
 	private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
 	public EconomicContextAnalysisService(EconomicContextAiProvider aiProvider,
@@ -60,7 +63,8 @@ public class EconomicContextAnalysisService {
 			UserRepository userRepository, AllocationPlanRepository allocationPlanRepository,
 			FundamentalSnapshotRepository fundamentalRepository,
 			TechnicalIndicatorSnapshotRepository technicalIndicatorRepository,
-			PositionRecommendationRepository recommendationRepository) {
+			PositionRecommendationRepository recommendationRepository,
+			MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository) {
 		this.aiProvider = aiProvider;
 		this.aiContextAnalysisRepository = aiContextAnalysisRepository;
 		this.thesisRepository = thesisRepository;
@@ -69,10 +73,17 @@ public class EconomicContextAnalysisService {
 		this.fundamentalRepository = fundamentalRepository;
 		this.technicalIndicatorRepository = technicalIndicatorRepository;
 		this.recommendationRepository = recommendationRepository;
+		this.macroIndicatorSnapshotRepository = macroIndicatorSnapshotRepository;
 	}
 
 	@Transactional
 	public AiContextAnalysis analyzeThesis(UUID thesisId, UUID requestedByUserId, boolean forceRefresh) {
+		return analyzeThesisWithExecution(thesisId, requestedByUserId, forceRefresh).analysis();
+	}
+
+	@Transactional
+	public EconomicContextAnalysisExecution analyzeThesisWithExecution(UUID thesisId, UUID requestedByUserId,
+			boolean forceRefresh) {
 		PositionThesis thesis = thesisRepository.findById(thesisId)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Thesis not found."));
 		User requester = userRepository.findById(requestedByUserId)
@@ -89,7 +100,7 @@ public class EconomicContextAnalysisService {
 							thesis.getReferenceDate(), aiProvider.provider(), aiProvider.model(), aiProvider.promptVersion(),
 							inputHash);
 			if (existing.isPresent()) {
-				return existing.get();
+				return new EconomicContextAnalysisExecution(existing.get(), null);
 			}
 		}
 
@@ -129,7 +140,8 @@ public class EconomicContextAnalysisService {
 		analysis.setErrorMessage(limit(result.errorMessage()));
 		analysis.setProcessingStatus(processingStatus(analysis.getValidationStatus()));
 		analysis.setFinishedAt(Instant.now());
-		return aiContextAnalysisRepository.saveAndFlush(analysis);
+		return new EconomicContextAnalysisExecution(aiContextAnalysisRepository.saveAndFlush(analysis),
+				result.tokenUsage());
 	}
 
 	private EconomicContextAiRequest requestFor(PositionThesis thesis) {
@@ -149,6 +161,14 @@ public class EconomicContextAnalysisService {
 				.ifPresent(value -> data.put("allocationPlan", value));
 		latestFundamental(thesis).map(this::fundamentalData).ifPresent(value -> data.put("fundamentals", value));
 		latestTechnical(thesis).map(this::technicalData).ifPresent(value -> data.put("technicalIndicators", value));
+		List<Map<String, Object>> macroIndicators = macroIndicatorSnapshotRepository
+				.findLatestByReferenceDateLessThanEqual(thesis.getReferenceDate())
+				.stream()
+				.map(this::macroIndicatorData)
+				.toList();
+		if (!macroIndicators.isEmpty()) {
+			data.put("macroIndicators", macroIndicators);
+		}
 		recommendationRepository.findFirstByCurrentThesisIdOrderByCreatedAtDesc(thesis.getId())
 				.ifPresent(recommendation -> data.put("latestDeterministicRecommendation",
 						Map.of("recommendation", recommendation.getRecommendationType().name(), "severity",
@@ -183,6 +203,22 @@ public class EconomicContextAnalysisService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
 					"Valid fundamental and technical snapshots are required for AI analysis.");
 		}
+	}
+
+	private Map<String, Object> macroIndicatorData(MacroIndicatorSnapshot snapshot) {
+		Map<String, Object> data = new LinkedHashMap<>();
+		data.put("slug", snapshot.getSlug());
+		data.put("name", snapshot.getName());
+		data.put("referenceDate", snapshot.getReferenceDate());
+		data.put("value", snapshot.getValue());
+		data.put("source", snapshot.getSource());
+		if (snapshot.getUnit() != null) {
+			data.put("unit", snapshot.getUnit());
+		}
+		if (snapshot.getFrequency() != null) {
+			data.put("frequency", snapshot.getFrequency());
+		}
+		return data;
 	}
 
 	private java.util.Optional<FundamentalSnapshot> latestFundamental(PositionThesis thesis) {

@@ -24,6 +24,9 @@ public record OpenAiProperties(
 		@NotBlank
 		String webSearchModel,
 		@NotBlank
+		@Pattern(regexp = "none|low|medium|high|xhigh")
+		String reasoningEffort,
+		@NotBlank
 		@Pattern(regexp = "low|medium|high")
 		String webSearchContextSize) {
 }

@@ -89,7 +89,8 @@ class OpenApiController {
 		}
 		if (path.contains("context-analyses")) {
 			return Map.of("analysisId", "uuid", "validationStatus", "VALID", "processingStatus", "COMPLETED",
-					"sources", List.of("OpenAI Web Search"));
+					"sources", List.of("OpenAI Web Search"), "tokenUsage",
+					Map.of("inputTokens", 1200, "outputTokens", 450, "totalTokens", 1650, "reasoningTokens", 300));
 		}
 		if (path.contains("theses")) {
 			return Map.of("status", "OPORTUNIDADE", "score", 82, "priceCeiling", 42.0,
