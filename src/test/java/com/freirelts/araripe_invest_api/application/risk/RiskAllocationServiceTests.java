@@ -64,6 +64,20 @@ class RiskAllocationServiceTests {
 	}
 
 	@Test
+	void blocksNewAllocationWhenTotalExposureWouldConsumeCashReserve() {
+		RiskAllocationResult result = service.calculate(validInputBuilder()
+				.currentAssetExposureValue(new BigDecimal("100.00"))
+				.currentSectorExposureValue(new BigDecimal("100.00"))
+				.currentTotalExposureValue(new BigDecimal("9000.00"))
+				.build());
+
+		assertThat(result.availableForCash()).isEqualByComparingTo("0.00");
+		assertThat(result.valid()).isFalse();
+		assertThat(result.suggestedQuantity()).isZero();
+		assertThat(result.invalidReason()).contains("capital");
+	}
+
+	@Test
 	void mapsDrawdownTrendOrFundamentalDeteriorationToReassessment() {
 		RiskAllocationResult drawdown = service.calculate(validInputBuilder()
 				.recentDrawdown(new BigDecimal("-0.300000"))
@@ -89,10 +103,11 @@ class RiskAllocationServiceTests {
 				.fairPriceEstimate(new BigDecimal("32.00"))
 				.priceCeiling(new BigDecimal("27.20"))
 				.safetyMargin(new BigDecimal("0.218750"))
-				.targetAllocationPercent(new BigDecimal("10.000000"))
-				.currentAssetExposureValue(BigDecimal.ZERO)
-				.currentSectorExposureValue(BigDecimal.ZERO)
-				.averagePrice(new BigDecimal("25.00"))
+					.targetAllocationPercent(new BigDecimal("10.000000"))
+					.currentAssetExposureValue(BigDecimal.ZERO)
+					.currentSectorExposureValue(BigDecimal.ZERO)
+					.currentTotalExposureValue(BigDecimal.ZERO)
+					.averagePrice(new BigDecimal("25.00"))
 				.recentDrawdown(new BigDecimal("-0.100000"))
 				.trendStatus(TrendStatus.HEALTHY)
 				.fundamentalsDeteriorated(false);
@@ -106,9 +121,10 @@ class RiskAllocationServiceTests {
 		private BigDecimal priceCeiling;
 		private BigDecimal safetyMargin;
 		private BigDecimal targetAllocationPercent;
-		private BigDecimal currentAssetExposureValue;
-		private BigDecimal currentSectorExposureValue;
-		private BigDecimal averagePrice;
+			private BigDecimal currentAssetExposureValue;
+			private BigDecimal currentSectorExposureValue;
+			private BigDecimal currentTotalExposureValue;
+			private BigDecimal averagePrice;
 		private BigDecimal userStopPrice;
 		private BigDecimal userTargetPrice;
 		private BigDecimal recentDrawdown;
@@ -155,10 +171,15 @@ class RiskAllocationServiceTests {
 			return this;
 		}
 
-		RiskAllocationInputBuilder currentSectorExposureValue(BigDecimal currentSectorExposureValue) {
-			this.currentSectorExposureValue = currentSectorExposureValue;
-			return this;
-		}
+			RiskAllocationInputBuilder currentSectorExposureValue(BigDecimal currentSectorExposureValue) {
+				this.currentSectorExposureValue = currentSectorExposureValue;
+				return this;
+			}
+
+			RiskAllocationInputBuilder currentTotalExposureValue(BigDecimal currentTotalExposureValue) {
+				this.currentTotalExposureValue = currentTotalExposureValue;
+				return this;
+			}
 
 		RiskAllocationInputBuilder averagePrice(BigDecimal averagePrice) {
 			this.averagePrice = averagePrice;
@@ -181,10 +202,10 @@ class RiskAllocationServiceTests {
 		}
 
 		RiskAllocationInput build() {
-			return new RiskAllocationInput(settings, thesisStatus, currentPrice, fairPriceEstimate, priceCeiling,
-					safetyMargin, targetAllocationPercent, currentAssetExposureValue, currentSectorExposureValue,
-					averagePrice, userStopPrice, userTargetPrice, recentDrawdown, trendStatus,
-					fundamentalsDeteriorated);
-		}
+				return new RiskAllocationInput(settings, thesisStatus, currentPrice, fairPriceEstimate, priceCeiling,
+						safetyMargin, targetAllocationPercent, currentAssetExposureValue, currentSectorExposureValue,
+						currentTotalExposureValue, averagePrice, userStopPrice, userTargetPrice, recentDrawdown, trendStatus,
+						fundamentalsDeteriorated);
+			}
 	}
 }

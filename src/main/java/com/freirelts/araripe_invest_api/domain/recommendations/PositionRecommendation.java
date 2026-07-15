@@ -89,6 +89,45 @@ public class PositionRecommendation {
 	@Column(name = "target_price", precision = 19, scale = 6)
 	private BigDecimal targetPrice;
 
+	@Column(name = "price_ceiling", precision = 19, scale = 6)
+	private BigDecimal priceCeiling;
+
+	@Column(name = "fair_price_estimate", precision = 19, scale = 6)
+	private BigDecimal fairPriceEstimate;
+
+	@Column(name = "safety_margin_percent", precision = 19, scale = 6)
+	private BigDecimal safetyMarginPercent;
+
+	@Column(name = "estimated_upside_percent", precision = 19, scale = 6)
+	private BigDecimal estimatedUpsidePercent;
+
+	@Column(name = "suggested_quantity")
+	private Integer suggestedQuantity;
+
+	@Column(name = "current_asset_exposure_value", precision = 19, scale = 2)
+	private BigDecimal currentAssetExposureValue;
+
+	@Column(name = "current_sector_exposure_value", precision = 19, scale = 2)
+	private BigDecimal currentSectorExposureValue;
+
+	@Column(name = "current_total_exposure_value", precision = 19, scale = 2)
+	private BigDecimal currentTotalExposureValue;
+
+	@Column(name = "available_for_asset", precision = 19, scale = 2)
+	private BigDecimal availableForAsset;
+
+	@Column(name = "available_for_sector", precision = 19, scale = 2)
+	private BigDecimal availableForSector;
+
+	@Column(name = "available_for_cash", precision = 19, scale = 2)
+	private BigDecimal availableForCash;
+
+	@Column(name = "allocation_valid")
+	private Boolean allocationValid;
+
+	@Column(name = "allocation_invalid_reason", length = 1000)
+	private String allocationInvalidReason;
+
 	@Column
 	private Integer score;
 

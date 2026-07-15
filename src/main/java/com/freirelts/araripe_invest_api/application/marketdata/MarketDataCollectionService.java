@@ -236,7 +236,7 @@ public class MarketDataCollectionService {
 			}
 		}
 		persistRecord(response, DataCollectionCategory.DAILY_HISTORY, warnings);
-		return new MarketDataCollectionSummary(persisted, 0, 0, 0, 0, 1, warnings.size());
+		return summary(persisted, 0, 0, 0, 0, response, warnings);
 	}
 
 	private MarketDataCollectionSummary processProfiles(ProviderRawResponse response) {
@@ -266,7 +266,7 @@ public class MarketDataCollectionService {
 			}
 		}
 		persistRecord(response, DataCollectionCategory.COMPANY_PROFILE, warnings);
-		return new MarketDataCollectionSummary(0, 0, 0, 0, 0, 1, warnings.size());
+		return summary(0, 0, 0, 0, 0, response, warnings);
 	}
 
 	private MarketDataCollectionSummary processFundamentals(ProviderRawResponse response,
@@ -303,7 +303,7 @@ public class MarketDataCollectionService {
 			}
 		}
 		persistRecord(response, category, warnings);
-		return new MarketDataCollectionSummary(0, persisted, 0, 0, 0, 1, warnings.size());
+		return summary(0, persisted, 0, 0, 0, response, warnings);
 	}
 
 	private MarketDataCollectionSummary processStatements(ProviderRawResponse response, DataCollectionCategory category,
@@ -349,7 +349,7 @@ public class MarketDataCollectionService {
 			}
 		}
 		persistRecord(response, category, warnings);
-		return new MarketDataCollectionSummary(0, 0, persisted, 0, 0, 1, warnings.size());
+		return summary(0, 0, persisted, 0, 0, response, warnings);
 	}
 
 	private MarketDataCollectionSummary processDividends(ProviderRawResponse response) {
@@ -370,7 +370,7 @@ public class MarketDataCollectionService {
 			}
 		}
 		persistRecord(response, DataCollectionCategory.DIVIDENDS, warnings);
-		return new MarketDataCollectionSummary(0, 0, 0, persisted, 0, 1, warnings.size());
+		return summary(0, 0, 0, persisted, 0, response, warnings);
 	}
 
 	private MarketDataCollectionSummary processMacro(ProviderRawResponse response) {
@@ -409,7 +409,7 @@ public class MarketDataCollectionService {
 			}
 		}
 		persistRecord(response, DataCollectionCategory.MACRO_SERIES, warnings);
-		return new MarketDataCollectionSummary(0, 0, 0, 0, persisted, 1, warnings.size());
+		return summary(0, 0, 0, 0, persisted, response, warnings);
 	}
 
 	private void upsertCandle(DailyCandle candle) {
@@ -568,6 +568,16 @@ public class MarketDataCollectionService {
 		record.setPayloadJson(response.payload() == null ? null : json(response.payload()));
 		record.setTookMillis(Math.max(response.tookMillis(), 0));
 		dataCollectionRecordRepository.save(record);
+	}
+
+	private MarketDataCollectionSummary summary(int candlesPersisted, int fundamentalSnapshotsPersisted,
+			int financialStatementsPersisted, int dividendEventsPersisted, int macroSnapshotsPersisted,
+			ProviderRawResponse response, List<String> warnings) {
+		DataCollectionStatus status = collectionStatus(response, warnings);
+		return new MarketDataCollectionSummary(candlesPersisted, fundamentalSnapshotsPersisted,
+				financialStatementsPersisted, dividendEventsPersisted, macroSnapshotsPersisted, 1, warnings.size(),
+				status == DataCollectionStatus.FAILED ? 1 : 0,
+				status == DataCollectionStatus.PARTIAL_SUCCESS ? 1 : 0);
 	}
 
 	private DataCollectionStatus collectionStatus(ProviderRawResponse response, List<String> warnings) {

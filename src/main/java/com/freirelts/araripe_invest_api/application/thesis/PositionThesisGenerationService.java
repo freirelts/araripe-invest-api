@@ -304,11 +304,11 @@ public class PositionThesisGenerationService {
 	}
 
 	private RiskAllocationResult riskAllocation(ThesisDraft draft) {
-		return riskAllocationService.calculate(new RiskAllocationInput(RiskAllocationSettings.conservativeDefault(),
-				draft.status(), draft.context().currentPrice(), draft.fairPrice(), draft.priceCeiling(),
-				draft.safetyMargin(), allocationPercent(draft.context()), BigDecimal.ZERO, BigDecimal.ZERO, null, null,
-				null, draft.context().recentDrawdown(), draft.context().trendStatus(),
-				fundamentalsDeteriorated(draft.context())));
+			return riskAllocationService.calculate(new RiskAllocationInput(RiskAllocationSettings.conservativeDefault(),
+					draft.status(), draft.context().currentPrice(), draft.fairPrice(), draft.priceCeiling(),
+					draft.safetyMargin(), allocationPercent(draft.context()), BigDecimal.ZERO, BigDecimal.ZERO,
+					BigDecimal.ZERO, null, null, null, draft.context().recentDrawdown(), draft.context().trendStatus(),
+					fundamentalsDeteriorated(draft.context())));
 	}
 
 	private void upsertAllocationPlan(PositionThesis thesis, RiskAllocationResult risk) {

@@ -168,6 +168,19 @@ class OperationalJobServiceTests {
 	}
 
 	@Test
+	void failedCollectionRecordMakesCollectionJobFail() {
+		User admin = saveAdmin();
+		when(marketDataCollectionService.collectActiveAssetData(DEFAULT_MACRO_SLUGS))
+				.thenReturn(new MarketDataCollectionSummary(1, 0, 0, 0, 0, 2, 0, 1, 0));
+
+		JobRunResult result = service.execute(JobName.DAILY_MARKET_DATA_COLLECTION, REFERENCE_DATE,
+				JobRunTrigger.MANUAL, admin.getId());
+
+		assertThat(result.status()).isEqualTo(JobRunStatus.FAILED);
+		assertThat(result.summary()).containsEntry("failedCollections", 1);
+	}
+
+	@Test
 	@SuppressWarnings("unchecked")
 	void dailyOperationalFlowRunsTheUnifiedDataCollectionOnlyOnce() {
 		User admin = saveAdmin();
@@ -214,6 +227,26 @@ class OperationalJobServiceTests {
 		verify(thesisGenerationService, never()).generateForActiveAssets(any());
 		verify(positionRecommendationService, never()).recommendOpenPositions(any());
 		verify(notificationDigestService, never()).publishDailyDigest(any());
+	}
+
+	@Test
+	@SuppressWarnings("unchecked")
+	void dailyOperationalFlowStopsAfterPartialCriticalCollection() {
+		User admin = saveAdmin();
+
+		when(marketDataCollectionService.collectActiveAssetData(DEFAULT_MACRO_SLUGS))
+				.thenReturn(new MarketDataCollectionSummary(1, 0, 0, 0, 0, 2, 1, 0, 1));
+
+		JobRunResult result = service.execute(JobName.DAILY_OPERATIONAL_FLOW, REFERENCE_DATE, JobRunTrigger.MANUAL,
+				admin.getId());
+
+		List<Map<String, Object>> steps = (List<Map<String, Object>>) result.summary().get("steps");
+
+		assertThat(result.status()).isEqualTo(JobRunStatus.FAILED);
+		assertThat(steps).extracting(step -> step.get("jobName"))
+				.containsExactly("DAILY_MARKET_DATA_COLLECTION");
+		verify(indicatorCalculationService, never()).calculateForActiveAssets(any());
+		verify(positionRecommendationService, never()).recommendOpenPositions(any());
 	}
 
 	@Test

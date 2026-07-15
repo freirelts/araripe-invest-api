@@ -23,10 +23,14 @@ public class RiskAllocationService {
 		BigDecimal maxPositionValue = money(settings.capitalBase().multiply(percent(targetAllocationPercent)));
 		BigDecimal maxSectorValue = money(settings.capitalBase()
 				.multiply(percent(settings.maxAllocationPerSectorPercent())));
-		BigDecimal availableForAsset = money(maxPositionValue.subtract(nonNull(input.currentAssetExposureValue())));
-		BigDecimal availableForSector = money(maxSectorValue.subtract(nonNull(input.currentSectorExposureValue())));
+		BigDecimal currentAssetExposure = money(nonNull(input.currentAssetExposureValue()));
+		BigDecimal currentSectorExposure = money(nonNull(input.currentSectorExposureValue()));
+		BigDecimal availableForAsset = money(maxPositionValue.subtract(currentAssetExposure));
+		BigDecimal availableForSector = money(maxSectorValue.subtract(currentSectorExposure));
+		BigDecimal currentTotalExposure = money(nonNull(input.currentTotalExposureValue()));
+		BigDecimal availableForCash = money(deployableCapital.subtract(currentTotalExposure));
 		BigDecimal allocatableValue = minNonNegative(maxPositionValue, availableForAsset, availableForSector,
-				money(deployableCapital));
+				availableForCash);
 
 		String invalidReason = invalidReason(input, settings, allocatableValue);
 		boolean valid = invalidReason == null;
@@ -44,8 +48,9 @@ public class RiskAllocationService {
 
 		return new RiskAllocationResult(money(settings.capitalBase()), targetAllocationPercent,
 				settings.maxAllocationPerAssetPercent(), settings.maxAllocationPerSectorPercent(),
-				settings.minimumCashReservePercent(), maxPositionValue, availableForAsset, availableForSector,
-				money6(currentPrice), money6(input.priceCeiling()), money6(input.fairPriceEstimate()),
+				settings.minimumCashReservePercent(), maxPositionValue, currentAssetExposure, currentSectorExposure,
+				availableForAsset, availableForSector, currentTotalExposure, availableForCash, money6(currentPrice),
+				money6(input.priceCeiling()), money6(input.fairPriceEstimate()),
 				toPercent(input.safetyMargin()), estimatedUpside(input.fairPriceEstimate(), currentPrice),
 				suggestedQuantity, firstTranche, secondTranche, thirdTranche, money(secondTranche.add(thirdTranche)),
 				stopPrice(input, settings), targetPrice(input, settings), valid, action(input, valid, invalidReason),

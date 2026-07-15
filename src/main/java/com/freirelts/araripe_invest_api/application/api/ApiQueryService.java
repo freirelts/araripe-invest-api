@@ -58,6 +58,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -277,7 +278,7 @@ public class ApiQueryService {
 		Asset asset = thesis.getAsset();
 		return new ThesisSummaryResponse(thesis.getId(), AssetResponse.from(asset), thesis.getReferenceDate(),
 				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), thesis.getPriceCeiling(),
-				thesis.getFairPriceEstimate(), thesis.getSafetyMarginPercent(), thesis.getStopPrice(),
+				thesis.getFairPriceEstimate(), percent(thesis.getSafetyMarginPercent()), thesis.getStopPrice(),
 				thesis.getTargetPrice(), allocationPlan == null ? null : allocationPlan.getTargetAllocationPercent(),
 				allocationPlan == null ? null : allocationPlan.getSuggestedQuantity(),
 				allocationPlan == null ? null : allocationPlan.isValid(), list(thesis.getReasonsJson()),
@@ -291,7 +292,13 @@ public class ApiQueryService {
 				recommendation.getCurrentThesis() == null ? null : recommendation.getCurrentThesis().getId(),
 				recommendation.getThesisType(), recommendation.getReferenceDate(), recommendation.getRecommendationType(),
 				recommendation.getSeverity(), recommendation.getCurrentPrice(), recommendation.getAveragePrice(),
-				recommendation.getStopPrice(), recommendation.getTargetPrice(), recommendation.getScore(),
+				recommendation.getStopPrice(), recommendation.getTargetPrice(), recommendation.getPriceCeiling(),
+				recommendation.getFairPriceEstimate(), recommendation.getSafetyMarginPercent(),
+				recommendation.getEstimatedUpsidePercent(), recommendation.getSuggestedQuantity(),
+				recommendation.getCurrentAssetExposureValue(), recommendation.getCurrentSectorExposureValue(),
+				recommendation.getCurrentTotalExposureValue(), recommendation.getAvailableForAsset(),
+				recommendation.getAvailableForSector(), recommendation.getAvailableForCash(),
+				recommendation.getAllocationValid(), recommendation.getAllocationInvalidReason(), recommendation.getScore(),
 				list(recommendation.getDeterministicReasonJson()), recommendation.getAiContextAnalysis() != null,
 				recommendation.getAiModel(), recommendation.getFinalMessage(), recommendation.getRuleVersion(),
 				recommendation.getCreatedAt());
@@ -349,6 +356,10 @@ public class ApiQueryService {
 
 	private boolean positive(BigDecimal value) {
 		return value != null && value.signum() > 0;
+	}
+
+	private BigDecimal percent(BigDecimal ratio) {
+		return ratio == null ? null : ratio.multiply(new BigDecimal("100.000000")).setScale(6, RoundingMode.HALF_UP);
 	}
 
 	private LocalDate effectiveDate(LocalDate date) {
@@ -514,7 +525,12 @@ public class ApiQueryService {
 	public record RecommendationResponse(UUID id, UUID positionId, AssetResponse asset, UUID customerPositionThesisId,
 			UUID currentThesisId, ThesisType thesisType, LocalDate referenceDate, RecommendationType recommendationType,
 			Severity severity, BigDecimal currentPrice, BigDecimal averagePrice, BigDecimal stopPrice,
-			BigDecimal targetPrice, Integer score, List<Object> deterministicReasons, boolean aiContextAvailable,
+			BigDecimal targetPrice, BigDecimal priceCeiling, BigDecimal fairPriceEstimate,
+			BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent, Integer suggestedQuantity,
+			BigDecimal currentAssetExposureValue, BigDecimal currentSectorExposureValue,
+			BigDecimal currentTotalExposureValue, BigDecimal availableForAsset, BigDecimal availableForSector,
+			BigDecimal availableForCash, Boolean allocationValid, String allocationInvalidReason, Integer score,
+			List<Object> deterministicReasons, boolean aiContextAvailable,
 			String aiModel, String finalMessage, String ruleVersion, Instant createdAt) {
 	}
 

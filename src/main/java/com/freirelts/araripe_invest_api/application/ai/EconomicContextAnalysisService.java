@@ -29,6 +29,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -154,7 +156,7 @@ public class EconomicContextAnalysisService {
 		data.put("failedFilters", jsonValue(thesis.getFailedFiltersJson()));
 		data.put("priceCeiling", thesis.getPriceCeiling());
 		data.put("fairPriceEstimate", thesis.getFairPriceEstimate());
-		data.put("safetyMarginPercent", thesis.getSafetyMarginPercent());
+		data.put("safetyMarginPercent", percent(thesis.getSafetyMarginPercent()));
 		data.put("stopPrice", thesis.getStopPrice());
 		data.put("targetPrice", thesis.getTargetPrice());
 		allocationPlanRepository.findByThesisId(thesis.getId()).map(this::allocationData)
@@ -219,6 +221,10 @@ public class EconomicContextAnalysisService {
 			data.put("frequency", snapshot.getFrequency());
 		}
 		return data;
+	}
+
+	private BigDecimal percent(BigDecimal ratio) {
+		return ratio == null ? null : ratio.multiply(new BigDecimal("100.000000")).setScale(6, RoundingMode.HALF_UP);
 	}
 
 	private java.util.Optional<FundamentalSnapshot> latestFundamental(PositionThesis thesis) {

@@ -18,6 +18,7 @@ import com.freirelts.araripe_invest_api.domain.portfolio.PositionStatus;
 import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
 import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.application.screening.DataFreshnessPolicy;
 import com.freirelts.araripe_invest_api.application.risk.RiskAllocationInput;
 import com.freirelts.araripe_invest_api.application.risk.RiskAllocationResult;
 import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
@@ -116,7 +117,7 @@ public class PositionRecommendationService {
 								thesis.getId(), referenceDate, AiValidationStatus.VALID));
 
 		Decision decision = decide(position, activeAssociation.orElse(null), currentThesis.orElse(null),
-				latestCandle.orElse(null), aiContext.orElse(null));
+				latestCandle.orElse(null), aiContext.orElse(null), referenceDate);
 
 		PositionRecommendation recommendation = new PositionRecommendation();
 		recommendation.setUser(position.getUser());
@@ -130,8 +131,11 @@ public class PositionRecommendationService {
 		recommendation.setSeverity(decision.severity());
 		recommendation.setCurrentPrice(decision.currentPrice());
 		recommendation.setAveragePrice(position.getAveragePrice());
-		recommendation.setStopPrice(position.getStopPrice());
-		recommendation.setTargetPrice(position.getTargetPrice());
+		recommendation.setStopPrice(effectiveStopPrice(position, decision.allocationResult().orElse(null),
+				currentThesis.orElse(null)));
+		recommendation.setTargetPrice(effectiveTargetPrice(position, decision.allocationResult().orElse(null),
+				currentThesis.orElse(null)));
+		applyRiskAudit(recommendation, decision.allocationResult().orElse(null));
 		recommendation.setScore(currentThesis.map(PositionThesis::getScore).orElse(null));
 		recommendation.setDeterministicReasonJson(json(decision.reasons()));
 		recommendation.setAiContextAnalysis(aiContext.orElse(null));
@@ -145,7 +149,7 @@ public class PositionRecommendationService {
 	}
 
 	private Decision decide(CustomerPosition position, CustomerPositionThesis association, PositionThesis currentThesis,
-			DailyCandle latestCandle, AiContextAnalysis aiContext) {
+			DailyCandle latestCandle, AiContextAnalysis aiContext, LocalDate referenceDate) {
 		List<String> reasons = new ArrayList<>();
 		BigDecimal currentPrice = latestCandle == null ? null : latestCandle.getClosePrice();
 
@@ -181,50 +185,72 @@ public class PositionRecommendationService {
 			return withAiContext(decision(RecommendationType.REAVALIAR, Severity.HIGH, currentPrice, reasons,
 					NotificationEventType.REASSESSMENT_REQUIRED), aiContext);
 		}
-
-		if (currentThesis.getStatus() == ThesisStatus.SAIR_DA_TESE || currentThesis.getStatus() == ThesisStatus.IGNORAR) {
-			reasons.add("Tese diaria atual invalida a tese principal acompanhada pela posicao.");
-			return withAiContext(decision(RecommendationType.SAIR_DA_TESE, Severity.CRITICAL, currentPrice, reasons,
-					NotificationEventType.EXIT_THESIS), aiContext);
-		}
-		if (currentThesis.getStatus() == ThesisStatus.REDUZIR_EXPOSICAO || currentThesis.getScore() < 60) {
-			reasons.add("Score ou status atual indicam risco elevado e reducao de exposicao.");
-			return withAiContext(decision(RecommendationType.REDUZIR_POSICAO, Severity.HIGH, currentPrice, reasons,
-					NotificationEventType.REDUCE_EXPOSURE), aiContext);
-		}
-		if (currentThesis.getStatus() == ThesisStatus.REAVALIAR) {
-			reasons.add("Tese diaria atual entrou em reavaliacao por regra deterministica.");
+		if (DataFreshnessPolicy.marketDataStale(referenceDate, currentThesis.getReferenceDate())) {
+			reasons.add("Tese diaria mais recente esta fora da tolerancia operacional; recomendacao acionavel bloqueada.");
 			return withAiContext(decision(RecommendationType.REAVALIAR, Severity.HIGH, currentPrice, reasons,
 					NotificationEventType.REASSESSMENT_REQUIRED), aiContext);
 		}
 
-		if (positive(currentThesis.getPriceCeiling()) && currentPrice.compareTo(currentThesis.getPriceCeiling()) > 0) {
-			reasons.add("Preco atual acima do preco teto; novo aporte bloqueado por valuation, mantendo acompanhamento.");
-			return withAiContext(decision(RecommendationType.MANTER, Severity.LOW, currentPrice, reasons, null),
-					aiContext);
+		RiskAllocationResult allocation = allocationResult(position, currentThesis, currentPrice,
+				latestCandle.getTradeDate());
+		BigDecimal effectiveStop = effectiveStopPrice(position, allocation, currentThesis);
+		BigDecimal effectiveTarget = effectiveTargetPrice(position, allocation, currentThesis);
+		if (!positive(position.getStopPrice()) && positive(effectiveStop) && currentPrice.compareTo(effectiveStop) <= 0) {
+			reasons.add("Stop calculado pela tese ou pelo motor de risco foi atingido ou perdido pelo preco de fechamento mais recente.");
+			return withAiContext(decision(RecommendationType.EXECUTAR_STOP, Severity.CRITICAL, currentPrice, reasons,
+					NotificationEventType.STOP_TRIGGERED, allocation), aiContext);
+		}
+		if (!positive(position.getTargetPrice()) && positive(effectiveTarget)
+				&& currentPrice.compareTo(effectiveTarget) >= 0) {
+			reasons.add("Objetivo calculado pela tese ou pelo motor de risco foi atingido pelo preco de fechamento mais recente.");
+			return withAiContext(decision(RecommendationType.REALIZAR_OBJETIVO, Severity.HIGH, currentPrice, reasons,
+					NotificationEventType.TARGET_REACHED, allocation), aiContext);
 		}
 
-			if (currentThesis.getScore() >= 75 && allowsIncrease(currentThesis)
-					&& allocationAllowsIncrease(position, currentThesis, currentPrice, latestCandle.getTradeDate())) {
-				reasons.add("Tese principal segue valida, score atual e valuation permitem aumento planejado da posicao.");
-				return withAiContext(decision(RecommendationType.AUMENTAR_POSICAO, Severity.MEDIUM, currentPrice, reasons,
-						null), aiContext);
-			}
+		if (currentThesis.getStatus() == ThesisStatus.SAIR_DA_TESE || currentThesis.getStatus() == ThesisStatus.IGNORAR) {
+			reasons.add("Tese diaria atual invalida a tese principal acompanhada pela posicao.");
+			return withAiContext(decision(RecommendationType.SAIR_DA_TESE, Severity.CRITICAL, currentPrice, reasons,
+					NotificationEventType.EXIT_THESIS, allocation), aiContext);
+		}
+		if (currentThesis.getStatus() == ThesisStatus.REDUZIR_EXPOSICAO || currentThesis.getScore() < 60) {
+			reasons.add("Score ou status atual indicam risco elevado e reducao de exposicao.");
+			return withAiContext(decision(RecommendationType.REDUZIR_POSICAO, Severity.HIGH, currentPrice, reasons,
+					NotificationEventType.REDUCE_EXPOSURE, allocation), aiContext);
+		}
+		if (currentThesis.getStatus() == ThesisStatus.REAVALIAR) {
+			reasons.add("Tese diaria atual entrou em reavaliacao por regra deterministica.");
+			return withAiContext(decision(RecommendationType.REAVALIAR, Severity.HIGH, currentPrice, reasons,
+					NotificationEventType.REASSESSMENT_REQUIRED, allocation), aiContext);
+		}
+
+		if (positive(currentThesis.getPriceCeiling()) && currentPrice.compareTo(currentThesis.getPriceCeiling()) > 0) {
+			reasons.add("Preco atual acima do preco teto; novo aporte bloqueado por valuation, mantendo acompanhamento.");
+			return withAiContext(decision(RecommendationType.MANTER, Severity.LOW, currentPrice, reasons, null,
+					allocation), aiContext);
+		}
+
+		if (currentThesis.getScore() >= 75 && allowsIncrease(currentThesis)
+				&& allocation.valid() && allocation.suggestedQuantity() > 0) {
+			reasons.add("Tese principal segue valida, score atual e valuation permitem aumento planejado da posicao.");
+			return withAiContext(decision(RecommendationType.AUMENTAR_POSICAO, Severity.MEDIUM, currentPrice, reasons,
+					null, allocation), aiContext);
+		}
 
 		reasons.add("Tese principal segue acompanhavel, mas sem gatilho deterministico para nova acao operacional.");
-		return withAiContext(decision(RecommendationType.MANTER, Severity.LOW, currentPrice, reasons, null), aiContext);
+		return withAiContext(decision(RecommendationType.MANTER, Severity.LOW, currentPrice, reasons, null,
+				allocation), aiContext);
 	}
 
-	private boolean allocationAllowsIncrease(CustomerPosition position, PositionThesis currentThesis, BigDecimal currentPrice,
+	private RiskAllocationResult allocationResult(CustomerPosition position, PositionThesis currentThesis, BigDecimal currentPrice,
 			LocalDate referenceDate) {
 		AllocationPlan thesisPlan = allocationPlanRepository.findByThesisId(currentThesis.getId()).orElse(null);
 		BigDecimal targetAllocationPercent = thesisPlan == null ? null : thesisPlan.getTargetAllocationPercent();
-		RiskAllocationResult result = riskAllocationService.calculate(new RiskAllocationInput(
+		return riskAllocationService.calculate(new RiskAllocationInput(
 				riskSettings(position.getUser().getId()), currentThesis.getStatus(), currentPrice,
 				currentThesis.getFairPriceEstimate(), currentThesis.getPriceCeiling(), currentThesis.getSafetyMarginPercent(),
 				targetAllocationPercent, assetExposure(position, referenceDate), sectorExposure(position, referenceDate),
-				position.getAveragePrice(), position.getStopPrice(), position.getTargetPrice(), null, null, false));
-		return result.valid() && result.suggestedQuantity() > 0;
+				totalExposure(position, referenceDate), position.getAveragePrice(), position.getStopPrice(),
+				position.getTargetPrice(), null, null, false));
 	}
 
 	private RiskAllocationSettings riskSettings(UUID userId) {
@@ -254,6 +280,13 @@ public class PositionRecommendationService {
 		return positionRepository.findByUserIdOrderByCreatedAtDesc(position.getUser().getId()).stream()
 				.filter(CustomerPosition::isOpenAndValidForDailyScan)
 				.filter(openPosition -> sameSector(sector, openPosition.getAsset().getSector()))
+				.map(openPosition -> exposureValue(openPosition, referenceDate))
+				.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
+
+	private BigDecimal totalExposure(CustomerPosition position, LocalDate referenceDate) {
+		return positionRepository.findByUserIdOrderByCreatedAtDesc(position.getUser().getId()).stream()
+				.filter(CustomerPosition::isOpenAndValidForDailyScan)
 				.map(openPosition -> exposureValue(openPosition, referenceDate))
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
@@ -288,7 +321,7 @@ public class PositionRecommendationService {
 			reasons.add("Divergencia registrada: IA validada sinalizou conflito, mas a decisao deterministica prevaleceu.");
 		}
 		return decision(decision.type(), decision.severity(), decision.currentPrice(), reasons,
-				decision.notificationEventType().orElse(null));
+				decision.notificationEventType().orElse(null), decision.allocationResult().orElse(null));
 	}
 
 	private boolean aiConflictsWithDeterministicRule(AiContextAnalysis aiContext) {
@@ -325,7 +358,53 @@ public class PositionRecommendationService {
 
 	private Decision decision(RecommendationType type, Severity severity, BigDecimal currentPrice, List<String> reasons,
 			NotificationEventType eventType) {
-		return new Decision(type, severity, currentPrice, List.copyOf(reasons), Optional.ofNullable(eventType));
+		return decision(type, severity, currentPrice, reasons, eventType, null);
+	}
+
+	private Decision decision(RecommendationType type, Severity severity, BigDecimal currentPrice, List<String> reasons,
+			NotificationEventType eventType, RiskAllocationResult allocationResult) {
+		return new Decision(type, severity, currentPrice, List.copyOf(reasons), Optional.ofNullable(eventType),
+				Optional.ofNullable(allocationResult));
+	}
+
+	private BigDecimal effectiveStopPrice(CustomerPosition position, RiskAllocationResult allocation, PositionThesis thesis) {
+		if (positive(position.getStopPrice())) {
+			return position.getStopPrice();
+		}
+		if (allocation != null && positive(allocation.stopPrice())) {
+			return allocation.stopPrice();
+		}
+		return thesis == null ? null : thesis.getStopPrice();
+	}
+
+	private BigDecimal effectiveTargetPrice(CustomerPosition position, RiskAllocationResult allocation,
+			PositionThesis thesis) {
+		if (positive(position.getTargetPrice())) {
+			return position.getTargetPrice();
+		}
+		if (allocation != null && positive(allocation.targetPrice())) {
+			return allocation.targetPrice();
+		}
+		return thesis == null ? null : thesis.getTargetPrice();
+	}
+
+	private void applyRiskAudit(PositionRecommendation recommendation, RiskAllocationResult allocation) {
+		if (allocation == null) {
+			return;
+		}
+		recommendation.setPriceCeiling(allocation.priceCeiling());
+		recommendation.setFairPriceEstimate(allocation.fairPriceEstimate());
+		recommendation.setSafetyMarginPercent(allocation.safetyMarginPercent());
+		recommendation.setEstimatedUpsidePercent(allocation.estimatedUpsidePercent());
+		recommendation.setSuggestedQuantity(allocation.suggestedQuantity());
+		recommendation.setCurrentAssetExposureValue(allocation.currentAssetExposureValue());
+		recommendation.setCurrentSectorExposureValue(allocation.currentSectorExposureValue());
+		recommendation.setCurrentTotalExposureValue(allocation.currentTotalExposureValue());
+		recommendation.setAvailableForAsset(allocation.availableForAsset());
+		recommendation.setAvailableForSector(allocation.availableForSector());
+		recommendation.setAvailableForCash(allocation.availableForCash());
+		recommendation.setAllocationValid(allocation.valid());
+		recommendation.setAllocationInvalidReason(limit(allocation.invalidReason(), 1000));
 	}
 
 	private String json(List<String> reasons) {
@@ -363,7 +442,8 @@ public class PositionRecommendationService {
 			Severity severity,
 			BigDecimal currentPrice,
 			List<String> reasons,
-			Optional<NotificationEventType> notificationEventType) {
+			Optional<NotificationEventType> notificationEventType,
+			Optional<RiskAllocationResult> allocationResult) {
 	}
 
 	public record RecommendationSummary(

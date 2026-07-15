@@ -286,8 +286,10 @@ class MarketDataCollectionServiceTests {
 		MarketDataCollectionSummary summary = collectionService.collect(List.of("PETR4"),
 				HistoricalDataRequest.dailyAscending("1mo"), List.of("selic"));
 
-		assertThat(summary.warnings()).isEqualTo(1);
-		assertThat(dailyCandleRepository.findAll()).isEmpty();
+			assertThat(summary.warnings()).isEqualTo(1);
+			assertThat(summary.partialCollections()).isEqualTo(1);
+			assertThat(summary.failedCollections()).isZero();
+			assertThat(dailyCandleRepository.findAll()).isEmpty();
 		assertThat(dataCollectionRecordRepository.findByReferenceDateAndCategory(LocalDate.of(2026, 7, 9),
 				DataCollectionCategory.DAILY_HISTORY)).singleElement().satisfies(record -> {
 					assertThat(record.getStatus()).isEqualTo(DataCollectionStatus.PARTIAL_SUCCESS);
@@ -303,8 +305,10 @@ class MarketDataCollectionServiceTests {
 		MarketDataCollectionSummary summary = collectionService.collect(List.of("PETR4"),
 				HistoricalDataRequest.dailyAscending("1mo"), List.of("selic"));
 
-		assertThat(summary.candlesPersisted()).isEqualTo(2);
-		assertThat(macroIndicatorSnapshotRepository.findAll()).hasSize(1);
+			assertThat(summary.candlesPersisted()).isEqualTo(2);
+			assertThat(summary.failedCollections()).isEqualTo(1);
+			assertThat(summary.partialCollections()).isZero();
+			assertThat(macroIndicatorSnapshotRepository.findAll()).hasSize(1);
 		assertThat(dataCollectionRecordRepository.findByReferenceDateAndCategory(LocalDate.of(2026, 7, 9),
 				DataCollectionCategory.FINANCIAL_DATA)).singleElement().satisfies(record -> {
 					assertThat(record.getStatus()).isEqualTo(DataCollectionStatus.FAILED);

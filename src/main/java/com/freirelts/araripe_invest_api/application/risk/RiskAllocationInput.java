@@ -15,6 +15,7 @@ public record RiskAllocationInput(
 		BigDecimal targetAllocationPercent,
 		BigDecimal currentAssetExposureValue,
 		BigDecimal currentSectorExposureValue,
+		BigDecimal currentTotalExposureValue,
 		BigDecimal averagePrice,
 		BigDecimal userStopPrice,
 		BigDecimal userTargetPrice,

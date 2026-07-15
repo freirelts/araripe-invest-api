@@ -328,12 +328,16 @@ public class PortfolioService {
 			Instant acceptedAt,
 			String notes) {
 
-		static MainThesisSummary from(CustomerPositionThesis association) {
-			return new MainThesisSummary(association.getId(), association.getAcceptedThesis().getId(),
-					association.getThesisType(), association.getStatus(), association.getAcceptedScore(),
-					association.getAcceptedPrice(), association.getAcceptedPriceCeiling(),
-					association.getAcceptedSafetyMarginPercent(), association.getRuleVersion(),
-					association.getAcceptedAt(), association.getNotes());
+			static MainThesisSummary from(CustomerPositionThesis association) {
+				return new MainThesisSummary(association.getId(), association.getAcceptedThesis().getId(),
+						association.getThesisType(), association.getStatus(), association.getAcceptedScore(),
+						association.getAcceptedPrice(), association.getAcceptedPriceCeiling(),
+						percent(association.getAcceptedSafetyMarginPercent()), association.getRuleVersion(),
+						association.getAcceptedAt(), association.getNotes());
+			}
+
+			private static BigDecimal percent(BigDecimal ratio) {
+				return ratio == null ? null : ratio.multiply(new BigDecimal("100.000000")).setScale(6, RoundingMode.HALF_UP);
+			}
 		}
 	}
-}

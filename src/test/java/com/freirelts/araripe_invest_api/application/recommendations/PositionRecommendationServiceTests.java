@@ -179,6 +179,36 @@ class PositionRecommendationServiceTests {
 	}
 
 	@Test
+	void increasePersistsRiskAuditAndCalculatedRiskControlsWhenPositionDoesNotHaveCustomStopOrTarget() {
+		User user = saveCustomer("risk-audit@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("SAPR11", "Sanepar", "Utilidade Publica"));
+		CustomerPosition position = savePosition(user, asset, "10", "40.00", null, null);
+		PositionThesis acceptedThesis = saveThesis(asset, REFERENCE_DATE.minusDays(1), ThesisStatus.OPORTUNIDADE, 80);
+		PositionThesis currentThesis = saveThesis(asset, REFERENCE_DATE, ThesisStatus.APORTE_PLANEJADO, 84);
+		CustomerPositionThesis association = positionThesisRepository.saveAndFlush(new CustomerPositionThesis(user,
+				position, acceptedThesis, position.getAveragePrice()));
+		saveCandle(asset, "41.00", DataQualityStatus.VALID);
+		saveAllocationPlan(currentThesis, 50);
+
+		RecommendationSummary summary = service.recommendPosition(position.getId(), REFERENCE_DATE);
+
+		assertThat(summary.recommendationType()).isEqualTo(RecommendationType.AUMENTAR_POSICAO);
+		assertThat(summary.customerPositionThesisId()).isEqualTo(association.getId());
+		assertThat(recommendationRepository.findAll()).singleElement().satisfies(recommendation -> {
+			assertThat(recommendation.getSuggestedQuantity()).isPositive();
+			assertThat(recommendation.getStopPrice()).isPositive();
+			assertThat(recommendation.getTargetPrice()).isPositive();
+			assertThat(recommendation.getPriceCeiling()).isEqualByComparingTo("42.000000");
+			assertThat(recommendation.getSafetyMarginPercent()).isEqualByComparingTo("19.000000");
+			assertThat(recommendation.getCurrentAssetExposureValue()).isEqualByComparingTo("410.00");
+			assertThat(recommendation.getCurrentSectorExposureValue()).isEqualByComparingTo("410.00");
+			assertThat(recommendation.getCurrentTotalExposureValue()).isEqualByComparingTo("410.00");
+			assertThat(recommendation.getAvailableForCash()).isEqualByComparingTo("8590.00");
+			assertThat(recommendation.getAllocationValid()).isTrue();
+		});
+	}
+
+	@Test
 	void increaseIsBlockedWhenCustomerCurrentExposureAlreadyExceedsAssetLimit() {
 		Scenario scenario = scenario("asset-limit@araripe.test", "CPFE3", "40.00", "34.00", "55.00", "41.00",
 				ThesisStatus.APORTE_PLANEJADO, 84, "30");
@@ -189,6 +219,46 @@ class PositionRecommendationServiceTests {
 		assertThat(summary.recommendationType()).isEqualTo(RecommendationType.MANTER);
 		assertThat(summary.finalMessage()).contains("sem gatilho deterministico");
 		assertThat(notificationEventRepository.findAll()).isEmpty();
+	}
+
+	@Test
+	void increaseIsBlockedWhenTotalPortfolioExposureConsumesCashReserve() {
+		Scenario scenario = scenario("cash-limit@araripe.test", "ALUP11", "40.00", "34.00", "55.00", "41.00",
+				ThesisStatus.APORTE_PLANEJADO, 84);
+		saveAllocationPlan(scenario.currentThesis(), 50);
+		Asset otherAsset = assetRepository.saveAndFlush(new Asset("HYPE3", "Hypera", "Saude"));
+		savePosition(scenario.user(), otherAsset, "220", "41.00", "30.00", "60.00");
+		saveCandle(otherAsset, "41.00", DataQualityStatus.VALID);
+
+		RecommendationSummary summary = service.recommendPosition(scenario.position().getId(), REFERENCE_DATE);
+
+		assertThat(summary.recommendationType()).isEqualTo(RecommendationType.MANTER);
+		assertThat(recommendationRepository.findAll()).singleElement().satisfies(recommendation -> {
+			assertThat(recommendation.getAllocationValid()).isFalse();
+			assertThat(recommendation.getSuggestedQuantity()).isZero();
+			assertThat(recommendation.getCurrentTotalExposureValue()).isEqualByComparingTo("9430.00");
+			assertThat(recommendation.getAllocationInvalidReason()).contains("capital");
+		});
+	}
+
+	@Test
+	void staleCurrentThesisGeneratesReassessmentAndNeverActionableRecommendation() {
+		User user = saveCustomer("stale-thesis@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("KLBN11", "Klabin", "Materiais Basicos"));
+		CustomerPosition position = savePosition(user, asset, "10", "20.00", "10.00", "100.00");
+		PositionThesis oldThesis = saveThesis(asset, REFERENCE_DATE.minusDays(10), ThesisStatus.APORTE_PLANEJADO, 84);
+		positionThesisRepository.saveAndFlush(new CustomerPositionThesis(user, position, oldThesis,
+				position.getAveragePrice()));
+		saveCandle(asset, "21.00", DataQualityStatus.VALID);
+		saveAllocationPlan(oldThesis, 50);
+
+		RecommendationSummary summary = service.recommendPosition(position.getId(), REFERENCE_DATE);
+
+		assertThat(summary.recommendationType()).isEqualTo(RecommendationType.REAVALIAR);
+		assertThat(summary.finalMessage()).contains("fora da tolerancia operacional");
+		assertThat(notificationEventRepository.findAll()).singleElement()
+				.satisfies(notification -> assertThat(notification.getEventType())
+						.isEqualTo(NotificationEventType.REASSESSMENT_REQUIRED));
 	}
 
 	@Test
@@ -258,8 +328,12 @@ class PositionRecommendationServiceTests {
 			String targetPrice) {
 		CustomerPosition position = new CustomerPosition(user, asset, new BigDecimal(quantity),
 				new BigDecimal(averagePrice), LocalDate.of(2026, 1, 10));
-		position.setStopPrice(new BigDecimal(stopPrice));
-		position.setTargetPrice(new BigDecimal(targetPrice));
+		if (stopPrice != null) {
+			position.setStopPrice(new BigDecimal(stopPrice));
+		}
+		if (targetPrice != null) {
+			position.setTargetPrice(new BigDecimal(targetPrice));
+		}
 		return positionRepository.saveAndFlush(position);
 	}
 
