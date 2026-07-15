@@ -4,6 +4,8 @@ import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisSe
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
+import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestSummary;
+import com.freirelts.araripe_invest_api.application.notifications.NotificationDigestService;
 import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
@@ -96,6 +98,9 @@ class OperationalJobServiceTests {
 	@Autowired
 	private PositionRecommendationService positionRecommendationService;
 
+	@Autowired
+	private NotificationDigestService notificationDigestService;
+
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -106,7 +111,7 @@ class OperationalJobServiceTests {
 	@BeforeEach
 	void resetMocks() {
 		reset(marketDataCollectionService, indicatorCalculationService, assetScreeningService, thesisGenerationService,
-				positionRecommendationService);
+				positionRecommendationService, notificationDigestService);
 	}
 
 	@Test
@@ -173,6 +178,8 @@ class OperationalJobServiceTests {
 		when(assetScreeningService.screenActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
 		when(thesisGenerationService.generateForActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
 		when(positionRecommendationService.recommendOpenPositions(REFERENCE_DATE)).thenReturn(List.of());
+		when(notificationDigestService.publishDailyDigest(REFERENCE_DATE))
+				.thenReturn(new DailyNotificationDigestSummary(0, 0, 0, 0, 0, 0, true, false));
 
 		JobRunResult result = service.execute(JobName.DAILY_OPERATIONAL_FLOW, REFERENCE_DATE, JobRunTrigger.MANUAL,
 				admin.getId());
@@ -218,6 +225,8 @@ class OperationalJobServiceTests {
 	@Test
 	void notificationDigestSkipsWhenThereAreNoActionableEvents() {
 		User admin = saveAdmin();
+		when(notificationDigestService.publishDailyDigest(REFERENCE_DATE))
+				.thenReturn(new DailyNotificationDigestSummary(0, 0, 0, 0, 0, 0, true, false));
 
 		JobRunResult result = service.execute(JobName.DAILY_NOTIFICATION_DIGEST, REFERENCE_DATE,
 				JobRunTrigger.MANUAL, admin.getId());
@@ -263,6 +272,11 @@ class OperationalJobServiceTests {
 		@Bean
 		PositionRecommendationService positionRecommendationService() {
 			return mock(PositionRecommendationService.class);
+		}
+
+		@Bean
+		NotificationDigestService notificationDigestService() {
+			return mock(NotificationDigestService.class);
 		}
 	}
 }

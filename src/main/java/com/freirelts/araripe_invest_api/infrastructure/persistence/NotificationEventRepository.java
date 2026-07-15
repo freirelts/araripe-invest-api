@@ -6,6 +6,8 @@ import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventTy
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -23,6 +25,21 @@ public interface NotificationEventRepository extends JpaRepository<NotificationE
 
 	List<NotificationEvent> findByReferenceDateAndChannelAndStatus(LocalDate referenceDate,
 			NotificationChannel channel, NotificationStatus status);
+
+	@Query("""
+			select event
+			from NotificationEvent event
+			join fetch event.user
+			join fetch event.asset
+			join fetch event.position
+			join fetch event.recommendation
+			where event.referenceDate = :referenceDate
+			  and event.channel = :channel
+			  and event.status = :status
+			order by event.user.id asc, event.ruleVersion asc, event.createdAt asc
+			""")
+	List<NotificationEvent> findDigestCandidates(@Param("referenceDate") LocalDate referenceDate,
+			@Param("channel") NotificationChannel channel, @Param("status") NotificationStatus status);
 
 	@EntityGraph(attributePaths = { "asset", "position", "recommendation" })
 	Optional<NotificationEvent> findByIdAndUserId(UUID id, UUID userId);

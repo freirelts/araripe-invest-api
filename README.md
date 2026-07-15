@@ -58,6 +58,8 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `SPRING_MAIL_PASSWORD` | Senha SMTP, quando aplicavel. |
 | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | Habilita autenticacao SMTP. |
 | `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` | Habilita STARTTLS no SMTP. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_SSL_ENABLE` | Habilita SSL direto no SMTP quando o provider exigir. |
+| `ARARIPE_MAIL_HEALTH_ENABLED` | Habilita o health check SMTP do Actuator quando houver provider configurado. Default: `false`. |
 | `ARARIPE_MAIL_FROM` | Remetente dos e-mails consolidados. |
 | `ARARIPE_MAIL_REPLY_TO` | Reply-to dos e-mails consolidados, quando aplicavel. |
 | `ARARIPE_ALLOWED_ORIGINS` | Origens CORS permitidas. Default local: `http://localhost:4200`. |

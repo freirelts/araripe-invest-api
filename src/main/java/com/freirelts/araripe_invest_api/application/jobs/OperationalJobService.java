@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
+import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestSummary;
+import com.freirelts.araripe_invest_api.application.notifications.NotificationDigestService;
 import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
@@ -13,12 +15,9 @@ import com.freirelts.araripe_invest_api.domain.jobs.JobName;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRun;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRunStatus;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRunTrigger;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
 import org.slf4j.Logger;
@@ -47,29 +46,30 @@ public class OperationalJobService {
 	private final JobRunRepository jobRunRepository;
 	private final UserRepository userRepository;
 	private final PositionThesisRepository positionThesisRepository;
-	private final NotificationEventRepository notificationEventRepository;
 	private final MarketDataCollectionService marketDataCollectionService;
 	private final IndicatorCalculationService indicatorCalculationService;
 	private final AssetScreeningService assetScreeningService;
 	private final PositionThesisGenerationService thesisGenerationService;
 	private final PositionRecommendationService positionRecommendationService;
+	private final NotificationDigestService notificationDigestService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public OperationalJobService(JobRunRepository jobRunRepository, UserRepository userRepository,
-			PositionThesisRepository positionThesisRepository, NotificationEventRepository notificationEventRepository,
+			PositionThesisRepository positionThesisRepository,
 			MarketDataCollectionService marketDataCollectionService,
 			IndicatorCalculationService indicatorCalculationService, AssetScreeningService assetScreeningService,
 			PositionThesisGenerationService thesisGenerationService,
-			PositionRecommendationService positionRecommendationService) {
+			PositionRecommendationService positionRecommendationService,
+			NotificationDigestService notificationDigestService) {
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
 		this.positionThesisRepository = positionThesisRepository;
-		this.notificationEventRepository = notificationEventRepository;
 		this.marketDataCollectionService = marketDataCollectionService;
 		this.indicatorCalculationService = indicatorCalculationService;
 		this.assetScreeningService = assetScreeningService;
 		this.thesisGenerationService = thesisGenerationService;
 		this.positionRecommendationService = positionRecommendationService;
+		this.notificationDigestService = notificationDigestService;
 	}
 
 	@Transactional
@@ -188,23 +188,15 @@ public class OperationalJobService {
 	}
 
 	private Map<String, Object> notificationDigest(LocalDate referenceDate) {
-		int pendingEvents = notificationEventRepository
-				.findByReferenceDateAndChannelAndStatus(referenceDate, NotificationChannel.EMAIL,
-						NotificationStatus.PENDING)
-				.size();
-		log.info("Daily notification digest checked referenceDate={} pendingActionableEvents={}", referenceDate,
-				pendingEvents);
-		// O job de Fase 9 nao envia e-mail: ele preserva eventos acionaveis pendentes para a integracao de e-mail da Fase 12,
-		// evitando marcar alerta como entregue sem provider externo auditado.
-		if (pendingEvents == 0) {
-			log.info("Daily notification digest skipped for referenceDate={} because there are no pending events",
-					referenceDate);
-			return Map.of("pendingActionableEvents", 0, "emailDeliveryReady", false, "skipped", true);
-		}
-		log.info("Daily notification digest found pending events for referenceDate={} pendingActionableEvents={}",
-				referenceDate, pendingEvents);
-		return Map.of("pendingActionableEvents", pendingEvents, "emailDeliveryReady", false, "partial", true,
-				"reason", "Email delivery is implemented in phase 12; events remain pending and idempotent.");
+		DailyNotificationDigestSummary summary = notificationDigestService.publishDailyDigest(referenceDate);
+		log.info(
+				"Daily notification digest finished referenceDate={} pendingEvents={} digestsCreated={} digestsSent={} digestsFailed={} eventsSent={} eventsFailed={}",
+				referenceDate, summary.pendingEvents(), summary.digestsCreated(), summary.digestsSent(),
+				summary.digestsFailed(), summary.eventsSent(), summary.eventsFailed());
+		return Map.of("pendingActionableEvents", summary.pendingEvents(), "digestsCreated", summary.digestsCreated(),
+				"digestsSent", summary.digestsSent(), "digestsFailed", summary.digestsFailed(), "eventsSent",
+				summary.eventsSent(), "eventsFailed", summary.eventsFailed(), "skipped", summary.skipped(), "partial",
+				summary.partial());
 	}
 
 	private Map<String, Object> count(String key, Supplier<Integer> supplier) {

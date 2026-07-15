@@ -3,6 +3,7 @@ package com.freirelts.araripe_invest_api.application.jobs;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisService;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
+import com.freirelts.araripe_invest_api.application.notifications.NotificationDigestService;
 import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
@@ -157,6 +158,11 @@ class OperationalJobServiceIndicatorCalculationTests {
 		@Bean
 		PositionRecommendationService positionRecommendationService() {
 			return mock(PositionRecommendationService.class);
+		}
+
+		@Bean
+		NotificationDigestService notificationDigestService() {
+			return mock(NotificationDigestService.class);
 		}
 	}
 }
