@@ -14,6 +14,8 @@ import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -35,6 +37,7 @@ import java.util.concurrent.TimeoutException;
 public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContextAiProvider {
 
 	static final String PROVIDER = "openai-responses-web-search";
+	private static final Logger log = LoggerFactory.getLogger(OpenAiWebSearchEconomicContextAiProvider.class);
 
 	private final OpenAiProperties properties;
 	private final AiContextResponseValidator validator;
@@ -159,16 +162,19 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 			return failed(promptHash, inputSummaryJson, "OpenAI web search response body is missing.",
 					latencyMs(startedAt));
 		}
+		String outputText = outputText(response);
+		Map<String, Object> responseAudit = responseAudit(response, outputText);
+		logResponseAudit(responseAudit);
+
 		String status = response.path("status").asText();
 		if (!status.isBlank() && !"completed".equals(status)) {
-			return failed(promptHash, inputSummaryJson, "OpenAI web search response status is " + status + ".",
-					latencyMs(startedAt));
+			return failed(promptHash, inputSummaryJson, incompleteStatusMessage(status, response),
+					latencyMs(startedAt), sourcesJson(request, List.of(), responseAudit), tokenUsage(response));
 		}
 
-		String outputText = outputText(response);
 		if (outputText == null || outputText.isBlank()) {
 			return failed(promptHash, inputSummaryJson, "OpenAI web search response has no output text.",
-					latencyMs(startedAt));
+					latencyMs(startedAt), sourcesJson(request, List.of(), responseAudit), tokenUsage(response));
 		}
 
 		List<Map<String, String>> citations = citations(response);
@@ -177,15 +183,60 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 			output = mergeCitationUrls(output, citations);
 			AiContextValidationResult validation = validator.validate(request, output);
 			return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
-					promptHash, inputSummaryJson, json(output), sourcesJson(request, citations), validation.status(),
-					latencyMs(startedAt), validation.errorMessage(), tokenUsage(response));
+					promptHash, inputSummaryJson, json(output), sourcesJson(request, citations, responseAudit),
+					validation.status(), latencyMs(startedAt), validation.errorMessage(), tokenUsage(response));
 		}
 		catch (JsonProcessingException ex) {
 			return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
-					promptHash, inputSummaryJson, outputText, sourcesJson(request, citations),
+					promptHash, inputSummaryJson, outputText, sourcesJson(request, citations, responseAudit),
 					AiValidationStatus.INVALID, latencyMs(startedAt),
 					"OpenAI web search returned non-structured JSON output.", tokenUsage(response));
 		}
+	}
+
+	private String incompleteStatusMessage(String status, JsonNode response) {
+		String reason = response.path("incomplete_details").path("reason").asText(null);
+		if (reason == null || reason.isBlank()) {
+			return "OpenAI web search response status is " + status + ".";
+		}
+		return "OpenAI web search response status is " + status + " (reason: " + reason + ").";
+	}
+
+	private Map<String, Object> responseAudit(JsonNode response, String outputText) {
+		Map<String, Object> audit = new LinkedHashMap<>();
+		audit.put("status", textOrNull(response.path("status")));
+		audit.put("incompleteDetails", jsonNodeValue(response.path("incomplete_details")));
+		audit.put("usage", jsonNodeValue(response.path("usage")));
+		audit.put("outputTextLength", outputText == null ? 0 : outputText.length());
+		return audit;
+	}
+
+	private void logResponseAudit(Map<String, Object> responseAudit) {
+		Object status = responseAudit.get("status");
+		if ("completed".equals(status)) {
+			log.info("OpenAI response audit: status={}, incompleteDetails={}, usage={}, outputTextLength={}",
+					status, responseAudit.get("incompleteDetails"), responseAudit.get("usage"),
+					responseAudit.get("outputTextLength"));
+			return;
+		}
+		log.warn("OpenAI response audit: status={}, incompleteDetails={}, usage={}, outputTextLength={}",
+				status, responseAudit.get("incompleteDetails"), responseAudit.get("usage"),
+				responseAudit.get("outputTextLength"));
+	}
+
+	private String textOrNull(JsonNode node) {
+		if (node == null || node.isMissingNode() || node.isNull()) {
+			return null;
+		}
+		String value = node.asText(null);
+		return value == null || value.isBlank() ? null : value;
+	}
+
+	private Object jsonNodeValue(JsonNode node) {
+		if (node == null || node.isMissingNode() || node.isNull()) {
+			return null;
+		}
+		return objectMapper.convertValue(node, Object.class);
 	}
 
 	private EconomicContextAiTokenUsage tokenUsage(JsonNode response) {
@@ -296,10 +347,12 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		citations.add(citation);
 	}
 
-	private String sourcesJson(EconomicContextAiRequest request, List<Map<String, String>> citations) {
+	private String sourcesJson(EconomicContextAiRequest request, List<Map<String, String>> citations,
+			Map<String, Object> responseAudit) {
 		Map<String, Object> sources = new LinkedHashMap<>();
 		sources.put("configuredSources", request.sources());
 		sources.put("webCitations", citations);
+		sources.put("openAiResponse", responseAudit);
 		return json(sources);
 	}
 
@@ -311,6 +364,13 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 	private EconomicContextAiResult failed(String promptHash, String inputSummaryJson, String message, Long latencyMs) {
 		return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
 				promptHash, inputSummaryJson, null, json(List.of()), AiValidationStatus.FAILED, latencyMs, message);
+	}
+
+	private EconomicContextAiResult failed(String promptHash, String inputSummaryJson, String message, Long latencyMs,
+			String sourcesJson, EconomicContextAiTokenUsage tokenUsage) {
+		return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
+				promptHash, inputSummaryJson, null, sourcesJson, AiValidationStatus.FAILED, latencyMs, message,
+				tokenUsage);
 	}
 
 	private String systemPrompt() {

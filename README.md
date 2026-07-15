@@ -50,7 +50,7 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `OPENAI_ENABLED` | Habilita o adapter OpenAI Responses API; sem chave o backend usa fallback deterministico auditavel. |
 | `OPENAI_MODEL` | Modelo usado para enriquecimento contextual. Default: `gpt-5.6-luna`. |
 | `OPENAI_TIMEOUT_SECONDS` | Timeout da chamada de IA. |
-| `OPENAI_MAX_TOKENS` | Limite total de tokens gerados pela Responses API, incluindo raciocinio e saida estruturada. Default: `8000`. |
+| `OPENAI_MAX_TOKENS` | Limite total de tokens gerados pela Responses API, incluindo raciocinio e saida estruturada. Default: `16000`. |
 | `OPENAI_PROMPT_VERSION` | Versao do prompt macro/setorial persistida na auditoria. |
 | `OPENAI_WEB_SEARCH_MODEL` | Modelo usado no adapter com `web_search` obrigatorio. Default: `gpt-5.4-mini`. |
 | `OPENAI_REASONING_EFFORT` | Esforco de raciocinio enviado em `reasoning.effort`. Valores: `none`, `low`, `medium`, `high`, `xhigh`. Default: `high`. |

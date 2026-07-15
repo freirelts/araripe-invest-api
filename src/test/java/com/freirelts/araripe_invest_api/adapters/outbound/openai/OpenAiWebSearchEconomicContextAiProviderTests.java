@@ -43,6 +43,7 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 				.andExpect(jsonPath("$.reasoning.effort").value("high"))
 				.andExpect(jsonPath("$.tools[0].type").value("web_search"))
 				.andExpect(jsonPath("$.tool_choice").value("required"))
+				.andExpect(jsonPath("$.max_output_tokens").value(16000))
 				.andExpect(jsonPath("$.instructions").value(containsString("nao substitua Selic")))
 				.andExpect(jsonPath("$.input").value(containsString("Banco Central/SGS")))
 				.andRespond(withSuccess(openAiResponse(), MediaType.APPLICATION_JSON));
@@ -53,11 +54,40 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 		assertThat(result.validationStatus()).isEqualTo(AiValidationStatus.VALID);
 		assertThat(result.outputJson()).contains("https://valor.example/noticia-wege");
 		assertThat(result.sourcesJson()).contains("webCitations");
+		assertThat(result.sourcesJson()).contains("\"openAiResponse\"");
+		assertThat(result.sourcesJson()).contains("\"status\":\"completed\"");
+		assertThat(result.sourcesJson()).contains("\"outputTextLength\"");
 		assertThat(result.tokenUsage()).isNotNull();
 		assertThat(result.tokenUsage().inputTokens()).isEqualTo(1200L);
 		assertThat(result.tokenUsage().outputTokens()).isEqualTo(450L);
 		assertThat(result.tokenUsage().totalTokens()).isEqualTo(1650L);
 		assertThat(result.tokenUsage().reasoningTokens()).isEqualTo(300L);
+		server.verify();
+	}
+
+	@Test
+	void returnsFailedWithResponseAuditWhenResponseIsIncomplete() throws Exception {
+		RestClient.Builder builder = RestClient.builder();
+		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		OpenAiWebSearchEconomicContextAiProvider provider = new OpenAiWebSearchEconomicContextAiProvider(
+				properties("test-key"), new AiContextResponseValidator(), objectMapper, builder);
+
+		server.expect(requestTo("https://api.openai.test/v1/responses"))
+				.andRespond(withSuccess(incompleteOpenAiResponse(), MediaType.APPLICATION_JSON));
+
+		EconomicContextAiResult result = provider.analyze(request());
+
+		assertThat(result.validationStatus()).isEqualTo(AiValidationStatus.FAILED);
+		assertThat(result.errorMessage()).contains("status is incomplete").contains("max_output_tokens");
+		assertThat(result.sourcesJson()).contains("\"status\":\"incomplete\"");
+		assertThat(result.sourcesJson()).contains("\"incompleteDetails\":{\"reason\":\"max_output_tokens\"}");
+		assertThat(result.sourcesJson()).contains("\"usage\"");
+		assertThat(result.sourcesJson()).contains("\"outputTextLength\":7");
+		assertThat(result.tokenUsage()).isNotNull();
+		assertThat(result.tokenUsage().inputTokens()).isEqualTo(1400L);
+		assertThat(result.tokenUsage().outputTokens()).isEqualTo(16000L);
+		assertThat(result.tokenUsage().totalTokens()).isEqualTo(17400L);
+		assertThat(result.tokenUsage().reasoningTokens()).isEqualTo(15993L);
 		server.verify();
 	}
 
@@ -102,6 +132,18 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 												"WEG e contexto industrial"))))))));
 	}
 
+	private String incompleteOpenAiResponse() throws Exception {
+		return objectMapper.writeValueAsString(Map.of(
+				"status", "incomplete",
+				"incomplete_details", Map.of("reason", "max_output_tokens"),
+				"usage", Map.of(
+						"input_tokens", 1400,
+						"output_tokens", 16000,
+						"total_tokens", 17400,
+						"output_tokens_details", Map.of("reasoning_tokens", 15993)),
+				"output_text", "partial"));
+	}
+
 	private EconomicContextAiRequest request() {
 		return new EconomicContextAiRequest(
 				new AiAssetContext("WEGE3", "WEG S.A.", "Bens Industriais", "Motores"),
@@ -118,7 +160,7 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 	}
 
 	private OpenAiProperties properties(String apiKey) {
-		return new OpenAiProperties(true, "gpt-5.6-luna", apiKey, "https://api.openai.test/v1", 30, 900,
+		return new OpenAiProperties(true, "gpt-5.6-luna", apiKey, "https://api.openai.test/v1", 30, 16000,
 				"macro-sector-context-v1", "gpt-5.5", "high", "medium");
 	}
 }
