@@ -378,7 +378,7 @@ class Phase10ApiControllerTests {
 		notification.setAsset(asset);
 		notification.setRecommendation(recommendation);
 		notification.setReferenceDate(referenceDate);
-		notification.setChannel(NotificationChannel.EMAIL_SNS);
+		notification.setChannel(NotificationChannel.EMAIL);
 		notification.setEventType(NotificationEventType.REASSESSMENT_REQUIRED);
 		notification.setRecommendationType(RecommendationType.REAVALIAR);
 		notification.setSeverity(Severity.HIGH);

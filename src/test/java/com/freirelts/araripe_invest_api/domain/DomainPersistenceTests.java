@@ -328,7 +328,7 @@ class DomainPersistenceTests {
 		notification.setPosition(position);
 		notification.setRecommendation(recommendation);
 		notification.setReferenceDate(LocalDate.of(2026, 7, 7));
-		notification.setChannel(NotificationChannel.EMAIL_SNS);
+		notification.setChannel(NotificationChannel.EMAIL);
 		notification.setEventType(NotificationEventType.TARGET_REACHED);
 		notification.setRecommendationType(RecommendationType.REALIZAR_OBJETIVO);
 		notification.setSeverity(Severity.HIGH);

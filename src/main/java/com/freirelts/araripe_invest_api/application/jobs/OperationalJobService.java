@@ -189,22 +189,22 @@ public class OperationalJobService {
 
 	private Map<String, Object> notificationDigest(LocalDate referenceDate) {
 		int pendingEvents = notificationEventRepository
-				.findByReferenceDateAndChannelAndStatus(referenceDate, NotificationChannel.EMAIL_SNS,
+				.findByReferenceDateAndChannelAndStatus(referenceDate, NotificationChannel.EMAIL,
 						NotificationStatus.PENDING)
 				.size();
 		log.info("Daily notification digest checked referenceDate={} pendingActionableEvents={}", referenceDate,
 				pendingEvents);
-		// O job de Fase 9 nao envia e-mail: ele preserva eventos acionaveis pendentes para a integracao SNS da Fase 12,
+		// O job de Fase 9 nao envia e-mail: ele preserva eventos acionaveis pendentes para a integracao de e-mail da Fase 12,
 		// evitando marcar alerta como entregue sem provider externo auditado.
 		if (pendingEvents == 0) {
 			log.info("Daily notification digest skipped for referenceDate={} because there are no pending events",
 					referenceDate);
-			return Map.of("pendingActionableEvents", 0, "snsPublishReady", false, "skipped", true);
+			return Map.of("pendingActionableEvents", 0, "emailDeliveryReady", false, "skipped", true);
 		}
 		log.info("Daily notification digest found pending events for referenceDate={} pendingActionableEvents={}",
 				referenceDate, pendingEvents);
-		return Map.of("pendingActionableEvents", pendingEvents, "snsPublishReady", false, "partial", true,
-				"reason", "SNS publication is implemented in phase 12; events remain pending and idempotent.");
+		return Map.of("pendingActionableEvents", pendingEvents, "emailDeliveryReady", false, "partial", true,
+				"reason", "Email delivery is implemented in phase 12; events remain pending and idempotent.");
 	}
 
 	private Map<String, Object> count(String key, Supplier<Integer> supplier) {

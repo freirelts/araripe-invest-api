@@ -11,7 +11,7 @@ Backend Spring Boot do Araripe Invest. Este projeto concentra dados de mercado, 
 - Spring Data JPA
 - Spring Security
 - OpenAI Responses API via adapter proprio
-- AWS SDK SNS
+- Spring Mail
 - Maven Wrapper
 
 ## Requisitos locais
@@ -52,9 +52,14 @@ Use `.env.example` como base para um arquivo local `.env`. Segredos reais nao de
 | `OPENAI_TIMEOUT_SECONDS` | Timeout da chamada de IA. |
 | `OPENAI_MAX_TOKENS` | Limite de tokens de saida para o contexto estruturado. |
 | `OPENAI_PROMPT_VERSION` | Versao do prompt macro/setorial persistida na auditoria. |
-| `AWS_REGION` | Regiao AWS para SNS. |
-| `AWS_SNS_TOPIC_ARN` | Topico SNS para e-mails consolidados. |
-| `SNS_EMAIL_SENDER` | Identificacao operacional do remetente/configuracao. |
+| `SPRING_MAIL_HOST` | Host SMTP para envio dos e-mails consolidados. |
+| `SPRING_MAIL_PORT` | Porta SMTP. Default local sugerido: `587`. |
+| `SPRING_MAIL_USERNAME` | Usuario SMTP, quando aplicavel. |
+| `SPRING_MAIL_PASSWORD` | Senha SMTP, quando aplicavel. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH` | Habilita autenticacao SMTP. |
+| `SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE` | Habilita STARTTLS no SMTP. |
+| `ARARIPE_MAIL_FROM` | Remetente dos e-mails consolidados. |
+| `ARARIPE_MAIL_REPLY_TO` | Reply-to dos e-mails consolidados, quando aplicavel. |
 | `ARARIPE_ALLOWED_ORIGINS` | Origens CORS permitidas. Default local: `http://localhost:4200`. |
 
 ## Subir banco local
@@ -139,7 +144,7 @@ Depois do primeiro login, desabilite o bootstrap em ambientes compartilhados.
 
 ## Regras de seguranca
 
-- Nunca expor token da brapi, OpenAI ou AWS no frontend.
+- Nunca expor token da brapi, OpenAI ou credenciais de e-mail/SMTP no frontend.
 - Nunca gravar senhas em texto puro.
 - Nunca registrar tokens, senhas ou prompts com dados sensiveis em logs.
 - Falha externa deve gerar status rastreavel, nao recomendacao falsa.

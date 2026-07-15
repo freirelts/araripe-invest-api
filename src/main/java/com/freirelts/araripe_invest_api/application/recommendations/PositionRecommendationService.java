@@ -242,7 +242,7 @@ public class PositionRecommendationService {
 
 	private void createNotification(PositionRecommendation recommendation, NotificationEventType eventType) {
 		notificationEventRepository
-				.findByRecommendationIdAndChannelAndEventType(recommendation.getId(), NotificationChannel.EMAIL_SNS,
+				.findByRecommendationIdAndChannelAndEventType(recommendation.getId(), NotificationChannel.EMAIL,
 						eventType)
 				.orElseGet(() -> {
 					NotificationEvent notification = new NotificationEvent();
@@ -251,7 +251,7 @@ public class PositionRecommendationService {
 					notification.setRecommendation(recommendation);
 					notification.setAsset(recommendation.getAsset());
 					notification.setReferenceDate(recommendation.getReferenceDate());
-					notification.setChannel(NotificationChannel.EMAIL_SNS);
+					notification.setChannel(NotificationChannel.EMAIL);
 					notification.setEventType(eventType);
 					notification.setRecommendationType(recommendation.getRecommendationType());
 					notification.setSeverity(recommendation.getSeverity());
