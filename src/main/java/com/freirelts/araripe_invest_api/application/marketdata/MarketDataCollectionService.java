@@ -45,6 +45,7 @@ public class MarketDataCollectionService {
 	private static final String SOURCE = "brapi";
 	private static final String COLLECTOR_CALCULATION_VERSION = "collector-v1";
 	private static final int ASSET_COLLECTION_BATCH_SIZE = 5;
+	private static final int INCREMENTAL_COLLECTION_DAYS = 5;
 
 	private final MarketDataProvider marketDataProvider;
 	private final FundamentalDataProvider fundamentalDataProvider;
@@ -82,10 +83,16 @@ public class MarketDataCollectionService {
 
 	@Transactional
 	public MarketDataCollectionSummary collectActiveAssetData(Collection<String> macroSlugs) {
-		List<String> symbols = monitoredAssetUniverse.findAllActiveAssets().stream()
-				.map(Asset::getSymbol)
-				.toList();
-		return collect(symbols, HistoricalDataRequest.dailyAscending("2y"), macroSlugs);
+		List<Asset> assets = monitoredAssetUniverse.findAllActiveAssets();
+		if (assets.isEmpty()) {
+			return collect(List.of(), HistoricalDataRequest.dailyAscending("5d"), macroSlugs);
+		}
+		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
+		for (List<Asset> assetBatch : assetBatches(assets)) {
+			summary = summary.plus(collectAssetBatch(assetBatch, true));
+		}
+		summary = summary.plus(processMacro(macroEconomicDataProvider.fetchSeries(macroSlugs)));
+		return summary;
 	}
 
 	@Transactional
@@ -96,20 +103,75 @@ public class MarketDataCollectionService {
 
 		List<List<String>> assetBatches = assetBatches(normalizedSymbols);
 		if (assetBatches.isEmpty()) {
-			summary = summary.plus(collectAssetBatch(normalizedSymbols, historicalDataRequest));
+			summary = summary.plus(collectAssetBatch(normalizedSymbols, historicalDataRequest,
+					DividendDataRequest.allDescending()));
 		}
 		for (List<String> assetBatch : assetBatches) {
-			summary = summary.plus(collectAssetBatch(assetBatch, historicalDataRequest));
+			summary = summary.plus(collectAssetBatch(assetBatch, historicalDataRequest,
+					DividendDataRequest.allDescending()));
 		}
 		summary = summary.plus(processMacro(macroEconomicDataProvider.fetchSeries(macroSlugs)));
 
 		return summary;
 	}
 
+	private MarketDataCollectionSummary collectAssetBatch(List<Asset> assets, boolean initializeAfterCollection) {
+		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
+		List<String> symbols = assets.stream().map(Asset::getSymbol).toList();
+		List<Asset> newAssets = assets.stream()
+				.filter(asset -> !asset.isDataCollectionInitialized())
+				.toList();
+		List<Asset> initializedAssets = assets.stream()
+				.filter(Asset::isDataCollectionInitialized)
+				.toList();
+
+		summary = summary.plus(collectMarketHistoryAndDividends(newAssets, HistoricalDataRequest.dailyAscending("2y"),
+				DividendDataRequest.allDescending(), initializeAfterCollection));
+		summary = summary.plus(collectMarketHistoryAndDividends(initializedAssets,
+				HistoricalDataRequest.dailyAscending("5d"),
+				DividendDataRequest.windowDescending(LocalDate.now(ZoneOffset.UTC), INCREMENTAL_COLLECTION_DAYS),
+				false));
+		summary = summary.plus(collectAssetMetadataAndFundamentals(symbols));
+		return summary;
+	}
+
 	private MarketDataCollectionSummary collectAssetBatch(List<String> symbols,
-			HistoricalDataRequest historicalDataRequest) {
+			HistoricalDataRequest historicalDataRequest, DividendDataRequest dividendDataRequest) {
+		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
+		summary = summary.plus(collectMarketHistoryAndDividends(symbols, historicalDataRequest, dividendDataRequest));
+		summary = summary.plus(collectAssetMetadataAndFundamentals(symbols));
+		return summary;
+	}
+
+	private MarketDataCollectionSummary collectMarketHistoryAndDividends(List<Asset> assets,
+			HistoricalDataRequest historicalDataRequest, DividendDataRequest dividendDataRequest,
+			boolean initializeAfterCollection) {
+		if (assets.isEmpty()) {
+			return MarketDataCollectionSummary.empty();
+		}
+		List<String> symbols = assets.stream().map(Asset::getSymbol).toList();
+		ProviderRawResponse historyResponse = marketDataProvider.fetchDailyHistory(symbols, historicalDataRequest);
+		ProviderRawResponse dividendsResponse = fundamentalDataProvider.fetchDividends(symbols, dividendDataRequest);
+		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty()
+				.plus(processDailyHistory(historyResponse))
+				.plus(processDividends(dividendsResponse));
+		if (initializeAfterCollection && processable(historyResponse) && processable(dividendsResponse)) {
+			assets.forEach(Asset::markDataCollectionInitialized);
+			assetRepository.saveAll(assets);
+		}
+		return summary;
+	}
+
+	private MarketDataCollectionSummary collectMarketHistoryAndDividends(List<String> symbols,
+			HistoricalDataRequest historicalDataRequest, DividendDataRequest dividendDataRequest) {
 		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
 		summary = summary.plus(processDailyHistory(marketDataProvider.fetchDailyHistory(symbols, historicalDataRequest)));
+		summary = summary.plus(processDividends(fundamentalDataProvider.fetchDividends(symbols, dividendDataRequest)));
+		return summary;
+	}
+
+	private MarketDataCollectionSummary collectAssetMetadataAndFundamentals(List<String> symbols) {
+		MarketDataCollectionSummary summary = MarketDataCollectionSummary.empty();
 		summary = summary.plus(processProfiles(fundamentalDataProvider.fetchCompanyProfiles(symbols)));
 		summary = summary.plus(processFundamentals(fundamentalDataProvider.fetchStatistics(symbols),
 				DataCollectionCategory.STATISTICS, this::applyStatistics));
@@ -125,7 +187,6 @@ public class MarketDataCollectionService {
 				PeriodType.QUARTERLY));
 		summary = summary.plus(processStatements(fundamentalDataProvider.fetchCashFlows(symbols),
 				DataCollectionCategory.CASH_FLOW, StatementType.CASH_FLOW));
-		summary = summary.plus(processDividends(fundamentalDataProvider.fetchDividends(symbols)));
 		return summary;
 	}
 
@@ -135,6 +196,22 @@ public class MarketDataCollectionService {
 			batches.add(symbols.subList(start, Math.min(start + ASSET_COLLECTION_BATCH_SIZE, symbols.size())));
 		}
 		return batches;
+	}
+
+	private static List<List<Asset>> assetBatches(Collection<Asset> assets) {
+		List<Asset> assetList = List.copyOf(assets);
+		List<List<Asset>> batches = new ArrayList<>();
+		for (int start = 0; start < assetList.size(); start += ASSET_COLLECTION_BATCH_SIZE) {
+			batches.add(assetList.subList(start, Math.min(start + ASSET_COLLECTION_BATCH_SIZE, assetList.size())));
+		}
+		return batches;
+	}
+
+	private static boolean processable(ProviderRawResponse response) {
+		return switch (response.status()) {
+			case SUCCESS, PARTIAL -> true;
+			case FAILED, SKIPPED -> false;
+		};
 	}
 
 	private MarketDataCollectionSummary processDailyHistory(ProviderRawResponse response) {

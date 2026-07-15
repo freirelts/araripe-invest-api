@@ -50,6 +50,9 @@ public class Asset {
 	@Column(nullable = false)
 	private boolean active = true;
 
+	@Column(name = "data_collection_initialized", nullable = false)
+	private boolean dataCollectionInitialized = false;
+
 	@Column(name = "monitoring_reason", length = 500)
 	private String monitoringReason;
 
@@ -63,5 +66,10 @@ public class Asset {
 		this.symbol = symbol;
 		this.name = name;
 		this.sector = sector;
+	}
+
+	public void markDataCollectionInitialized() {
+		this.dataCollectionInitialized = true;
+		this.updatedAt = Instant.now();
 	}
 }

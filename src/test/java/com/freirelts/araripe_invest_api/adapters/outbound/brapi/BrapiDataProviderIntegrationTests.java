@@ -3,6 +3,7 @@ package com.freirelts.araripe_invest_api.adapters.outbound.brapi;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.freirelts.araripe_invest_api.application.assets.MonitoredAssetUniverseService;
 import com.freirelts.araripe_invest_api.application.auth.AuthService;
+import com.freirelts.araripe_invest_api.application.marketdata.DividendDataRequest;
 import com.freirelts.araripe_invest_api.application.marketdata.FundamentalDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.ProviderRawResponse;
@@ -38,6 +39,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -197,6 +199,19 @@ class BrapiDataProviderIntegrationTests {
 	}
 
 	@Test
+	void providerAddsDateWindowWhenFetchingIncrementalDividends() {
+		assetRepository.saveAndFlush(new Asset("VALE3", "Vale S.A.", "Materiais Básicos"));
+
+		ProviderRawResponse response = fundamentalDataProvider.fetchDividends(List.of("vale3"),
+				new DividendDataRequest(LocalDate.of(2026, 3, 4), LocalDate.of(2026, 3, 9), "desc"));
+
+		assertThat(response.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(BRAPI_SERVER.requestUris()).hasSize(1);
+		assertThat(BRAPI_SERVER.requestUris().getFirst().getRawQuery())
+				.isEqualTo("symbols=VALE3&sortOrder=desc&startDate=2026-03-04&endDate=2026-03-09");
+	}
+
+	@Test
 	void providerSplitsIncomeStatementRequestsAndKeepsPeriodInEveryBatch() {
 		List<String> symbols = List.of("PETR4", "VALE3", "ITUB4", "BBDC4", "ABEV3", "WEGE3");
 		symbols.forEach(symbol -> assetRepository.save(new Asset(symbol, symbol, "Setor")));
@@ -267,6 +282,7 @@ class BrapiDataProviderIntegrationTests {
 			}
 			server.createContext("/api/v2/stocks/quote", this::handleQuote);
 			server.createContext("/api/v2/stocks/income-statement", this::handleIncomeStatement);
+			server.createContext("/api/v2/stocks/dividends", this::handleDividends);
 			server.start();
 		}
 
@@ -301,6 +317,13 @@ class BrapiDataProviderIntegrationTests {
 		}
 
 		private void handleIncomeStatement(HttpExchange exchange) throws IOException {
+			recordRequest(exchange);
+			writeJson(exchange, """
+					{"results":[],"requestedAt":"2026-07-09T12:00:00.000Z","took":1}
+					""");
+		}
+
+		private void handleDividends(HttpExchange exchange) throws IOException {
 			recordRequest(exchange);
 			writeJson(exchange, """
 					{"results":[],"requestedAt":"2026-07-09T12:00:00.000Z","took":1}

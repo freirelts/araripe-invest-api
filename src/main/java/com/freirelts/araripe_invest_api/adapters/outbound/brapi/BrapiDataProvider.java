@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.freirelts.araripe_invest_api.application.assets.MonitoredAssetUniverseService;
+import com.freirelts.araripe_invest_api.application.marketdata.DividendDataRequest;
 import com.freirelts.araripe_invest_api.application.marketdata.FundamentalDataProvider;
 import com.freirelts.araripe_invest_api.application.marketdata.HistoricalDataRequest;
 import com.freirelts.araripe_invest_api.application.marketdata.MacroEconomicDataProvider;
@@ -92,10 +93,12 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 	}
 
 	@Override
-	public ProviderRawResponse fetchDividends(Collection<String> symbols) {
+	public ProviderRawResponse fetchDividends(Collection<String> symbols, DividendDataRequest request) {
 		return fetchForSymbols("/v2/stocks/dividends", symbols, query -> query
 				.queryParam("symbols", query.joinedSymbols())
-				.queryParam("sortOrder", "desc"));
+				.queryParam("sortOrder", request.sortOrder())
+				.queryParam("startDate", request.startDate() == null ? null : request.startDate().toString())
+				.queryParam("endDate", request.endDate() == null ? null : request.endDate().toString()));
 	}
 
 	@Override

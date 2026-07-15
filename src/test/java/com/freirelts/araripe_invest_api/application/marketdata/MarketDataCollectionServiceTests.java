@@ -244,6 +244,41 @@ class MarketDataCollectionServiceTests {
 	}
 
 	@Test
+	void activeAssetJobUsesBackfillForNewAssetsAndFiveDayWindowForInitializedAssets() {
+		testProviders().useEmptyAssetPayloads();
+		Asset newAsset = assetRepository.save(new Asset("ABEV3", "Ambev ON", "Consumo"));
+		Asset initializedAsset = new Asset("PETR4", "Petrobras PN", "Energia");
+		initializedAsset.markDataCollectionInitialized();
+		assetRepository.saveAndFlush(initializedAsset);
+
+		LocalDate today = LocalDate.now(java.time.ZoneOffset.UTC);
+
+		collectionService.collectActiveAssetData(List.of());
+
+		assertThat(testProviders().requestedSymbols("/v2/stocks/historical"))
+				.containsExactly(List.of("ABEV3"), List.of("PETR4"));
+		assertThat(testProviders().historicalRequests())
+				.extracting(HistoricalDataRequest::range)
+				.containsExactly("2y", "5d");
+		assertThat(testProviders().requestedSymbols("/v2/stocks/dividends"))
+				.containsExactly(List.of("ABEV3"), List.of("PETR4"));
+		assertThat(testProviders().dividendRequests()).satisfiesExactly(
+				request -> {
+					assertThat(request.startDate()).isNull();
+					assertThat(request.endDate()).isNull();
+					assertThat(request.sortOrder()).isEqualTo("desc");
+				},
+				request -> {
+					assertThat(request.startDate()).isEqualTo(today.minusDays(5));
+					assertThat(request.endDate()).isEqualTo(today);
+					assertThat(request.sortOrder()).isEqualTo("desc");
+				});
+		assertThat(assetRepository.findById(newAsset.getId()))
+				.get()
+				.satisfies(asset -> assertThat(asset.isDataCollectionInitialized()).isTrue());
+	}
+
+	@Test
 	void incompleteOhlcvCreatesPartialCollectionRecordWithoutPersistingInvalidCandle() {
 		testProviders().useIncompleteHistory();
 		assetRepository.saveAndFlush(new Asset("PETR4", "Petrobras PN", "Energia"));
@@ -283,6 +318,8 @@ class MarketDataCollectionServiceTests {
 		private final ObjectMapper objectMapper = new ObjectMapper();
 		private Mode mode = Mode.NORMAL;
 		private final Map<String, List<List<String>>> requestedSymbolsByEndpoint = new LinkedHashMap<>();
+		private final List<HistoricalDataRequest> historicalRequests = new ArrayList<>();
+		private final List<DividendDataRequest> dividendRequests = new ArrayList<>();
 
 		@Bean
 		ObjectMapper objectMapper() {
@@ -307,6 +344,8 @@ class MarketDataCollectionServiceTests {
 		void reset() {
 			mode = Mode.NORMAL;
 			requestedSymbolsByEndpoint.clear();
+			historicalRequests.clear();
+			dividendRequests.clear();
 		}
 
 		void useIncompleteHistory() {
@@ -329,6 +368,14 @@ class MarketDataCollectionServiceTests {
 			return requestedSymbolsByEndpoint.getOrDefault(endpoint, List.of());
 		}
 
+		List<HistoricalDataRequest> historicalRequests() {
+			return historicalRequests;
+		}
+
+		List<DividendDataRequest> dividendRequests() {
+			return dividendRequests;
+		}
+
 		@Override
 		public ProviderRawResponse fetchCurrentQuotes(Collection<String> symbols) {
 			recordRequest("/v2/stocks/quote", symbols);
@@ -340,6 +387,7 @@ class MarketDataCollectionServiceTests {
 		@Override
 		public ProviderRawResponse fetchDailyHistory(Collection<String> symbols, HistoricalDataRequest request) {
 			recordRequest("/v2/stocks/historical", symbols);
+			historicalRequests.add(request);
 			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
 				return success("/v2/stocks/historical", symbols, """
 						{"results":[]}
@@ -493,8 +541,9 @@ class MarketDataCollectionServiceTests {
 		}
 
 		@Override
-		public ProviderRawResponse fetchDividends(Collection<String> symbols) {
+		public ProviderRawResponse fetchDividends(Collection<String> symbols, DividendDataRequest request) {
 			recordRequest("/v2/stocks/dividends", symbols);
+			dividendRequests.add(request);
 			if (mode == Mode.EMPTY_ASSET_PAYLOADS) {
 				return success("/v2/stocks/dividends", symbols, """
 						{"results":[]}

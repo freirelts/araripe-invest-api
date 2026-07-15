@@ -18,5 +18,5 @@ public interface FundamentalDataProvider {
 
 	ProviderRawResponse fetchCashFlows(Collection<String> symbols);
 
-	ProviderRawResponse fetchDividends(Collection<String> symbols);
+	ProviderRawResponse fetchDividends(Collection<String> symbols, DividendDataRequest request);
 }

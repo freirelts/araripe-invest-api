@@ -134,12 +134,13 @@ class AdminAssetController {
 			Market market,
 			AssetType assetType,
 			boolean active,
+			boolean dataCollectionInitialized,
 			String monitoringReason) {
 
 		static AdminAssetResponse from(Asset asset) {
 			return new AdminAssetResponse(asset.getId(), asset.getSymbol(), asset.getName(), asset.getSector(),
 					asset.getIndustry(), asset.getMarket(), asset.getAssetType(), asset.isActive(),
-					asset.getMonitoringReason());
+					asset.isDataCollectionInitialized(), asset.getMonitoringReason());
 		}
 	}
 }
