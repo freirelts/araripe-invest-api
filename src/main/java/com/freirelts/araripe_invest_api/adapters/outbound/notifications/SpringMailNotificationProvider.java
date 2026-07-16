@@ -41,23 +41,29 @@ class SpringMailNotificationProvider implements NotificationProvider {
 		return new NotificationPublishResult(PROVIDER_NAME, internalMessageId);
 	}
 
-	private String body(DailyNotificationDigest digest, String internalMessageId) {
+	String body(DailyNotificationDigest digest, String internalMessageId) {
 		StringBuilder body = new StringBuilder();
 		body.append("Ola, ").append(digest.recipientName()).append(".\n\n");
-		body.append("Resumo diario consolidado de recomendacoes acionaveis da sua carteira em ")
+		body.append("Resumo diario consolidado de alertas informativos dos ativos acompanhados em ")
 				.append(digest.referenceDate())
 				.append(".\n\n");
 		for (DailyNotificationDigestItem item : digest.items()) {
 			body.append("- ")
 					.append(item.symbol())
 					.append(" | ")
-					.append(item.recommendationType())
-					.append(" | ")
 					.append(item.eventType())
 					.append(" | Severidade: ")
 					.append(item.severity())
 					.append("\n  ")
+					.append(item.title())
+					.append("\n  ")
 					.append(item.summary())
+					.append("\n  Fonte: ")
+					.append(item.source())
+					.append(" | Data de referencia: ")
+					.append(item.referenceDate())
+					.append(" | Regra: ")
+					.append(item.ruleVersion())
 					.append("\n");
 		}
 		body.append("\nEste alerta e informativo e nao recomenda compra, venda, manutencao, aumento, reducao, ")

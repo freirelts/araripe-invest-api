@@ -3,6 +3,8 @@ package com.freirelts.araripe_invest_api.domain.alerts;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
+import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
+import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
 import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
@@ -102,6 +104,29 @@ public class InformationalAlert {
 
 	@Column(name = "read_at")
 	private Instant readAt;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "notification_channel", nullable = false, length = 32)
+	private NotificationChannel notificationChannel = NotificationChannel.EMAIL;
+
+	@Enumerated(EnumType.STRING)
+	@Column(name = "notification_status", nullable = false, length = 32)
+	private NotificationStatus notificationStatus = NotificationStatus.PENDING;
+
+	@Column(name = "notification_provider", length = 80)
+	private String notificationProvider;
+
+	@Column(name = "notification_provider_message_id", length = 160)
+	private String notificationProviderMessageId;
+
+	@Column(name = "notification_attempt_count", nullable = false)
+	private int notificationAttemptCount;
+
+	@Column(name = "notification_last_error", length = 1000)
+	private String notificationLastError;
+
+	@Column(name = "notification_sent_at")
+	private Instant notificationSentAt;
 
 	public InformationalAlert(User user, Asset asset, LocalDate referenceDate, InformationalEventType eventType,
 			Severity severity, String title, String summary, String ruleVersion) {

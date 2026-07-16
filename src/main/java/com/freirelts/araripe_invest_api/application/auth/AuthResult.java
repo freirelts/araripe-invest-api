@@ -26,6 +26,8 @@ public record AuthResult(
 			String email,
 			UserStatus status,
 			SubscriptionStatus subscriptionStatus,
-			List<UserRoleType> roles) {
+			List<UserRoleType> roles,
+			String termsVersionAccepted,
+			Instant termsAcceptedAt) {
 	}
 }

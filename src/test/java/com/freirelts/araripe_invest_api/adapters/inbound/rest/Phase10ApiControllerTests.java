@@ -7,6 +7,8 @@ import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerat
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.jobs.JobName;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRun;
@@ -25,8 +27,6 @@ import com.freirelts.araripe_invest_api.domain.marketdata.StatementType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
@@ -47,8 +47,8 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.DataCollectio
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FinancialStatementSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
@@ -130,7 +130,7 @@ class Phase10ApiControllerTests {
 	private PositionRecommendationRepository recommendationRepository;
 
 	@Autowired
-	private NotificationEventRepository notificationEventRepository;
+	private InformationalAlertRepository informationalAlertRepository;
 
 	@Autowired
 	private DataCollectionRecordRepository dataCollectionRecordRepository;
@@ -153,7 +153,9 @@ class Phase10ApiControllerTests {
 		mockMvc.perform(get("/v3/api-docs"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.openapi").value("3.0.3"))
-				.andExpect(jsonPath("$.paths['/api/v1/recommendations'].get.summary").isString())
+				.andExpect(jsonPath("$.paths['/api/v1/alerts'].get.summary").isString())
+				.andExpect(jsonPath("$.paths['/api/v1/asset-studies/{studyId}'].get.summary").isString())
+				.andExpect(jsonPath("$.paths['/api/v1/recommendations']").doesNotExist())
 				.andExpect(jsonPath("$.paths['/api/v1/admin/jobs/{jobName}/runs'].post.summary").isString());
 	}
 
@@ -183,8 +185,8 @@ class Phase10ApiControllerTests {
 				position, thesis, new BigDecimal("38.00")));
 		PositionRecommendation recommendation = recommendationRepository.saveAndFlush(recommendation(customer, position,
 				asset, association, thesis, referenceDate));
-		NotificationEvent notification = notificationEventRepository.saveAndFlush(notification(customer, position, asset,
-				recommendation, referenceDate));
+		InformationalAlert alert = informationalAlertRepository.saveAndFlush(alert(customer, position, asset,
+				recommendation, association, thesis, referenceDate));
 		saveJobStatus(customer, referenceDate);
 
 		String token = login(customer, "senha-phase10-123");
@@ -209,7 +211,7 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$[0].sources[0]").value("brapi"))
 				.andExpect(jsonPath("$[0].limitations[0]").value("Conteudo educacional e informativo."));
 
-		mockMvc.perform(get("/api/v1/theses/{thesisId}", thesis.getId()).header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/asset-studies/{studyId}", thesis.getId()).header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.thesis.asset.symbol").value("WEGE3"))
 				.andExpect(jsonPath("$.aiContext.analysisId").value(validAiContext.getId().toString()))
@@ -219,7 +221,7 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$.aiContext.sources.webCitations[0].url").value("https://example.com/macro"))
 				.andExpect(jsonPath("$.riskNotice").isString());
 
-		mockMvc.perform(get("/api/v1/theses/history?symbol=WEGE3&from=2026-07-01&to=2026-07-12")
+		mockMvc.perform(get("/api/v1/asset-studies/history?symbol=WEGE3&from=2026-07-01&to=2026-07-12")
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].id").value(thesis.getId().toString()));
@@ -257,21 +259,32 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$.persisted").value(true));
 
 		mockMvc.perform(get("/api/v1/recommendations?date=2026-07-07").header("Authorization", bearer(token)))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].id").value(recommendation.getId().toString()))
-				.andExpect(jsonPath("$[0].deterministicReasons[0]").value("Tese principal segue valida."));
+				.andExpect(status().isGone());
 
 		mockMvc.perform(get("/api/v1/recommendations/{recommendationId}", recommendation.getId())
 						.header("Authorization", bearer(otherToken)))
-				.andExpect(status().isNotFound());
+				.andExpect(status().isGone());
+
+		mockMvc.perform(get("/api/v1/alerts?from=2026-07-01&to=2026-07-12")
+						.header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].id").value(alert.getId().toString()))
+				.andExpect(jsonPath("$[0].eventType").value("STUDY_ASSUMPTION_CHANGED"))
+				.andExpect(jsonPath("$[0].notificationStatus").value("PENDING"))
+				.andExpect(jsonPath("$[0].regulatoryNotice").isString())
+				.andExpect(jsonPath("$[0].evidence.studyReferenceDate").value("2026-07-07"));
+
+		mockMvc.perform(get("/api/v1/alerts/{alertId}", alert.getId()).header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.source").value("araripe-rules"));
 
 		mockMvc.perform(get("/api/v1/notifications?from=2026-07-01&to=2026-07-12")
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].id").value(notification.getId().toString()))
+				.andExpect(jsonPath("$[0].id").value(alert.getId().toString()))
 				.andExpect(jsonPath("$[0].readAt").doesNotExist());
 
-		mockMvc.perform(patch("/api/v1/notifications/{notificationId}/read", notification.getId())
+		mockMvc.perform(patch("/api/v1/notifications/{notificationId}/read", alert.getId())
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.readAt", notNullValue()));
@@ -401,22 +414,24 @@ class Phase10ApiControllerTests {
 		return recommendation;
 	}
 
-	private NotificationEvent notification(User user, CustomerPosition position, Asset asset,
-			PositionRecommendation recommendation, LocalDate referenceDate) {
-		NotificationEvent notification = new NotificationEvent();
-		notification.setUser(user);
-		notification.setPosition(position);
-		notification.setAsset(asset);
-		notification.setRecommendation(recommendation);
-		notification.setReferenceDate(referenceDate);
-		notification.setChannel(NotificationChannel.EMAIL);
-		notification.setEventType(NotificationEventType.REASSESSMENT_REQUIRED);
-		notification.setRecommendationType(RecommendationType.REAVALIAR);
-		notification.setSeverity(Severity.HIGH);
-		notification.setStatus(NotificationStatus.PENDING);
-		notification.setSummary("Premissas do estudo alteradas por evento critico.");
-		notification.setRuleVersion(LEGACY_RECOMMENDATION_RULE_VERSION);
-		return notification;
+	private InformationalAlert alert(User user, CustomerPosition position, Asset asset,
+			PositionRecommendation recommendation, CustomerPositionThesis association, PositionThesis thesis,
+			LocalDate referenceDate) {
+		InformationalAlert alert = new InformationalAlert(user, asset, referenceDate,
+				InformationalEventType.STUDY_ASSUMPTION_CHANGED, Severity.HIGH,
+				"Premissas do modelo de estudo alteradas",
+				"Premissas do estudo alteradas por evento critico.", "informational-events-v1");
+		alert.setSourcePosition(position);
+		alert.setLegacyRecommendation(recommendation);
+		alert.setStudyModel(association);
+		alert.setCurrentStudyModelSnapshot(thesis);
+		alert.setSource("araripe-rules");
+		alert.setEvidenceJson("""
+				{"assetSymbol":"WEGE3","sourcePositionId":"%s","studyReferenceDate":"2026-07-07","rule":"informational-events-v1"}
+				""".formatted(position.getId()));
+		alert.setNotificationChannel(NotificationChannel.EMAIL);
+		alert.setNotificationStatus(NotificationStatus.PENDING);
+		return alert;
 	}
 
 	private void saveJobStatus(User requester, LocalDate referenceDate) {

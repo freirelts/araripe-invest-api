@@ -1,4 +1,4 @@
-package com.freirelts.araripe_invest_api.adapters.inbound.rest.notifications;
+package com.freirelts.araripe_invest_api.adapters.inbound.rest.alerts;
 
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService.InformationalAlertResponse;
@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/notifications")
+@RequestMapping("/api/v1/alerts")
 @PreAuthorize("hasRole('CUSTOMER')")
-class NotificationController {
+class InformationalAlertController {
 
 	private final ApiQueryService apiQueryService;
 
-	NotificationController(ApiQueryService apiQueryService) {
+	InformationalAlertController(ApiQueryService apiQueryService) {
 		this.apiQueryService = apiQueryService;
 	}
 
@@ -36,12 +36,17 @@ class NotificationController {
 			@RequestParam(required = false)
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
 			LocalDate to) {
-		return apiQueryService.notifications(userId(authentication), from, to);
+		return apiQueryService.alerts(userId(authentication), from, to);
 	}
 
-	@PatchMapping("/{notificationId}/read")
-	InformationalAlertResponse markRead(JwtAuthenticationToken authentication, @PathVariable UUID notificationId) {
-		return apiQueryService.markNotificationRead(userId(authentication), notificationId);
+	@GetMapping("/{alertId}")
+	InformationalAlertResponse detail(JwtAuthenticationToken authentication, @PathVariable UUID alertId) {
+		return apiQueryService.alert(userId(authentication), alertId);
+	}
+
+	@PatchMapping("/{alertId}/read")
+	InformationalAlertResponse markRead(JwtAuthenticationToken authentication, @PathVariable UUID alertId) {
+		return apiQueryService.markAlertRead(userId(authentication), alertId);
 	}
 
 	private static UUID userId(JwtAuthenticationToken authentication) {

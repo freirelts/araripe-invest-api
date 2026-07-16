@@ -1,21 +1,15 @@
 package com.freirelts.araripe_invest_api.application.notifications;
 
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
-import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
-import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
 import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +26,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -50,7 +43,7 @@ class NotificationDigestServiceTests {
 	static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
 
 	private static final LocalDate REFERENCE_DATE = LocalDate.of(2026, 7, 7);
-	private static final String RULE_VERSION = "position-recommendation-v1";
+	private static final String RULE_VERSION = "informational-events-v1";
 
 	@Autowired
 	private NotificationDigestService service;
@@ -65,13 +58,7 @@ class NotificationDigestServiceTests {
 	private AssetRepository assetRepository;
 
 	@Autowired
-	private CustomerPositionRepository positionRepository;
-
-	@Autowired
-	private PositionRecommendationRepository recommendationRepository;
-
-	@Autowired
-	private NotificationEventRepository notificationEventRepository;
+	private InformationalAlertRepository alertRepository;
 
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
@@ -86,12 +73,12 @@ class NotificationDigestServiceTests {
 	}
 
 	@Test
-	void customerWithActionableRecommendationsReceivesOneConsolidatedEmail() {
+	void customerWithInformationalAlertsReceivesOneConsolidatedEmail() {
 		User customer = saveCustomer("digest@araripe.test");
-		savePendingNotification(customer, "WEGE3", RecommendationType.REALIZAR_OBJETIVO,
-				NotificationEventType.TARGET_REACHED, "Objetivo atingido.");
-		savePendingNotification(customer, "PETR4", RecommendationType.EXECUTAR_STOP,
-				NotificationEventType.STOP_TRIGGERED, "Stop acionado.");
+		savePendingAlert(customer, "WEGE3", InformationalEventType.PRICE_THRESHOLD_REACHED,
+				"Limiar superior de preco atingido.");
+		savePendingAlert(customer, "PETR4", InformationalEventType.QUALITY_DATA_BLOCKED,
+				"Dado de preco indisponivel para ativo acompanhado.");
 
 		DailyNotificationDigestSummary summary = service.publishDailyDigest(REFERENCE_DATE);
 
@@ -105,18 +92,18 @@ class NotificationDigestServiceTests {
 					assertThat(digest.recipientEmail()).isEqualTo("digest@araripe.test");
 					assertThat(digest.items()).hasSize(2);
 				});
-		assertThat(notificationEventRepository.findAll())
+		assertThat(alertRepository.findAll())
 				.allSatisfy(event -> {
-					assertThat(event.getStatus()).isEqualTo(NotificationStatus.SENT);
-					assertThat(event.getProvider()).isEqualTo("test-mail");
-					assertThat(event.getProviderMessageId()).isEqualTo("message-1");
-					assertThat(event.getAttemptCount()).isEqualTo(1);
-					assertThat(event.getSentAt()).isNotNull();
+					assertThat(event.getNotificationStatus()).isEqualTo(NotificationStatus.SENT);
+					assertThat(event.getNotificationProvider()).isEqualTo("test-mail");
+					assertThat(event.getNotificationProviderMessageId()).isEqualTo("message-1");
+					assertThat(event.getNotificationAttemptCount()).isEqualTo(1);
+					assertThat(event.getNotificationSentAt()).isNotNull();
 				});
 	}
 
 	@Test
-	void customerWithoutActionableRecommendationsDoesNotReceiveEmail() {
+	void customerWithoutInformationalAlertsDoesNotReceiveEmail() {
 		saveCustomer("no-events@araripe.test");
 
 		DailyNotificationDigestSummary summary = service.publishDailyDigest(REFERENCE_DATE);
@@ -129,8 +116,8 @@ class NotificationDigestServiceTests {
 	@Test
 	void secondRunDoesNotDuplicateDailyEmailAfterSuccessfulSend() {
 		User customer = saveCustomer("idempotent-digest@araripe.test");
-		savePendingNotification(customer, "VALE3", RecommendationType.REAVALIAR,
-				NotificationEventType.REASSESSMENT_REQUIRED, "Reavaliar posicao.");
+		savePendingAlert(customer, "VALE3", InformationalEventType.STUDY_ASSUMPTION_CHANGED,
+				"Premissas do estudo alteradas.");
 
 		DailyNotificationDigestSummary first = service.publishDailyDigest(REFERENCE_DATE);
 		provider.reset();
@@ -140,15 +127,15 @@ class NotificationDigestServiceTests {
 		assertThat(second.skipped()).isTrue();
 		assertThat(second.pendingEvents()).isZero();
 		assertThat(provider.digests).isEmpty();
-		assertThat(notificationEventRepository.findAll()).singleElement()
-				.satisfies(event -> assertThat(event.getStatus()).isEqualTo(NotificationStatus.SENT));
+		assertThat(alertRepository.findAll()).singleElement()
+				.satisfies(event -> assertThat(event.getNotificationStatus()).isEqualTo(NotificationStatus.SENT));
 	}
 
 	@Test
-	void providerFailureDoesNotRemovePersistedRecommendation() {
+	void providerFailureDoesNotRemovePersistedAlert() {
 		User customer = saveCustomer("failure@araripe.test");
-		savePendingNotification(customer, "ITUB4", RecommendationType.REDUZIR_POSICAO,
-				NotificationEventType.REDUCE_EXPOSURE, "Reducao por risco.");
+		savePendingAlert(customer, "ITUB4", InformationalEventType.INDICATOR_THRESHOLD_REACHED,
+				"Indicador observado fora do intervalo do estudo.");
 		provider.fail = true;
 
 		DailyNotificationDigestSummary summary = service.publishDailyDigest(REFERENCE_DATE);
@@ -156,47 +143,22 @@ class NotificationDigestServiceTests {
 		assertThat(summary.partial()).isTrue();
 		assertThat(summary.digestsFailed()).isEqualTo(1);
 		assertThat(summary.eventsFailed()).isEqualTo(1);
-		assertThat(recommendationRepository.findAll()).hasSize(1);
-		assertThat(notificationEventRepository.findAll()).singleElement()
+		assertThat(alertRepository.findAll()).singleElement()
 				.satisfies(event -> {
-					assertThat(event.getStatus()).isEqualTo(NotificationStatus.FAILED);
-					assertThat(event.getAttemptCount()).isEqualTo(1);
-					assertThat(event.getLastError()).contains("forced test failure");
-					assertThat(event.getSentAt()).isNull();
+					assertThat(event.getNotificationStatus()).isEqualTo(NotificationStatus.FAILED);
+					assertThat(event.getNotificationAttemptCount()).isEqualTo(1);
+					assertThat(event.getNotificationLastError()).contains("forced test failure");
+					assertThat(event.getNotificationSentAt()).isNull();
 				});
 	}
 
-	private NotificationEvent savePendingNotification(User user, String symbol, RecommendationType recommendationType,
-			NotificationEventType eventType, String summary) {
+	private InformationalAlert savePendingAlert(User user, String symbol, InformationalEventType eventType,
+			String summary) {
 		Asset asset = assetRepository.saveAndFlush(new Asset(symbol, symbol + " S.A.", "Financeiro"));
-		CustomerPosition position = positionRepository.saveAndFlush(new CustomerPosition(user, asset,
-				new BigDecimal("10"), new BigDecimal("30.00"), LocalDate.of(2026, 1, 10)));
-		PositionRecommendation recommendation = new PositionRecommendation();
-		recommendation.setUser(user);
-		recommendation.setPosition(position);
-		recommendation.setAsset(asset);
-		recommendation.setReferenceDate(REFERENCE_DATE);
-		recommendation.setRecommendationType(recommendationType);
-		recommendation.setSeverity(Severity.HIGH);
-		recommendation.setDeterministicReasonJson("[]");
-		recommendation.setFinalMessage(summary);
-		recommendation.setRuleVersion(RULE_VERSION);
-		PositionRecommendation savedRecommendation = recommendationRepository.saveAndFlush(recommendation);
-
-		NotificationEvent event = new NotificationEvent();
-		event.setUser(user);
-		event.setPosition(position);
-		event.setRecommendation(savedRecommendation);
-		event.setAsset(asset);
-		event.setReferenceDate(REFERENCE_DATE);
-		event.setChannel(NotificationChannel.EMAIL);
-		event.setEventType(eventType);
-		event.setRecommendationType(recommendationType);
-		event.setSeverity(Severity.HIGH);
-		event.setSummary(summary);
-		event.setStatus(NotificationStatus.PENDING);
-		event.setRuleVersion(RULE_VERSION);
-		return notificationEventRepository.saveAndFlush(event);
+		InformationalAlert alert = new InformationalAlert(user, asset, REFERENCE_DATE, eventType, Severity.HIGH,
+				summary, summary, RULE_VERSION);
+		alert.setEvidenceJson("{\"source\":\"test\",\"referenceDate\":\"2026-07-07\"}");
+		return alertRepository.saveAndFlush(alert);
 	}
 
 	private User saveCustomer(String email) {

@@ -9,6 +9,7 @@ import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerat
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
 import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.assets.AssetType;
@@ -26,10 +27,7 @@ import com.freirelts.araripe_invest_api.domain.marketdata.StatementType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
 import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
 import com.freirelts.araripe_invest_api.domain.risk.UserRiskAllocationSettings;
 import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
@@ -45,9 +43,8 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.DataCollectio
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FinancialStatementSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
@@ -83,8 +80,7 @@ public class ApiQueryService {
 	private final FundamentalSnapshotRepository fundamentalRepository;
 	private final FinancialStatementSnapshotRepository financialStatementRepository;
 	private final DividendEventRepository dividendEventRepository;
-	private final PositionRecommendationRepository recommendationRepository;
-	private final NotificationEventRepository notificationEventRepository;
+	private final InformationalAlertRepository informationalAlertRepository;
 	private final DataCollectionRecordRepository dataCollectionRecordRepository;
 	private final JobRunRepository jobRunRepository;
 	private final UserRepository userRepository;
@@ -97,8 +93,7 @@ public class ApiQueryService {
 			TechnicalIndicatorSnapshotRepository technicalIndicatorRepository,
 			FundamentalSnapshotRepository fundamentalRepository,
 			FinancialStatementSnapshotRepository financialStatementRepository,
-			DividendEventRepository dividendEventRepository, PositionRecommendationRepository recommendationRepository,
-			NotificationEventRepository notificationEventRepository,
+			DividendEventRepository dividendEventRepository, InformationalAlertRepository informationalAlertRepository,
 			DataCollectionRecordRepository dataCollectionRecordRepository, JobRunRepository jobRunRepository,
 			UserRepository userRepository, UserRiskAllocationSettingsRepository riskSettingsRepository,
 			AiContextAnalysisRepository aiContextAnalysisRepository) {
@@ -109,8 +104,7 @@ public class ApiQueryService {
 		this.fundamentalRepository = fundamentalRepository;
 		this.financialStatementRepository = financialStatementRepository;
 		this.dividendEventRepository = dividendEventRepository;
-		this.recommendationRepository = recommendationRepository;
-		this.notificationEventRepository = notificationEventRepository;
+		this.informationalAlertRepository = informationalAlertRepository;
 		this.dataCollectionRecordRepository = dataCollectionRecordRepository;
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
@@ -215,42 +209,56 @@ public class ApiQueryService {
 
 	@Transactional(readOnly = true)
 	public List<RecommendationResponse> recommendations(UUID userId, LocalDate date) {
-		requireCustomer(userId);
-		return recommendationRepository.findByUserIdAndReferenceDateOrderByCreatedAtDesc(userId, effectiveDate(date))
-				.stream()
-				.map(this::recommendationResponse)
-				.toList();
+		throw new ResponseStatusException(HttpStatus.GONE,
+				"Endpoint legado descontinuado. Use /api/v1/alerts para alertas informativos.");
 	}
 
 	@Transactional(readOnly = true)
 	public RecommendationResponse recommendation(UUID userId, UUID recommendationId) {
-		requireCustomer(userId);
-		return recommendationRepository.findByIdAndUserId(recommendationId, userId)
-				.map(this::recommendationResponse)
-				.orElseThrow(() -> notFound("Recommendation not found."));
+		throw new ResponseStatusException(HttpStatus.GONE,
+				"Endpoint legado descontinuado. Use /api/v1/alerts para alertas informativos.");
 	}
 
 	@Transactional(readOnly = true)
-	public List<NotificationResponse> notifications(UUID userId, LocalDate from, LocalDate to) {
+	public List<InformationalAlertResponse> alerts(UUID userId, LocalDate from, LocalDate to) {
 		requireCustomer(userId);
 		LocalDate effectiveTo = effectiveDate(to);
 		LocalDate effectiveFrom = from == null ? effectiveTo.minusDays(30) : from;
-		return notificationEventRepository
-				.findByUserIdAndReferenceDateBetweenOrderByReferenceDateDescCreatedAtDesc(userId, effectiveFrom, effectiveTo)
+		return informationalAlertRepository
+				.findByUserIdAndReferenceDateBetweenOrderByReferenceDateDescCreatedAtDesc(userId, effectiveFrom,
+						effectiveTo)
 				.stream()
-				.map(NotificationResponse::from)
+				.map(alert -> InformationalAlertResponse.from(alert, this::map))
 				.toList();
 	}
 
 	@Transactional
-	public NotificationResponse markNotificationRead(UUID userId, UUID notificationId) {
+	public InformationalAlertResponse alert(UUID userId, UUID alertId) {
 		requireCustomer(userId);
-		NotificationEvent event = notificationEventRepository.findByIdAndUserId(notificationId, userId)
-				.orElseThrow(() -> notFound("Notification not found."));
+		InformationalAlert alert = informationalAlertRepository.findByIdAndUserId(alertId, userId)
+				.orElseThrow(() -> notFound("Alert not found."));
+		return InformationalAlertResponse.from(alert, this::map);
+	}
+
+	@Transactional
+	public InformationalAlertResponse markAlertRead(UUID userId, UUID alertId) {
+		requireCustomer(userId);
+		InformationalAlert event = informationalAlertRepository.findByIdAndUserId(alertId, userId)
+				.orElseThrow(() -> notFound("Alert not found."));
 		if (event.getReadAt() == null) {
 			event.setReadAt(Instant.now());
 		}
-		return NotificationResponse.from(notificationEventRepository.saveAndFlush(event));
+		return InformationalAlertResponse.from(informationalAlertRepository.saveAndFlush(event), this::map);
+	}
+
+	@Transactional(readOnly = true)
+	public List<InformationalAlertResponse> notifications(UUID userId, LocalDate from, LocalDate to) {
+		return alerts(userId, from, to);
+	}
+
+	@Transactional
+	public InformationalAlertResponse markNotificationRead(UUID userId, UUID notificationId) {
+		return markAlertRead(userId, notificationId);
 	}
 
 	@Transactional(readOnly = true)
@@ -324,25 +332,6 @@ public class ApiQueryService {
 		return List.of("Conteudo educacional e informativo.",
 				"Nao recomenda compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.",
 				"Dados incompletos, desatualizados ou inconsistentes bloqueiam modelos de estudo e alertas informativos.");
-	}
-
-	private RecommendationResponse recommendationResponse(PositionRecommendation recommendation) {
-		return new RecommendationResponse(recommendation.getId(), recommendation.getPosition().getId(),
-				AssetResponse.from(recommendation.getAsset()),
-				recommendation.getCustomerPositionThesis() == null ? null : recommendation.getCustomerPositionThesis().getId(),
-				recommendation.getCurrentThesis() == null ? null : recommendation.getCurrentThesis().getId(),
-				recommendation.getThesisType(), recommendation.getReferenceDate(), recommendation.getSeverity(),
-				recommendation.getCurrentPrice(), recommendation.getAveragePrice(),
-				recommendation.getStopPrice(), recommendation.getTargetPrice(), recommendation.getPriceCeiling(),
-				recommendation.getFairPriceEstimate(), recommendation.getSafetyMarginPercent(),
-				recommendation.getEstimatedUpsidePercent(), recommendation.getCurrentAssetExposureValue(),
-				recommendation.getCurrentSectorExposureValue(),
-				recommendation.getCurrentTotalExposureValue(), recommendation.getAvailableForAsset(),
-				recommendation.getAvailableForSector(), recommendation.getAvailableForCash(),
-				recommendation.getAllocationValid(), recommendation.getAllocationInvalidReason(), recommendation.getScore(),
-				list(recommendation.getDeterministicReasonJson()), recommendation.getAiContextAnalysis() != null,
-				recommendation.getAiModel(), recommendation.getFinalMessage(), recommendation.getRuleVersion(),
-				recommendation.getCreatedAt());
 	}
 
 	private FundamentalSnapshot latestFundamental(UUID assetId, LocalDate referenceDate) {
@@ -580,25 +569,27 @@ public class ApiQueryService {
 			String aiModel, String finalMessage, String ruleVersion, Instant createdAt) {
 	}
 
-	public record NotificationResponse(UUID id, UUID recommendationId, UUID positionId, AssetResponse asset,
-			LocalDate referenceDate, NotificationChannel channel, InformationalEventType eventType,
-			Severity severity, String summary, NotificationStatus status, String provider, String providerMessageId,
-			int attemptCount, String lastError, String ruleVersion, Instant createdAt, Instant sentAt, Instant readAt) {
-		static NotificationResponse from(NotificationEvent event) {
-			return new NotificationResponse(event.getId(), event.getRecommendation().getId(), event.getPosition().getId(),
-					AssetResponse.from(event.getAsset()), event.getReferenceDate(), event.getChannel(),
-					informationalEventType(event.getEventType()),
-					event.getSeverity(), event.getSummary(), event.getStatus(), event.getProvider(),
-					event.getProviderMessageId(), event.getAttemptCount(), event.getLastError(), event.getRuleVersion(),
-					event.getCreatedAt(), event.getSentAt(), event.getReadAt());
-		}
-
-		private static InformationalEventType informationalEventType(NotificationEventType legacyEventType) {
-			return switch (legacyEventType) {
-				case STOP_TRIGGERED, TARGET_REACHED -> InformationalEventType.PRICE_THRESHOLD_REACHED;
-				case REDUCE_EXPOSURE -> InformationalEventType.INDICATOR_THRESHOLD_REACHED;
-				case REASSESSMENT_REQUIRED, EXIT_THESIS -> InformationalEventType.STUDY_ASSUMPTION_CHANGED;
-			};
+	public record InformationalAlertResponse(UUID id, UUID watchItemId, UUID positionId, AssetResponse asset,
+			UUID studyModelId, UUID currentStudyModelSnapshotId, LocalDate referenceDate,
+			NotificationChannel notificationChannel, InformationalEventType eventType, Severity severity, String title,
+			String summary, Map<String, Object> evidence, String source, NotificationStatus notificationStatus,
+			String notificationProvider, String notificationProviderMessageId, int notificationAttemptCount,
+			String notificationLastError, String ruleVersion, Instant createdAt, Instant notificationSentAt,
+			Instant readAt, String regulatoryNotice) {
+		static InformationalAlertResponse from(InformationalAlert alert,
+				java.util.function.Function<String, Map<String, Object>> jsonReader) {
+			return new InformationalAlertResponse(alert.getId(),
+					alert.getWatchItem() == null ? null : alert.getWatchItem().getId(),
+					alert.getSourcePosition() == null ? null : alert.getSourcePosition().getId(),
+					AssetResponse.from(alert.getAsset()), alert.getStudyModel() == null ? null : alert.getStudyModel().getId(),
+					alert.getCurrentStudyModelSnapshot() == null ? null : alert.getCurrentStudyModelSnapshot().getId(),
+					alert.getReferenceDate(), alert.getNotificationChannel(), alert.getEventType(), alert.getSeverity(),
+					alert.getTitle(), alert.getSummary(), jsonReader.apply(alert.getEvidenceJson()), alert.getSource(),
+					alert.getNotificationStatus(), alert.getNotificationProvider(),
+					alert.getNotificationProviderMessageId(), alert.getNotificationAttemptCount(),
+					alert.getNotificationLastError(), alert.getRuleVersion(), alert.getCreatedAt(),
+					alert.getNotificationSentAt(), alert.getReadAt(),
+					"Alerta informativo factual; nao recomenda compra, venda, manutencao, aumento, reducao, alocacao ou encerramento.");
 		}
 	}
 

@@ -25,12 +25,12 @@ class OpenApiController {
 		add(paths, "/api/v1/auth/register", "post", "Cadastro de usuario CUSTOMER.");
 		add(paths, "/api/v1/auth/login", "post", "Login com JWT assinado.");
 		add(paths, "/api/v1/auth/me", "get", "Usuario autenticado.");
+		add(paths, "/api/v1/legal/terms/current", "get", "Termos atuais de uso educacional e informativo.");
 		add(paths, "/api/v1/screener", "get",
 				"Screener de modelos de estudo ordenavel por criterio escolhido pelo usuario.");
-		add(paths, "/api/v1/theses/ranking", "get", "Alias legado do screener, sem ordenacao padrao por score.");
-		add(paths, "/api/v1/theses/{thesisId}", "get",
+		add(paths, "/api/v1/asset-studies/{studyId}", "get",
 				"Detalhe do modelo de estudo com filtros, aderencia a criterios, fundamentos, referencias analiticas e contexto de IA validado quando existir.");
-		add(paths, "/api/v1/theses/history", "get", "Historico de teses por ativo.");
+		add(paths, "/api/v1/asset-studies/history", "get", "Historico de modelos de estudo por ativo.");
 		add(paths, "/api/v1/assets", "get", "Ativos monitorados ativos.");
 		add(paths, "/api/v1/assets/{symbol}/fundamentals", "get",
 				"Fundamentos, indicadores, demonstrativos e dividendos.");
@@ -52,11 +52,12 @@ class OpenApiController {
 				"Associa modelo de estudo acompanhado.");
 		add(paths, "/api/v1/position-records/{positionId}/main-thesis", "patch",
 				"Troca modelo de estudo acompanhado.");
-		add(paths, "/api/v1/recommendations", "get", "Endpoint legado de registros por posicao, sem tipo operacional no DTO.");
-		add(paths, "/api/v1/recommendations/{recommendationId}", "get",
-				"Detalhe legado de registro por posicao, sem tipo operacional no DTO.");
-		add(paths, "/api/v1/notifications", "get", "Eventos de notificacao do usuario.");
-		add(paths, "/api/v1/notifications/{notificationId}/read", "patch", "Marca notificacao como lida na web.");
+		add(paths, "/api/v1/alerts", "get", "Alertas informativos factuais dos ativos acompanhados.");
+		add(paths, "/api/v1/alerts/{alertId}", "get", "Detalhe rastreavel de alerta informativo factual.");
+		add(paths, "/api/v1/alerts/{alertId}/read", "patch", "Marca alerta informativo como lido na web.");
+		add(paths, "/api/v1/notifications", "get", "Alias de notificacao para alertas informativos do usuario.");
+		add(paths, "/api/v1/notifications/{notificationId}/read", "patch",
+				"Marca alerta informativo como lido pela superficie de notificacao.");
 		add(paths, "/api/v1/ai/context-analyses", "get", "Lista analises economicas de IA persistidas.");
 		add(paths, "/api/v1/ai/context-analyses/{analysisId}", "get", "Detalhe e status da analise economica de IA.");
 		add(paths, "/api/v1/jobs/status", "get", "Status de coleta e jobs por data.");
@@ -92,12 +93,15 @@ class OpenApiController {
 		if (path.contains("diagnostics")) {
 			return Map.of("symbol", "WEGE3", "status", "APPROVED", "failedFilters", List.of());
 		}
-		if (path.contains("recommendations")) {
-			return Map.of("severity", "HIGH",
-					"deterministicReasons", List.of("Indicador observado fora do intervalo de estudo."));
+		if (path.contains("legal/terms")) {
+			return Map.of("version", "terms-educational-v1", "title",
+					"Termos de uso educacionais e informativos do Araripe Invest");
 		}
-		if (path.contains("notifications")) {
-			return Map.of("eventType", "STUDY_ASSUMPTION_CHANGED", "status", "PENDING", "readAt", "");
+		if (path.contains("alerts") || path.contains("notifications")) {
+			return Map.of("eventType", "PRICE_THRESHOLD_REACHED", "notificationStatus", "PENDING",
+					"title", "Limiar superior de preco atingido",
+					"source", "araripe-rules", "referenceDate", "2026-07-07",
+					"regulatoryNotice", "Alerta informativo factual.");
 		}
 		if (path.contains("watched-assets")) {
 			return Map.of("symbol", "WEGE3", "userLowerPriceThreshold", 33.0, "userUpperPriceThreshold", 48.0,
@@ -113,7 +117,7 @@ class OpenApiController {
 					"sources", List.of("OpenAI Web Search"), "tokenUsage",
 					Map.of("inputTokens", 1200, "outputTokens", 450, "totalTokens", 1650, "reasoningTokens", 300));
 		}
-		if (path.contains("screener") || path.contains("theses")) {
+		if (path.contains("screener") || path.contains("asset-studies")) {
 			return Map.of("status", "CRITERIOS_ATENDIDOS", "criteriaAdherenceScore", 82,
 					"scoreLabel", "Aderencia a criterios do estudo", "studyPriceReference", 42.0,
 					"methodology", "Pontuacao deterministica de aderencia aos criterios do estudo.",

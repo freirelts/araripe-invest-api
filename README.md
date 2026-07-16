@@ -109,6 +109,40 @@ Authorization: Bearer <token>
 
 O endpoint `GET /api/v1/auth/me` retorna o usuario autenticado. Rotas `/api/v1/admin/**` exigem perfil `ADMIN`.
 
+O cadastro de cliente exige aceite versionado dos termos educacionais vigentes:
+
+```json
+{
+  "name": "Cliente",
+  "email": "cliente@exemplo.com",
+  "password": "senha-forte",
+  "acceptedTerms": true,
+  "acceptedTermsVersion": "terms-educational-v1"
+}
+```
+
+Os termos atuais ficam publicos em:
+
+```http
+GET /api/v1/legal/terms/current
+```
+
+## Contratos regulatoriamente neutros
+
+Contratos principais expostos ao frontend:
+
+```http
+GET /api/v1/screener
+GET /api/v1/asset-studies/{studyId}
+GET /api/v1/asset-studies/history
+GET /api/v1/watched-assets
+GET /api/v1/alerts
+GET /api/v1/alerts/{alertId}
+PATCH /api/v1/alerts/{alertId}/read
+```
+
+`/api/v1/recommendations` esta deprecado e responde `410 Gone`. Use `/api/v1/alerts` para eventos factuais rastreados por fonte, data de referencia e regra informativa.
+
 ## Universo monitorado e brapi.dev
 
 O cadastro administrativo de ativos define o universo monitorado. A integracao com brapi.dev consulta somente simbolos cadastrados e com `active=true`; simbolos ausentes ou inativos sao ignorados antes de qualquer chamada externa.
@@ -153,3 +187,4 @@ Depois do primeiro login, desabilite o bootstrap em ambientes compartilhados.
 - Nunca gravar senhas em texto puro.
 - Nunca registrar tokens, senhas ou prompts com dados sensiveis em logs.
 - Falha externa deve gerar status rastreavel, nao alerta falso.
+- E-mails consolidados devem conter apenas alertas informativos dos ativos acompanhados, sem `RecommendationType` ou comando operacional.

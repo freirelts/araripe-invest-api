@@ -1,5 +1,6 @@
 package com.freirelts.araripe_invest_api.application.auth;
 
+import com.freirelts.araripe_invest_api.application.legal.LegalTermsService;
 import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
@@ -27,27 +28,34 @@ public class AuthService {
 	private final AuthenticationManager authenticationManager;
 	private final JwtTokenService jwtTokenService;
 	private final AraripeSecurityProperties properties;
+	private final LegalTermsService legalTermsService;
 
 	AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
 			AuthenticationManager authenticationManager, JwtTokenService jwtTokenService,
-			AraripeSecurityProperties properties) {
+			AraripeSecurityProperties properties, LegalTermsService legalTermsService) {
 		this.userRepository = userRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.authenticationManager = authenticationManager;
 		this.jwtTokenService = jwtTokenService;
 		this.properties = properties;
+		this.legalTermsService = legalTermsService;
 	}
 
 	@Transactional
-	public AuthResult registerCustomer(String name, String email, String rawPassword) {
+	public AuthResult registerCustomer(String name, String email, String rawPassword, boolean acceptedTerms,
+			String acceptedTermsVersion) {
 		String normalizedEmail = normalizeEmail(email);
 		if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
 			throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail already registered.");
+		}
+		if (!acceptedTerms || !legalTermsService.isCurrentVersion(acceptedTermsVersion)) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current terms must be accepted.");
 		}
 
 		User user = new User(name.trim(), normalizedEmail, passwordEncoder.encode(rawPassword),
 				SubscriptionStatus.TRIALING);
 		user.addRole(UserRoleType.CUSTOMER);
+		user.acceptTerms(acceptedTermsVersion, Instant.now());
 		User persisted = userRepository.saveAndFlush(user);
 		return issueToken(new AraripeUserDetails(persisted), persisted);
 	}
@@ -88,7 +96,8 @@ public class AuthService {
 
 	private AuthResult.UserSummary summary(User user) {
 		return new AuthResult.UserSummary(user.getId(), user.getName(), user.getEmail(), user.getStatus(),
-				user.getSubscriptionStatus(), user.getRoles().stream().map(role -> role.getRole()).toList());
+				user.getSubscriptionStatus(), user.getRoles().stream().map(role -> role.getRole()).toList(),
+				user.getTermsVersionAccepted(), user.getTermsAcceptedAt());
 	}
 
 	private ResponseStatusException unauthorized() {

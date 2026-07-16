@@ -74,11 +74,28 @@ class AuthSecurityTests {
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.email").value("cliente-auth@araripe.test"))
-				.andExpect(jsonPath("$.roles[*]").value(containsInAnyOrder("CUSTOMER")));
+				.andExpect(jsonPath("$.roles[*]").value(containsInAnyOrder("CUSTOMER")))
+				.andExpect(jsonPath("$.termsVersionAccepted").value("terms-educational-v1"))
+				.andExpect(jsonPath("$.termsAcceptedAt").isString());
 
 		User user = userRepository.findByEmailIgnoreCase("cliente-auth@araripe.test").orElseThrow();
 		assertThat(user.getPasswordHash()).isNotEqualTo("senha-forte-123");
 		assertThat(passwordEncoder.matches("senha-forte-123", user.getPasswordHash())).isTrue();
+	}
+
+	@Test
+	void currentTermsArePublicAndRegistrationRequiresAcceptance() throws Exception {
+		mockMvc.perform(get("/api/v1/legal/terms/current"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.version").value("terms-educational-v1"))
+				.andExpect(jsonPath("$.clauses[0]").isString());
+
+		mockMvc.perform(post("/api/v1/auth/register")
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{"name":"Sem Termos","email":"sem-termos@araripe.test","password":"senha-forte-123","acceptedTerms":false,"acceptedTermsVersion":"terms-educational-v1"}
+								"""))
+				.andExpect(status().isBadRequest());
 	}
 
 	@Test
@@ -234,7 +251,7 @@ class AuthSecurityTests {
 		String response = mockMvc.perform(post("/api/v1/auth/register")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"name":"%s","email":"%s","password":"%s"}
+								{"name":"%s","email":"%s","password":"%s","acceptedTerms":true,"acceptedTermsVersion":"terms-educational-v1"}
 								""".formatted(name, email, password)))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.accessToken").isString())
