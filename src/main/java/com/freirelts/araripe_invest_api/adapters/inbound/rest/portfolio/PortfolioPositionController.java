@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/portfolio/positions")
+@RequestMapping({ "/api/v1/position-records", "/api/v1/portfolio/positions" })
 @PreAuthorize("hasRole('CUSTOMER')")
 class PortfolioPositionController {
 
@@ -68,6 +68,12 @@ class PortfolioPositionController {
 		return portfolioService.registerContribution(userId(authentication), positionId, request.toInput());
 	}
 
+	@PostMapping("/{positionId}/quantity-adjustments")
+	PositionSummary registerQuantityAdjustment(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
+			@Valid @RequestBody ContributionRequest request) {
+		return portfolioService.registerContribution(userId(authentication), positionId, request.toInput());
+	}
+
 	@PostMapping("/{positionId}/main-thesis")
 	@ResponseStatus(HttpStatus.CREATED)
 	PositionSummary associateMainThesis(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
@@ -101,18 +107,25 @@ class PortfolioPositionController {
 			@PastOrPresent
 			LocalDate entryDate,
 			@Positive
+			BigDecimal userLowerPriceThreshold,
+			@Positive
+			BigDecimal userUpperPriceThreshold,
+			@Positive
 			BigDecimal stopPrice,
 			@Positive
 			BigDecimal targetPrice,
-			@Positive
-			BigDecimal targetReturnPercent,
 			@Size(max = 1000)
 			String notes) {
 
 		PositionInput toInput() {
-			return new PositionInput(assetId, quantity, averagePrice, entryDate, stopPrice, targetPrice,
-					targetReturnPercent, notes);
+			return new PositionInput(assetId, quantity, averagePrice, entryDate,
+					firstNonNull(userLowerPriceThreshold, stopPrice), firstNonNull(userUpperPriceThreshold, targetPrice),
+					null, notes);
 		}
+	}
+
+	private static BigDecimal firstNonNull(BigDecimal primary, BigDecimal fallback) {
+		return primary == null ? fallback : primary;
 	}
 
 	record MainThesisRequest(

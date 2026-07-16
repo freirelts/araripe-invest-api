@@ -29,22 +29,29 @@ class OpenApiController {
 				"Screener de modelos de estudo ordenavel por criterio escolhido pelo usuario.");
 		add(paths, "/api/v1/theses/ranking", "get", "Alias legado do screener, sem ordenacao padrao por score.");
 		add(paths, "/api/v1/theses/{thesisId}", "get",
-				"Detalhe da tese com filtros, aderencia a criterios, fundamentos, alocacao e contexto de IA validado quando existir.");
+				"Detalhe do modelo de estudo com filtros, aderencia a criterios, fundamentos, referencias analiticas e contexto de IA validado quando existir.");
 		add(paths, "/api/v1/theses/history", "get", "Historico de teses por ativo.");
 		add(paths, "/api/v1/assets", "get", "Ativos monitorados ativos.");
 		add(paths, "/api/v1/assets/{symbol}/fundamentals", "get",
 				"Fundamentos, indicadores, demonstrativos e dividendos.");
 		add(paths, "/api/v1/assets/{symbol}/diagnostics", "get", "Diagnostico de filtros eliminatorios.");
-		add(paths, "/api/v1/allocation-settings", "get", "Parametros pessoais de risco e alocacao.");
-		add(paths, "/api/v1/allocation-settings", "put", "Atualiza parametros pessoais de risco e alocacao.");
-		add(paths, "/api/v1/portfolio/positions", "get", "Carteira do cliente.");
-		add(paths, "/api/v1/portfolio/positions", "post", "Cria posicao do cliente.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}", "put", "Edita posicao aberta.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/contributions", "post",
-				"Registra aporte e recalcula quantidade e preco medio.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/close", "patch", "Encerra posicao mantendo historico.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "post", "Associa tese principal.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "patch", "Troca tese principal.");
+		add(paths, "/api/v1/watched-assets", "get", "Ativos acompanhados pelo usuario para alertas informativos.");
+		add(paths, "/api/v1/watched-assets", "post",
+				"Cadastra ou atualiza ativo acompanhado com limiares informativos definidos pelo usuario.");
+		add(paths, "/api/v1/watched-assets/{watchItemId}", "put",
+				"Atualiza preferencias de alerta de ativo acompanhado, sem inferir suitability.");
+		add(paths, "/api/v1/watched-assets/{watchItemId}/archive", "patch", "Arquiva ativo acompanhado.");
+		add(paths, "/api/v1/position-records", "get", "Registros informativos de posicao real declarados pelo usuario.");
+		add(paths, "/api/v1/position-records", "post", "Cria cadastro informativo de posicao real do usuario.");
+		add(paths, "/api/v1/position-records/{positionId}", "put", "Edita cadastro informativo de posicao real.");
+		add(paths, "/api/v1/position-records/{positionId}/quantity-adjustments", "post",
+				"Atualiza quantidade e preco medio informados pelo usuario para fins de registro.");
+		add(paths, "/api/v1/position-records/{positionId}/close", "patch",
+				"Arquiva cadastro informativo de posicao real mantendo historico.");
+		add(paths, "/api/v1/position-records/{positionId}/main-thesis", "post",
+				"Associa modelo de estudo acompanhado.");
+		add(paths, "/api/v1/position-records/{positionId}/main-thesis", "patch",
+				"Troca modelo de estudo acompanhado.");
 		add(paths, "/api/v1/recommendations", "get", "Endpoint legado de registros por posicao, sem tipo operacional no DTO.");
 		add(paths, "/api/v1/recommendations/{recommendationId}", "get",
 				"Detalhe legado de registro por posicao, sem tipo operacional no DTO.");
@@ -91,6 +98,15 @@ class OpenApiController {
 		}
 		if (path.contains("notifications")) {
 			return Map.of("eventType", "STUDY_ASSUMPTION_CHANGED", "status", "PENDING", "readAt", "");
+		}
+		if (path.contains("watched-assets")) {
+			return Map.of("symbol", "WEGE3", "userLowerPriceThreshold", 33.0, "userUpperPriceThreshold", 48.0,
+					"regulatoryNotice", "Ativo acompanhado para alertas informativos definidos pelo usuario.");
+		}
+		if (path.contains("position-records")) {
+			return Map.of("symbol", "WEGE3", "quantity", 10, "userLowerPriceThreshold", 33.0,
+					"userUpperPriceThreshold", 48.0,
+					"regulatoryNotice", "Cadastro informativo declarado pelo usuario.");
 		}
 		if (path.contains("context-analyses")) {
 			return Map.of("analysisId", "uuid", "validationStatus", "VALID", "processingStatus", "COMPLETED",

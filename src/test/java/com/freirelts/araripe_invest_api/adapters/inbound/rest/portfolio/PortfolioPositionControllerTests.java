@@ -82,7 +82,7 @@ class PortfolioPositionControllerTests {
 		PositionThesis thesis = thesisRepository.saveAndFlush(thesis(asset));
 		String token = login(customer, "senha-portfolio-123");
 
-		String created = mockMvc.perform(post("/api/v1/portfolio/positions")
+		String created = mockMvc.perform(post("/api/v1/position-records")
 						.header("Authorization", bearer(token))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -91,8 +91,8 @@ class PortfolioPositionControllerTests {
 								  "quantity":10,
 								  "averagePrice":38.40,
 								  "entryDate":"2026-07-07",
-								  "stopPrice":33.00,
-								  "targetPrice":48.00,
+								  "userLowerPriceThreshold":33.00,
+								  "userUpperPriceThreshold":48.00,
 								  "notes":"Posicao acompanhada pelo cliente"
 								}
 								""".formatted(asset.getId())))
@@ -104,12 +104,15 @@ class PortfolioPositionControllerTests {
 				.getContentAsString();
 		String positionId = objectMapper.readTree(created).get("id").asText();
 
-		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/position-records").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
-				.andExpect(jsonPath("$[0].symbol").value("WEGE3"));
+				.andExpect(jsonPath("$[0].symbol").value("WEGE3"))
+				.andExpect(jsonPath("$[0].userLowerPriceThreshold").value(33.0))
+				.andExpect(jsonPath("$[0].userUpperPriceThreshold").value(48.0))
+				.andExpect(jsonPath("$[0].regulatoryNotice").isString());
 
-		mockMvc.perform(post("/api/v1/portfolio/positions/{positionId}/main-thesis", positionId)
+		mockMvc.perform(post("/api/v1/position-records/{positionId}/main-thesis", positionId)
 						.header("Authorization", bearer(token))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -118,7 +121,7 @@ class PortfolioPositionControllerTests {
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.accompaniedStudyModel.acceptedThesisId").value(thesis.getId().toString()));
 
-		mockMvc.perform(post("/api/v1/portfolio/positions/{positionId}/contributions", positionId)
+		mockMvc.perform(post("/api/v1/position-records/{positionId}/quantity-adjustments", positionId)
 						.header("Authorization", bearer(token))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -134,7 +137,7 @@ class PortfolioPositionControllerTests {
 				.andExpect(jsonPath("$.averagePrice").value(39.6))
 				.andExpect(jsonPath("$.notes").value("Aporte executado na corretora"));
 
-		mockMvc.perform(patch("/api/v1/portfolio/positions/{positionId}/close", positionId)
+		mockMvc.perform(patch("/api/v1/position-records/{positionId}/close", positionId)
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("CLOSED"));
@@ -164,6 +167,16 @@ class PortfolioPositionControllerTests {
 
 		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
 				.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void legacyPortfolioAliasStillWorksForCompatibility() throws Exception {
+		User customer = saveUser("Legacy Portfolio Customer", "portfolio-legacy-rest@araripe.test",
+				"senha-portfolio-legacy-123", SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
+		String token = login(customer, "senha-portfolio-legacy-123");
+
+		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
+				.andExpect(status().isOk());
 	}
 
 	private String login(User user, String password) throws Exception {

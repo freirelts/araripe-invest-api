@@ -22,4 +22,8 @@ public interface InformationalAlertRepository extends JpaRepository<Informationa
 	Optional<InformationalAlert> findByUserIdAndAssetIdAndSourcePositionIdAndReferenceDateAndEventTypeAndRuleVersionAndSource(
 			UUID userId, UUID assetId, UUID sourcePositionId, LocalDate referenceDate, InformationalEventType eventType,
 			String ruleVersion, String source);
+
+	Optional<InformationalAlert> findByUserIdAndAssetIdAndWatchItemIdAndReferenceDateAndEventTypeAndRuleVersionAndSource(
+			UUID userId, UUID assetId, UUID watchItemId, LocalDate referenceDate, InformationalEventType eventType,
+			String ruleVersion, String source);
 }

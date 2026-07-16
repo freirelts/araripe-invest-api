@@ -14,5 +14,8 @@ public interface AssetWatchItemRepository extends JpaRepository<AssetWatchItem, 
 	@EntityGraph(attributePaths = { "asset", "sourcePosition", "accompaniedStudyModel" })
 	List<AssetWatchItem> findByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, AssetWatchStatus status);
 
+	@EntityGraph(attributePaths = { "user", "asset", "sourcePosition", "accompaniedStudyModel" })
+	List<AssetWatchItem> findByStatusOrderByCreatedAtAsc(AssetWatchStatus status);
+
 	Optional<AssetWatchItem> findByUserIdAndAssetIdAndStatus(UUID userId, UUID assetId, AssetWatchStatus status);
 }

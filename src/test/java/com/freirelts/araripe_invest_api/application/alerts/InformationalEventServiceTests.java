@@ -1,6 +1,7 @@
 package com.freirelts.araripe_invest_api.application.alerts;
 
 import com.freirelts.araripe_invest_api.application.alerts.InformationalEventService.InformationalEventSummary;
+import com.freirelts.araripe_invest_api.domain.alerts.AssetWatchItem;
 import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
@@ -15,6 +16,7 @@ import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetWatchItemRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
@@ -64,6 +66,9 @@ class InformationalEventServiceTests {
 	private AssetRepository assetRepository;
 
 	@Autowired
+	private AssetWatchItemRepository watchItemRepository;
+
+	@Autowired
 	private CustomerPositionRepository positionRepository;
 
 	@Autowired
@@ -102,6 +107,26 @@ class InformationalEventServiceTests {
 		assertThat(summary.eventType()).isEqualTo(InformationalEventType.PRICE_THRESHOLD_REACHED);
 		assertThat(summary.severity()).isEqualTo(Severity.HIGH);
 		assertThat(summary.title()).contains("Limiar inferior");
+		assertNoOperationalTermsWerePersisted();
+		assertThat(recommendationRepository.findAll()).isEmpty();
+		assertThat(notificationEventRepository.findAll()).isEmpty();
+	}
+
+	@Test
+	void watchedAssetWithoutRealPositionCreatesFactualThresholdAlert() {
+		User user = saveCustomer("watched-threshold@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("B3SA3", "B3 S.A.", "Financeiro"));
+		AssetWatchItem item = new AssetWatchItem(user, asset);
+		item.setUserLowerPriceThreshold(new BigDecimal("10.00"));
+		item.setUserUpperPriceThreshold(new BigDecimal("14.00"));
+		watchItemRepository.saveAndFlush(item);
+		saveCandle(asset, "14.50", DataQualityStatus.VALID);
+
+		InformationalEventSummary summary = service.scanWatchItem(item.getId(), REFERENCE_DATE).orElseThrow();
+
+		assertThat(summary.eventType()).isEqualTo(InformationalEventType.PRICE_THRESHOLD_REACHED);
+		assertThat(summary.watchItemId()).isEqualTo(item.getId());
+		assertThat(summary.positionId()).isNull();
 		assertNoOperationalTermsWerePersisted();
 		assertThat(recommendationRepository.findAll()).isEmpty();
 		assertThat(notificationEventRepository.findAll()).isEmpty();

@@ -32,6 +32,7 @@ public class PortfolioService {
 
 	private static final String REPLACED_BY_CUSTOMER = "Tese principal substituida pelo cliente.";
 	private static final String CLOSED_WITH_POSITION = "Posicao encerrada pelo cliente.";
+	private static final String INFORMATIONAL_POSITION_NOTICE = "Cadastro informativo declarado pelo usuario; nao e usado para recomendar compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.";
 	private static final int PRICE_SCALE = 6;
 
 	private final UserRepository userRepository;
@@ -297,22 +298,22 @@ public class PortfolioService {
 			BigDecimal quantity,
 			BigDecimal averagePrice,
 			LocalDate entryDate,
-			BigDecimal stopPrice,
-			BigDecimal targetPrice,
-			BigDecimal targetReturnPercent,
+			BigDecimal userLowerPriceThreshold,
+			BigDecimal userUpperPriceThreshold,
 			String notes,
 			PositionStatus status,
 			Instant createdAt,
 			Instant updatedAt,
 			Instant closedAt,
-			AccompaniedStudyModelSummary accompaniedStudyModel) {
+			AccompaniedStudyModelSummary accompaniedStudyModel,
+			String regulatoryNotice) {
 
 		static PositionSummary from(CustomerPosition position, AccompaniedStudyModelSummary accompaniedStudyModel) {
 			return new PositionSummary(position.getId(), position.getAsset().getId(), position.getAsset().getSymbol(),
 					position.getAsset().getName(), position.getQuantity(), position.getAveragePrice(),
 					position.getEntryDate(), position.getStopPrice(), position.getTargetPrice(),
-					position.getTargetReturnPercent(), position.getNotes(), position.getStatus(), position.getCreatedAt(),
-					position.getUpdatedAt(), position.getClosedAt(), accompaniedStudyModel);
+					position.getNotes(), position.getStatus(), position.getCreatedAt(), position.getUpdatedAt(),
+					position.getClosedAt(), accompaniedStudyModel, INFORMATIONAL_POSITION_NOTICE);
 		}
 	}
 

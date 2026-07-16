@@ -126,7 +126,7 @@ public class OperationalJobService {
 		List<Map<String, Object>> steps = new ArrayList<>();
 		boolean failed = false;
 		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses
-		// e varredura de carteira antes de qualquer notificacao.
+		// e varredura de ativos acompanhados antes de qualquer notificacao.
 		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
 				JobName.FILTERS_AND_THESES, JobName.SCREENER, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
 		log.info("Daily operational flow started for referenceDate={} steps={}", referenceDate, orderedSteps.size());
@@ -208,10 +208,12 @@ public class OperationalJobService {
 				"Daily notification digest finished referenceDate={} pendingEvents={} digestsCreated={} digestsSent={} digestsFailed={} eventsSent={} eventsFailed={}",
 				referenceDate, summary.pendingEvents(), summary.digestsCreated(), summary.digestsSent(),
 				summary.digestsFailed(), summary.eventsSent(), summary.eventsFailed());
-		return Map.of("pendingActionableEvents", summary.pendingEvents(), "digestsCreated", summary.digestsCreated(),
-				"digestsSent", summary.digestsSent(), "digestsFailed", summary.digestsFailed(), "eventsSent",
-				summary.eventsSent(), "eventsFailed", summary.eventsFailed(), "skipped", summary.skipped(), "partial",
-				summary.partial());
+		return Map.ofEntries(Map.entry("pendingInformationalEvents", summary.pendingEvents()),
+				Map.entry("pendingActionableEvents", summary.pendingEvents()),
+				Map.entry("digestsCreated", summary.digestsCreated()), Map.entry("digestsSent", summary.digestsSent()),
+				Map.entry("digestsFailed", summary.digestsFailed()), Map.entry("eventsSent", summary.eventsSent()),
+				Map.entry("eventsFailed", summary.eventsFailed()), Map.entry("skipped", summary.skipped()),
+				Map.entry("partial", summary.partial()));
 	}
 
 	private Map<String, Object> count(String key, Supplier<Integer> supplier) {

@@ -166,7 +166,7 @@ public class ApiQueryService {
 				list(thesis.getReasonsJson()), list(thesis.getFailedFiltersJson()), list(thesis.getReviewPointsJson()),
 				technical == null ? null : TechnicalIndicatorResponse.from(technical),
 				fundamental == null ? null : FundamentalResponse.from(fundamental),
-				allocationPlan == null ? null : AllocationPlanResponse.from(allocationPlan),
+				allocationPlan == null ? null : StudyReferenceResponse.from(allocationPlan),
 				aiContext == null ? null : AiContextAnalysisSummaryResponse.from(aiContext, this::jsonValue),
 				"Conteudo educacional e informativo; nao indica compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.");
 	}
@@ -294,9 +294,8 @@ public class ApiQueryService {
 				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), "Aderencia a criterios do estudo",
 				thesis.getPriceCeiling(),
 				thesis.getFairPriceEstimate(), percent(thesis.getSafetyMarginPercent()), thesis.getStopPrice(),
-				thesis.getTargetPrice(), allocationPlan == null ? null : allocationPlan.isValid(),
-				list(thesis.getReasonsJson()), methodology(), sources(), thesis.getReferenceDate(), limitations(),
-				thesis.getRuleVersion(), thesis.getCreatedAt());
+				thesis.getTargetPrice(), list(thesis.getReasonsJson()), methodology(), sources(),
+				thesis.getReferenceDate(), limitations(), thesis.getRuleVersion(), thesis.getCreatedAt());
 	}
 
 	private Comparator<PositionThesis> comparator(ScreenerSortBy sortBy) {
@@ -468,15 +467,15 @@ public class ApiQueryService {
 	public record ThesisSummaryResponse(UUID id, AssetResponse asset, LocalDate referenceDate, ThesisType thesisType,
 			ThesisStatus status, int criteriaAdherenceScore, String scoreLabel, BigDecimal studyPriceReference,
 			BigDecimal fairPriceEstimate,
-			BigDecimal safetyMarginPercent, BigDecimal stopPrice, BigDecimal targetPrice,
-			Boolean allocationValid, List<Object> reasons, String methodology, List<String> sources,
+			BigDecimal safetyMarginPercent, BigDecimal userLowerPriceThreshold,
+			BigDecimal userUpperPriceThreshold, List<Object> reasons, String methodology, List<String> sources,
 			LocalDate dataReferenceDate, List<String> limitations, String ruleVersion, Instant createdAt) {
 	}
 
 	public record ThesisDetailResponse(ThesisSummaryResponse thesis, Map<String, Object> scoreBreakdown,
 			List<Object> reasons, List<Object> failedFilters, List<Object> reviewPoints,
 			TechnicalIndicatorResponse technicalIndicators, FundamentalResponse fundamentals,
-			AllocationPlanResponse allocationPlan, AiContextAnalysisSummaryResponse aiContext, String riskNotice) {
+			StudyReferenceResponse studyReference, AiContextAnalysisSummaryResponse aiContext, String riskNotice) {
 	}
 
 	public record AiContextAnalysisSummaryResponse(UUID analysisId, String model, String promptVersion,
@@ -541,23 +540,13 @@ public class ApiQueryService {
 		}
 	}
 
-	public record AllocationPlanResponse(UUID id, BigDecimal capitalBase,
-			BigDecimal maxAllocationPerAssetPercent, BigDecimal maxAllocationPerSectorPercent,
-			BigDecimal minimumCashReservePercent, BigDecimal maxPositionValue, BigDecimal availableForAsset,
-			BigDecimal availableForSector, BigDecimal currentPrice, BigDecimal priceCeiling,
+	public record StudyReferenceResponse(UUID id, BigDecimal currentPrice, BigDecimal studyPriceReference,
 			BigDecimal fairPriceEstimate, BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent,
-			BigDecimal firstTrancheValue, BigDecimal secondTrancheValue, BigDecimal thirdTrancheValue,
-			BigDecimal remainingPlannedValue, BigDecimal stopPrice, BigDecimal targetPrice, boolean valid,
-			String invalidReason) {
-		static AllocationPlanResponse from(AllocationPlan plan) {
-			return new AllocationPlanResponse(plan.getId(), plan.getCapitalBase(),
-					plan.getMaxAllocationPerAssetPercent(), plan.getMaxAllocationPerSectorPercent(),
-					plan.getMinimumCashReservePercent(), plan.getMaxPositionValue(), plan.getAvailableForAsset(),
-					plan.getAvailableForSector(), plan.getCurrentPrice(), plan.getPriceCeiling(),
+			BigDecimal userLowerPriceThreshold, BigDecimal userUpperPriceThreshold) {
+		static StudyReferenceResponse from(AllocationPlan plan) {
+			return new StudyReferenceResponse(plan.getId(), plan.getCurrentPrice(), plan.getPriceCeiling(),
 					plan.getFairPriceEstimate(), plan.getSafetyMarginPercent(), plan.getEstimatedUpsidePercent(),
-					plan.getFirstTrancheValue(), plan.getSecondTrancheValue(), plan.getThirdTrancheValue(),
-					plan.getRemainingPlannedValue(), plan.getStopPrice(), plan.getTargetPrice(), plan.isValid(),
-					plan.getInvalidReason());
+					plan.getStopPrice(), plan.getTargetPrice());
 		}
 	}
 
