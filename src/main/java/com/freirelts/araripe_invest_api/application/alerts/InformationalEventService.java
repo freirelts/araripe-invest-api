@@ -164,7 +164,9 @@ public class InformationalEventService {
 	}
 
 	private boolean studyAssumptionChanged(CustomerPositionThesis association, PositionThesis thesis) {
-		if (thesis.getStatus() == ThesisStatus.REAVALIAR || thesis.getStatus() == ThesisStatus.IGNORAR) {
+		if (thesis.getStatus() == ThesisStatus.PREMISSAS_ALTERADAS
+				|| thesis.getStatus() == ThesisStatus.DADOS_DESATUALIZADOS
+				|| thesis.getStatus() == ThesisStatus.DADOS_INSUFICIENTES) {
 			return true;
 		}
 		return thesis.getScore() < 60 || association.getAcceptedScore() - thesis.getScore() >= 20;

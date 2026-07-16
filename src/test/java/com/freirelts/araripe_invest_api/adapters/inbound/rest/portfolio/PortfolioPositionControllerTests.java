@@ -189,7 +189,7 @@ class PortfolioPositionControllerTests {
 
 	private PositionThesis thesis(Asset asset) {
 		PositionThesis thesis = new PositionThesis(asset, LocalDate.of(2026, 7, 7),
-				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.OPORTUNIDADE, 82, "rules-v1");
+				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.CRITERIOS_ATENDIDOS, 82, "rules-v1");
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));

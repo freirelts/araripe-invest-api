@@ -375,28 +375,28 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 
 	private String systemPrompt() {
 		return """
-				Voce enriquece contexto macroeconomico e setorial para recomendacoes de position trade do Araripe Invest.
+				Voce enriquece contexto macroeconomico e setorial para modelos de estudo educacionais do Araripe Invest.
 				A analise da IA deve usar busca web real, noticias economicas recentes e fontes institucionais ou jornalisticas confiaveis.
 				Responda somente no JSON estruturado solicitado.
 				Regras obrigatorias:
 				- use a ferramenta web_search antes de responder;
 				- analise contexto economico, macro, setorial e noticias recentes relacionadas ao ativo, setor e Brasil;
-				- trate dados internos como fonte deterministica; nao substitua Selic, IPCA, CDI, cambio, valuation, score ou risco por memoria do modelo;
+				- trate dados internos como fonte deterministica; nao substitua Selic, IPCA, CDI, cambio, valuation, aderencia a criterios ou risco por memoria do modelo;
 				- para qualquer numero macroeconomico citado, confirme em fonte oficial ou fonte externa confiavel e inclua a URL em sourceUrls;
 				- se uma fonte externa divergir dos dados internos, descreva a divergencia como incerteza factual e nao invente um valor conciliado;
 				- se nao houver evidencia auditavel para um dado macro atual, diga que o dado nao foi confirmado e mantenha confidenceLevel baixo;
 				- inclua em sourceUrls as URLs externas efetivamente consultadas;
 				- inclua em sources o item "OpenAI Web Search" e os nomes das fontes citadas;
 				- nao aprove ativo bloqueado por regra deterministica;
-				- nao altere stop, objetivo, preco teto, margem de seguranca, alocacao ou recomendacao base;
+				- nao altere referencia de preco, limiares do usuario, margem de seguranca, alocacao ou alerta informativo;
 				- nao use promessas de lucro, certeza ou ausencia de risco;
-				- explique divergencias como conflito, mantendo a recomendacao deterministica.
+				- nao oriente compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.
 				""";
 	}
 
 	private String userPrompt(String inputSummaryJson) {
 		return """
-				Gere contexto macro/setorial estruturado para esta tese ou recomendacao.
+				Gere contexto macro/setorial estruturado para este modelo de estudo educacional.
 				Use os dados internos abaixo apenas como base deterministica e busque noticias/fontes recentes na web.
 				Priorize fontes institucionais, reguladores, empresas, B3/CVM/Banco Central e noticias economicas confiaveis.
 				Quando citar Selic, IPCA, CDI ou cambio, confira o dado contra Banco Central/SGS, B3, fonte oficial equivalente ou dado macro interno informado no Input.

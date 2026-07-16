@@ -60,8 +60,8 @@ class SpringMailNotificationProvider implements NotificationProvider {
 					.append(item.summary())
 					.append("\n");
 		}
-		body.append("\nEste alerta nao executa compra ou venda automaticamente. A decisao deve seguir seu plano de ")
-				.append("position trade e os pontos de reavaliacao cadastrados.\n");
+		body.append("\nEste alerta e informativo e nao recomenda compra, venda, manutencao, aumento, reducao, ")
+				.append("alocacao ou encerramento de posicao. Use-o apenas como apoio educacional.\n");
 		body.append("\nIdentificador interno: ").append(internalMessageId).append("\n");
 		return body.toString();
 	}

@@ -101,7 +101,7 @@ class PositionThesisGenerationServiceTests {
 		assertThat(positionThesisRepository.findAll()).hasSize(3);
 		assertThat(allocationPlanRepository.findAll()).hasSize(3);
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.APORTE_PLANEJADO);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.CRITERIOS_ATENDIDOS);
 			assertThat(thesis.getFairPriceEstimate()).isPositive();
 			assertThat(thesis.getPriceCeiling()).isPositive();
 			assertThat(thesis.getSafetyMarginPercent()).isGreaterThanOrEqualTo(new BigDecimal("0.150000"));
@@ -153,7 +153,7 @@ class PositionThesisGenerationServiceTests {
 		assertThat(allocationPlanRepository.findByThesisId(qualityThesis.getId())).hasValueSatisfying(plan -> {
 			assertThat(plan.isValid()).isFalse();
 			assertThat(plan.getSuggestedQuantity()).isZero();
-			assertThat(plan.getInvalidReason()).contains("preco teto");
+			assertThat(plan.getInvalidReason()).contains("referencia do estudo");
 		});
 	}
 
@@ -192,7 +192,7 @@ class PositionThesisGenerationServiceTests {
 				.findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(asset.getId(), referenceDate,
 						ThesisType.SUSTAINABLE_DIVIDENDS, PositionThesisGenerationService.RULE_VERSION)
 				.orElseThrow();
-		assertThat(dividendThesis.getStatus()).isNotEqualTo(ThesisStatus.APORTE_PLANEJADO);
+		assertThat(dividendThesis.getStatus()).isNotEqualTo(ThesisStatus.CRITERIOS_ATENDIDOS);
 		assertThat(dividendThesis.getReasonsJson()).contains("DIVIDEND_RECURRENCE_FAILED");
 	}
 
@@ -207,7 +207,7 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses)
-				.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.REDUZIR_EXPOSICAO));
+				.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS));
 	}
 
 	@Test
@@ -227,7 +227,7 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.REDUZIR_EXPOSICAO);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS);
 			assertThat(thesis.getFailedFiltersJson()).contains("STRONG_EARNINGS_DETERIORATION")
 				.doesNotContain("STRONG_REVENUE_DETERIORATION", "NEGATIVE_PROFIT_MARGIN");
 		});
@@ -247,12 +247,12 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.MONITORAR);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.EM_ESTUDO);
 			assertThat(thesis.getScore()).isGreaterThanOrEqualTo(80);
 			assertThat(thesis.getFailedFiltersJson()).contains("INSUFFICIENT_LIQUIDITY");
 			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().isValid()).isFalse();
 			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getInvalidReason())
-					.contains("Status da tese");
+					.contains("Estado do modelo de estudo");
 		});
 	}
 
@@ -272,7 +272,7 @@ class PositionThesisGenerationServiceTests {
 		assertThat(theses).hasSize(3)
 				.allSatisfy(thesis -> {
 					assertThat(thesis.getReferenceDate()).isEqualTo(referenceDate);
-					assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.APORTE_PLANEJADO);
+					assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.CRITERIOS_ATENDIDOS);
 					assertThat(thesis.getFailedFiltersJson()).isEqualTo("[]");
 				});
 	}

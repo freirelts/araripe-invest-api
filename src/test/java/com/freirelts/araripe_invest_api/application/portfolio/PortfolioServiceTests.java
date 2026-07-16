@@ -159,7 +159,7 @@ class PortfolioServiceTests {
 		Asset asset = assetRepository.saveAndFlush(new Asset("BBAS3", "Banco do Brasil", "Financeiro"));
 		var position = portfolioService.createPosition(customer.getId(), input(asset, "100", "27.00"));
 		PositionThesis ignoredThesis = thesisRepository.saveAndFlush(thesis(asset, LocalDate.of(2026, 7, 7),
-				ThesisType.QUALITY_REASONABLE_PRICE, 55, "rules-v1", ThesisStatus.IGNORAR));
+				ThesisType.QUALITY_REASONABLE_PRICE, 55, "rules-v1", ThesisStatus.DADOS_INSUFICIENTES));
 			PositionThesis dataBlockedThesis = thesis(asset, LocalDate.of(2026, 7, 8),
 					ThesisType.SUSTAINABLE_DIVIDENDS, 75, "rules-v1");
 			dataBlockedThesis.setFailedFiltersJson("[{\"code\":\"DATA_QUALITY_BLOCKED\"}]");
@@ -241,7 +241,7 @@ class PortfolioServiceTests {
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,
 			String ruleVersion) {
-		return thesis(asset, referenceDate, thesisType, score, ruleVersion, ThesisStatus.OPORTUNIDADE);
+		return thesis(asset, referenceDate, thesisType, score, ruleVersion, ThesisStatus.CRITERIOS_ATENDIDOS);
 	}
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,

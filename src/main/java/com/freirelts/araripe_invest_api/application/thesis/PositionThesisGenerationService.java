@@ -150,7 +150,7 @@ public class PositionThesisGenerationService {
 		score += addReason(reasons, debtControlled, 10, "risco", "QUALITY_DEBT",
 				"Divida/patrimonio dentro do limite conservador da tese.");
 		score += addReason(reasons, valuationReasonable && valuationComplete, 16, "valuation", "QUALITY_VALUATION",
-				"Multiplos e preco teto indicam valuation razoavel para a qualidade observada.");
+				"Multiplos e referencia de preco do estudo indicam valuation razoavel para a qualidade observada.");
 		score += addReason(reasons, trendAcceptable, 10, "tecnico", "QUALITY_TREND",
 				"Tendencia longa saudavel ou neutra evita tese contra deterioracao estrutural.");
 
@@ -318,8 +318,7 @@ public class PositionThesisGenerationService {
 		AllocationPlan plan = allocationPlanRepository.findByThesisId(thesis.getId())
 				.orElseGet(() -> new AllocationPlan(thesis));
 
-		// O plano persistido guarda os limites usados para auditoria: teto por ativo/setor, reserva de caixa,
-		// parcelas de entrada, stop, objetivo e motivo de bloqueio quando alguma regra de risco falha.
+		// O plano persistido guarda limites analiticos usados para auditoria, sem representar comando operacional.
 		plan.setThesis(thesis);
 		plan.setCapitalBase(risk.capitalBase());
 		plan.setTargetAllocationPercent(risk.targetAllocationPercent());
@@ -428,7 +427,7 @@ public class PositionThesisGenerationService {
 			ScoreResult scoreResult) {
 		if (priceCeiling != null && context.currentPrice() != null) {
 			reasons.add(new ThesisReason("valuation", "ENTRY_ZONE",
-					"Zona de entrada calculada ate o preco teto de R$ " + priceCeiling.setScale(2,
+					"Faixa de observacao do estudo calculada ate a referencia de preco de R$ " + priceCeiling.setScale(2,
 							RoundingMode.HALF_UP) + "."));
 		}
 		return new ThesisDraft(context, thesisType, status, Math.min(100, Math.max(0, score)), fairPrice, priceCeiling,
@@ -463,36 +462,35 @@ public class PositionThesisGenerationService {
 				EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION,
 				EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN,
 				EliminatoryFilterCode.LONG_TREND_DETERIORATED)) {
-			return ThesisStatus.SAIR_DA_TESE;
+			return ThesisStatus.PREMISSAS_ALTERADAS;
 		}
 		if (hasFilter(failedFilters, EliminatoryFilterCode.EXCESSIVE_DEBT,
 				EliminatoryFilterCode.EXTREME_VALUATION_WITHOUT_GROWTH,
 				EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION,
 				EliminatoryFilterCode.EXTREME_VOLATILITY)) {
-			return ThesisStatus.REDUZIR_EXPOSICAO;
+			return ThesisStatus.PREMISSAS_ALTERADAS;
 		}
-		if (hasFilter(failedFilters, EliminatoryFilterCode.DATA_QUALITY_BLOCKED,
-				EliminatoryFilterCode.MINIMUM_FUNDAMENTALS_MISSING)) {
-			return score >= 60 ? ThesisStatus.REAVALIAR : ThesisStatus.IGNORAR;
+		if (hasFilter(failedFilters, EliminatoryFilterCode.DATA_QUALITY_BLOCKED)) {
+			return ThesisStatus.DADOS_DESATUALIZADOS;
+		}
+		if (hasFilter(failedFilters, EliminatoryFilterCode.MINIMUM_FUNDAMENTALS_MISSING)) {
+			return ThesisStatus.DADOS_INSUFICIENTES;
 		}
 		if (!mandatory) {
-			return score >= 60 ? ThesisStatus.MONITORAR : ThesisStatus.IGNORAR;
+			return score >= 60 ? ThesisStatus.EM_ESTUDO : ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS;
 		}
 		if (priceCeiling != null && context.currentPrice() != null
 				&& context.currentPrice().compareTo(priceCeiling.multiply(PRICE_REVIEW_PREMIUM)) > 0) {
-			return ThesisStatus.REAVALIAR;
+			return ThesisStatus.PREMISSAS_ALTERADAS;
 		}
 		if (hasFilter(failedFilters, EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY,
 				EliminatoryFilterCode.PRICE_BELOW_MINIMUM)) {
-			return score >= 60 ? ThesisStatus.MONITORAR : ThesisStatus.IGNORAR;
-		}
-		if (priceAttractive && score >= 80) {
-			return ThesisStatus.APORTE_PLANEJADO;
+			return score >= 60 ? ThesisStatus.EM_ESTUDO : ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS;
 		}
 		if (priceAttractive && score >= 70) {
-			return ThesisStatus.OPORTUNIDADE;
+			return ThesisStatus.CRITERIOS_ATENDIDOS;
 		}
-		return score >= 60 ? ThesisStatus.MONITORAR : ThesisStatus.IGNORAR;
+		return score >= 60 ? ThesisStatus.EM_ESTUDO : ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS;
 	}
 
 	private boolean hasFilter(List<EliminatoryFilterReason> failedFilters, EliminatoryFilterCode... codes) {

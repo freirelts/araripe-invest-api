@@ -62,11 +62,11 @@ public class RiskAllocationService {
 			return "Preco atual indisponivel ou invalido para calcular alocacao.";
 		}
 		if (!positive(input.priceCeiling())) {
-			return "Preco teto indisponivel para validar novo aporte.";
+			return "Referencia de preco do estudo indisponivel para validar o plano analitico.";
 		}
-		// Preco acima do teto bloqueia novo aporte: a empresa pode continuar monitorada, mas nao ha margem de seguranca.
+		// Preco acima da referencia bloqueia o plano analitico, mas nao gera comando operacional.
 		if (input.currentPrice().compareTo(input.priceCeiling()) > 0) {
-			return "Preco atual acima do preco teto; novo aporte bloqueado por valuation.";
+			return "Preco atual acima da referencia do estudo; plano analitico bloqueado por valuation.";
 		}
 		if (input.safetyMargin() == null
 				|| toPercent(input.safetyMargin()).compareTo(settings.minimumSafetyMarginPercent()) < 0) {
@@ -76,20 +76,19 @@ public class RiskAllocationService {
 		if (allocatableValue.compareTo(BigDecimal.ZERO) <= 0) {
 			return "Exposicao atual ja atingiu o limite por ativo, setor ou capital disponivel.";
 		}
-		if (input.thesisStatus() != ThesisStatus.APORTE_PLANEJADO
-				&& input.thesisStatus() != ThesisStatus.OPORTUNIDADE) {
-			return "Status da tese nao permite novo aporte planejado.";
+		if (input.thesisStatus() != ThesisStatus.CRITERIOS_ATENDIDOS) {
+			return "Estado do modelo de estudo nao atende todos os criterios analiticos.";
 		}
-		// Drawdown, perda de tendencia ou deterioracao fundamental exigem reavaliacao antes de aumentar posicao.
+		// Drawdown, perda de tendencia ou deterioracao fundamental alteram premissas do estudo.
 		if (input.fundamentalsDeteriorated()) {
-			return "Fundamentos deterioraram e exigem reavaliacao da tese.";
+			return "Fundamentos deterioraram e alteraram premissas do modelo de estudo.";
 		}
 		if (input.trendStatus() == TrendStatus.DOWN_TREND || input.trendStatus() == TrendStatus.DETERIORATING) {
-			return "Tendencia longa deteriorou e exige reavaliacao da posicao.";
+			return "Tendencia longa deteriorou e alterou premissas do modelo de estudo.";
 		}
 		if (input.recentDrawdown() != null
 				&& input.recentDrawdown().compareTo(percent(settings.toleratedDrawdownPercent()).negate()) <= 0) {
-			return "Drawdown recente superou o limite tolerado e exige reavaliacao.";
+			return "Drawdown recente superou o limite analitico definido para o estudo.";
 		}
 		return null;
 	}
@@ -98,8 +97,9 @@ public class RiskAllocationService {
 		if (valid) {
 			return input.thesisStatus().name();
 		}
-		if (invalidReason != null && invalidReason.contains("reavaliacao")) {
-			return ThesisStatus.REAVALIAR.name();
+		if (invalidReason != null && (invalidReason.contains("alterou premissas")
+				|| invalidReason.contains("superou o limite analitico"))) {
+			return ThesisStatus.PREMISSAS_ALTERADAS.name();
 		}
 		return "BLOQUEADO";
 	}

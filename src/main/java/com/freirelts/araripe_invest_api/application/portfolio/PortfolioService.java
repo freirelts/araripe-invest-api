@@ -234,8 +234,9 @@ public class PortfolioService {
 	}
 
 	private void validateAssociableThesis(PositionThesis thesis) {
-		if (thesis.getStatus() != ThesisStatus.MONITORAR && thesis.getStatus() != ThesisStatus.OPORTUNIDADE
-				&& thesis.getStatus() != ThesisStatus.APORTE_PLANEJADO) {
+		if (thesis.getStatus() != ThesisStatus.EM_ESTUDO
+				&& thesis.getStatus() != ThesisStatus.CRITERIOS_ATENDIDOS
+				&& thesis.getStatus() != ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
 					"Only monitorable study models can be accompanied.");
 		}

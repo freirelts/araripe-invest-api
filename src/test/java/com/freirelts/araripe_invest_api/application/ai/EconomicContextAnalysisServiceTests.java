@@ -150,7 +150,7 @@ class EconomicContextAnalysisServiceTests {
 	void rejectsThesisWithoutMinimumSnapshots() {
 		Asset asset = assetRepository.saveAndFlush(new Asset("RADL3", "Raia Drogasil", "Saude"));
 		PositionThesis thesis = new PositionThesis(asset, LocalDate.of(2026, 7, 9),
-				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.OPORTUNIDADE, 82, "test-rule-v1");
+				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.CRITERIOS_ATENDIDOS, 82, "test-rule-v1");
 		thesis.setPriceCeiling(new java.math.BigDecimal("24.00"));
 		thesis.setFairPriceEstimate(new java.math.BigDecimal("28.00"));
 		thesis.setSafetyMarginPercent(new java.math.BigDecimal("12.50"));
@@ -167,7 +167,7 @@ class EconomicContextAnalysisServiceTests {
 	private PositionThesis thesis(String symbol, String name) {
 		Asset asset = assetRepository.saveAndFlush(new Asset(symbol, name, "Bens Industriais"));
 		PositionThesis thesis = new PositionThesis(asset, LocalDate.of(2026, 7, 9),
-				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.OPORTUNIDADE, 82, "test-rule-v1");
+				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.CRITERIOS_ATENDIDOS, 82, "test-rule-v1");
 		thesis.setPriceCeiling(new java.math.BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new java.math.BigDecimal("48.00"));
 		thesis.setSafetyMarginPercent(new java.math.BigDecimal("12.50"));

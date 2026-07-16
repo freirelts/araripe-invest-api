@@ -191,18 +191,23 @@ class Phase10ApiControllerTests {
 		String adminToken = login(admin, "senha-phase10-admin-123");
 		String otherToken = login(other, "senha-phase10-other-123");
 
-		mockMvc.perform(get("/api/v1/theses/ranking?date=2026-07-07"))
+		mockMvc.perform(get("/api/v1/screener?date=2026-07-07"))
 				.andExpect(status().isUnauthorized());
 
 		mockMvc.perform(get("/api/v1/assets").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].symbol").value("WEGE3"));
 
-		mockMvc.perform(get("/api/v1/theses/ranking?date=2026-07-07").header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/screener?date=2026-07-07&sortBy=CRITERIA_ADHERENCE_SCORE&direction=DESC")
+						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
-				.andExpect(jsonPath("$[0].score").value(82))
-				.andExpect(jsonPath("$[0].priceCeiling").value(42.0));
+				.andExpect(jsonPath("$[0].criteriaAdherenceScore").value(82))
+				.andExpect(jsonPath("$[0].scoreLabel").value("Aderencia a criterios do estudo"))
+				.andExpect(jsonPath("$[0].studyPriceReference").value(42.0))
+				.andExpect(jsonPath("$[0].methodology").isString())
+				.andExpect(jsonPath("$[0].sources[0]").value("brapi"))
+				.andExpect(jsonPath("$[0].limitations[0]").value("Conteudo educacional e informativo."));
 
 		mockMvc.perform(get("/api/v1/theses/{thesisId}", thesis.getId()).header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
@@ -274,7 +279,7 @@ class Phase10ApiControllerTests {
 		mockMvc.perform(get("/api/v1/jobs/status?date=2026-07-07").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.collectionRecords[0].category").value("DAILY_HISTORY"))
-				.andExpect(jsonPath("$.jobRuns[0].jobName").value("RANKING"));
+				.andExpect(jsonPath("$.jobRuns[0].jobName").value("SCREENER"));
 
 		String aiResponse = mockMvc.perform(post("/api/v1/admin/ai/context-analyses")
 						.header("Authorization", bearer(adminToken))
@@ -327,13 +332,13 @@ class Phase10ApiControllerTests {
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate) {
 		PositionThesis thesis = new PositionThesis(asset, referenceDate, ThesisType.QUALITY_REASONABLE_PRICE,
-				ThesisStatus.OPORTUNIDADE, 82, PositionThesisGenerationService.RULE_VERSION);
+				ThesisStatus.CRITERIOS_ATENDIDOS, 82, PositionThesisGenerationService.RULE_VERSION);
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));
 		thesis.setStopPrice(new BigDecimal("34.00"));
 		thesis.setTargetPrice(new BigDecimal("52.00"));
-		thesis.setReasonsJson("[\"Fundamentos consistentes e preco dentro da zona de entrada.\"]");
+		thesis.setReasonsJson("[\"Fundamentos consistentes e preco dentro da faixa de observacao do estudo.\"]");
 		thesis.setScoreBreakdownJson("{\"quality\":30,\"valuation\":18}");
 		thesis.setReviewPointsJson("[\"Reavaliar se perder tendencia longa.\"]");
 		return thesis;
@@ -420,7 +425,7 @@ class Phase10ApiControllerTests {
 		record.setStatus(DataCollectionStatus.SUCCESS);
 		dataCollectionRecordRepository.saveAndFlush(record);
 
-		JobRun run = new JobRun(JobName.RANKING, referenceDate, JobRunTrigger.MANUAL, requester,
+		JobRun run = new JobRun(JobName.SCREENER, referenceDate, JobRunTrigger.MANUAL, requester,
 				"{\"referenceDate\":\"2026-07-07\"}");
 		run.setStatus(JobRunStatus.SUCCESS);
 		run.setCompletedAt(Instant.now());

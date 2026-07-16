@@ -94,7 +94,7 @@ class InformationalEventServiceTests {
 	@Test
 	void priceThresholdReachedCreatesOnlyFactualInformationalAlert() {
 		Scenario scenario = scenario("threshold@araripe.test", "WEGE3", "38.40", "33.00", "48.00", "32.90",
-				DataQualityStatus.VALID, ThesisStatus.OPORTUNIDADE, 82);
+				DataQualityStatus.VALID, ThesisStatus.CRITERIOS_ATENDIDOS, 82);
 
 		InformationalEventSummary summary = service.scanPosition(scenario.position().getId(), REFERENCE_DATE)
 				.orElseThrow();
@@ -110,7 +110,7 @@ class InformationalEventServiceTests {
 	@Test
 	void invalidExternalPriceDataCreatesQualityBlockOnly() {
 		Scenario scenario = scenario("bad-source@araripe.test", "VALE3", "60.00", "51.00", "75.00", "62.00",
-				DataQualityStatus.INCOMPLETE, ThesisStatus.OPORTUNIDADE, 88);
+				DataQualityStatus.INCOMPLETE, ThesisStatus.CRITERIOS_ATENDIDOS, 88);
 
 		InformationalEventSummary summary = service.scanPosition(scenario.position().getId(), REFERENCE_DATE)
 				.orElseThrow();
@@ -127,7 +127,7 @@ class InformationalEventServiceTests {
 		User user = saveCustomer("stale-study@araripe.test");
 		Asset asset = assetRepository.saveAndFlush(new Asset("KLBN11", "Klabin", "Materiais Basicos"));
 		CustomerPosition position = savePosition(user, asset, "10", "20.00", "10.00", "100.00");
-		PositionThesis oldThesis = saveThesis(asset, REFERENCE_DATE.minusDays(10), ThesisStatus.OPORTUNIDADE, 84);
+		PositionThesis oldThesis = saveThesis(asset, REFERENCE_DATE.minusDays(10), ThesisStatus.CRITERIOS_ATENDIDOS, 84);
 		positionThesisRepository.saveAndFlush(new CustomerPositionThesis(user, position, oldThesis,
 				position.getAveragePrice()));
 		saveCandle(asset, "21.00", DataQualityStatus.VALID);
@@ -142,7 +142,7 @@ class InformationalEventServiceTests {
 	@Test
 	void changedStudyIndicatorsCreateAssumptionChangedEventWithoutOperationalText() {
 		Scenario scenario = scenario("assumption@araripe.test", "TAEE11", "35.00", "30.00", "45.00", "36.00",
-				DataQualityStatus.VALID, ThesisStatus.REAVALIAR, 58);
+				DataQualityStatus.VALID, ThesisStatus.PREMISSAS_ALTERADAS, 58);
 
 		InformationalEventSummary summary = service.scanPosition(scenario.position().getId(), REFERENCE_DATE)
 				.orElseThrow();
@@ -155,7 +155,7 @@ class InformationalEventServiceTests {
 	@Test
 	void informationalAlertIsIdempotentByUserAssetPositionDateEventTypeRuleVersionAndSource() {
 		Scenario scenario = scenario("idempotent@araripe.test", "VIVT3", "48.00", "42.00", "60.00", "41.90",
-				DataQualityStatus.VALID, ThesisStatus.OPORTUNIDADE, 82);
+				DataQualityStatus.VALID, ThesisStatus.CRITERIOS_ATENDIDOS, 82);
 
 		InformationalEventSummary first = service.scanPosition(scenario.position().getId(), REFERENCE_DATE)
 				.orElseThrow();
@@ -181,7 +181,7 @@ class InformationalEventServiceTests {
 		User user = saveCustomer(email);
 		Asset asset = assetRepository.saveAndFlush(new Asset(symbol, symbol + " S.A.", "Financeiro"));
 		CustomerPosition position = savePosition(user, asset, "10", averagePrice, lowerThreshold, upperThreshold);
-		PositionThesis acceptedThesis = saveThesis(asset, REFERENCE_DATE.minusDays(1), ThesisStatus.OPORTUNIDADE, 82);
+		PositionThesis acceptedThesis = saveThesis(asset, REFERENCE_DATE.minusDays(1), ThesisStatus.CRITERIOS_ATENDIDOS, 82);
 		PositionThesis currentThesis = saveThesis(asset, REFERENCE_DATE, thesisStatus, score);
 		CustomerPositionThesis association = positionThesisRepository.saveAndFlush(new CustomerPositionThesis(user,
 				position, acceptedThesis, position.getAveragePrice()));

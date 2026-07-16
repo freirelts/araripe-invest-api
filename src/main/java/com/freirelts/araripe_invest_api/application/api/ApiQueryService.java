@@ -61,6 +61,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -125,11 +126,24 @@ public class ApiQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<ThesisSummaryResponse> ranking(LocalDate referenceDate) {
+	public List<ThesisSummaryResponse> legacyScreener(LocalDate referenceDate) {
+		return screener(referenceDate, ScreenerSortBy.ASSET_SYMBOL, SortDirection.ASC);
+	}
+
+	@Transactional(readOnly = true)
+	public List<ThesisSummaryResponse> screener(LocalDate referenceDate, ScreenerSortBy sortBy,
+			SortDirection direction) {
+		ScreenerSortBy effectiveSort = sortBy == null ? ScreenerSortBy.ASSET_SYMBOL : sortBy;
+		SortDirection effectiveDirection = direction == null ? SortDirection.ASC : direction;
+		Comparator<PositionThesis> comparator = comparator(effectiveSort);
+		if (effectiveDirection == SortDirection.DESC) {
+			comparator = comparator.reversed();
+		}
 		return thesisRepository
-				.findByReferenceDateAndRuleVersionOrderByScoreDesc(effectiveDate(referenceDate),
+				.findByReferenceDateAndRuleVersion(effectiveDate(referenceDate),
 						PositionThesisGenerationService.RULE_VERSION)
 				.stream()
+				.sorted(comparator.thenComparing(thesis -> thesis.getId().toString()))
 				.map(thesis -> thesisSummary(thesis, allocationPlanRepository.findByThesisId(thesis.getId()).orElse(null)))
 				.toList();
 	}
@@ -277,10 +291,40 @@ public class ApiQueryService {
 	private ThesisSummaryResponse thesisSummary(PositionThesis thesis, AllocationPlan allocationPlan) {
 		Asset asset = thesis.getAsset();
 		return new ThesisSummaryResponse(thesis.getId(), AssetResponse.from(asset), thesis.getReferenceDate(),
-				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), thesis.getPriceCeiling(),
+				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), "Aderencia a criterios do estudo",
+				thesis.getPriceCeiling(),
 				thesis.getFairPriceEstimate(), percent(thesis.getSafetyMarginPercent()), thesis.getStopPrice(),
 				thesis.getTargetPrice(), allocationPlan == null ? null : allocationPlan.isValid(),
-				list(thesis.getReasonsJson()), thesis.getRuleVersion(), thesis.getCreatedAt());
+				list(thesis.getReasonsJson()), methodology(), sources(), thesis.getReferenceDate(), limitations(),
+				thesis.getRuleVersion(), thesis.getCreatedAt());
+	}
+
+	private Comparator<PositionThesis> comparator(ScreenerSortBy sortBy) {
+		return switch (sortBy) {
+			case ASSET_SYMBOL -> Comparator.comparing(thesis -> thesis.getAsset().getSymbol(),
+					String.CASE_INSENSITIVE_ORDER);
+			case UPDATED_AT -> Comparator.comparing(PositionThesis::getCreatedAt);
+			case CRITERIA_ADHERENCE_SCORE -> Comparator.comparingInt(PositionThesis::getScore);
+			case SAFETY_MARGIN -> Comparator.comparing(PositionThesis::getSafetyMarginPercent,
+					Comparator.nullsLast(BigDecimal::compareTo));
+			case STATUS -> Comparator.comparing(thesis -> thesis.getStatus().name());
+			case STUDY_TYPE -> Comparator.comparing(thesis -> thesis.getThesisType().name());
+		};
+	}
+
+	private String methodology() {
+		return "Pontuacao deterministica de 0 a 100 que mede aderencia aos criterios do modelo de estudo, "
+				+ "com filtros obrigatorios, valuation educacional, risco analitico e trilha de auditoria.";
+	}
+
+	private List<String> sources() {
+		return List.of(COLLECTOR_FUNDAMENTAL_SOURCE, DERIVED_FUNDAMENTAL_SOURCE, "araripe-rules");
+	}
+
+	private List<String> limitations() {
+		return List.of("Conteudo educacional e informativo.",
+				"Nao recomenda compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.",
+				"Dados incompletos, desatualizados ou inconsistentes bloqueiam modelos de estudo e alertas informativos.");
 	}
 
 	private RecommendationResponse recommendationResponse(PositionRecommendation recommendation) {
@@ -407,10 +451,26 @@ public class ApiQueryService {
 		}
 	}
 
+	public enum ScreenerSortBy {
+		ASSET_SYMBOL,
+		UPDATED_AT,
+		CRITERIA_ADHERENCE_SCORE,
+		SAFETY_MARGIN,
+		STATUS,
+		STUDY_TYPE
+	}
+
+	public enum SortDirection {
+		ASC,
+		DESC
+	}
+
 	public record ThesisSummaryResponse(UUID id, AssetResponse asset, LocalDate referenceDate, ThesisType thesisType,
-			ThesisStatus status, int score, BigDecimal priceCeiling, BigDecimal fairPriceEstimate,
+			ThesisStatus status, int criteriaAdherenceScore, String scoreLabel, BigDecimal studyPriceReference,
+			BigDecimal fairPriceEstimate,
 			BigDecimal safetyMarginPercent, BigDecimal stopPrice, BigDecimal targetPrice,
-			Boolean allocationValid, List<Object> reasons, String ruleVersion, Instant createdAt) {
+			Boolean allocationValid, List<Object> reasons, String methodology, List<String> sources,
+			LocalDate dataReferenceDate, List<String> limitations, String ruleVersion, Instant createdAt) {
 	}
 
 	public record ThesisDetailResponse(ThesisSummaryResponse thesis, Map<String, Object> scoreBreakdown,

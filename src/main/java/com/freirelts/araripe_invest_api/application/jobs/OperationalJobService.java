@@ -30,6 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -112,7 +113,7 @@ public class OperationalJobService {
 			case INDICATOR_CALCULATION -> count("indicatorResults",
 					() -> indicatorCalculationService.calculateForActiveAssets(referenceDate).size());
 			case FILTERS_AND_THESES -> filtersAndTheses(referenceDate);
-			case RANKING -> ranking(referenceDate);
+			case SCREENER -> screener(referenceDate);
 			case PORTFOLIO_SCAN -> count("informationalEvents",
 					() -> informationalEventService.scanOpenPositions(referenceDate).size());
 			case DAILY_NOTIFICATION_DIGEST -> notificationDigest(referenceDate);
@@ -127,7 +128,7 @@ public class OperationalJobService {
 		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses
 		// e varredura de carteira antes de qualquer notificacao.
 		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
-				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
+				JobName.FILTERS_AND_THESES, JobName.SCREENER, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
 		log.info("Daily operational flow started for referenceDate={} steps={}", referenceDate, orderedSteps.size());
 		for (JobName step : orderedSteps) {
 			log.info("Daily operational flow executing step={} referenceDate={}", step, referenceDate);
@@ -180,25 +181,25 @@ public class OperationalJobService {
 		log.info("Running screening filters for referenceDate={}", referenceDate);
 		int diagnostics = assetScreeningService.screenActiveAssets(referenceDate).size();
 		log.info("Screening filters finished for referenceDate={} diagnostics={}", referenceDate, diagnostics);
-		log.info("Generating position trade theses for referenceDate={}", referenceDate);
+		log.info("Generating study models for referenceDate={}", referenceDate);
 		int theses = thesisGenerationService.generateForActiveAssets(referenceDate).size();
-		log.info("Position trade theses generated for referenceDate={} thesesGenerated={}", referenceDate, theses);
+		log.info("Study models generated for referenceDate={} thesesGenerated={}", referenceDate, theses);
 		return Map.of("screeningDiagnostics", diagnostics, "thesesGenerated", theses);
 	}
 
-	private Map<String, Object> ranking(LocalDate referenceDate) {
-		log.info("Building thesis ranking for referenceDate={} ruleVersion={}", referenceDate,
+	private Map<String, Object> screener(LocalDate referenceDate) {
+		log.info("Building thesis screener for referenceDate={} ruleVersion={}", referenceDate,
 				PositionThesisGenerationService.RULE_VERSION);
-		List<PositionThesis> ranking = positionThesisRepository
-				.findByReferenceDateAndRuleVersionOrderByScoreDesc(referenceDate,
-						PositionThesisGenerationService.RULE_VERSION);
-		List<String> topSymbols = ranking.stream()
+		List<PositionThesis> studyModels = positionThesisRepository
+				.findByReferenceDateAndRuleVersion(referenceDate, PositionThesisGenerationService.RULE_VERSION);
+		List<String> sampleSymbols = studyModels.stream()
+				.sorted(Comparator.comparing(thesis -> thesis.getAsset().getSymbol(), String.CASE_INSENSITIVE_ORDER))
 				.limit(10)
 				.map(thesis -> thesis.getAsset().getSymbol())
 				.toList();
-		log.info("Thesis ranking finished for referenceDate={} rankedTheses={} topSymbols={}", referenceDate,
-				ranking.size(), topSymbols);
-		return Map.of("rankedTheses", ranking.size(), "topSymbols", topSymbols);
+		log.info("Thesis screener finished for referenceDate={} screenedStudyModels={} sampleSymbols={}", referenceDate,
+				studyModels.size(), sampleSymbols);
+		return Map.of("screenedStudyModels", studyModels.size(), "sampleSymbols", sampleSymbols);
 	}
 
 	private Map<String, Object> notificationDigest(LocalDate referenceDate) {

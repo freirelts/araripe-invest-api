@@ -201,7 +201,7 @@ class OperationalJobServiceTests {
 
 		assertThat(result.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(steps).extracting(step -> step.get("jobName")).containsExactly("DAILY_MARKET_DATA_COLLECTION",
-				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "RANKING", "PORTFOLIO_SCAN", "DAILY_NOTIFICATION_DIGEST");
+				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "SCREENER", "PORTFOLIO_SCAN", "DAILY_NOTIFICATION_DIGEST");
 		verify(marketDataCollectionService, times(1)).collectActiveAssetData(DEFAULT_MACRO_SLUGS);
 	}
 
@@ -250,20 +250,20 @@ class OperationalJobServiceTests {
 	}
 
 	@Test
-	void rankingJobIsAuditedAndCanBeRerunWithoutDuplicatingFinancialRecords() {
+	void screenerJobIsAuditedAndCanBeRerunWithoutDuplicatingFinancialRecords() {
 		User admin = saveAdmin();
 		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG ON", "Industrial"));
 		thesisRepository.saveAndFlush(new PositionThesis(asset, REFERENCE_DATE,
-				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.OPORTUNIDADE, 82,
+				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.CRITERIOS_ATENDIDOS, 82,
 				PositionThesisGenerationService.RULE_VERSION));
 
-		JobRunResult first = service.execute(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
-		JobRunResult second = service.execute(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
+		JobRunResult first = service.execute(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
+		JobRunResult second = service.execute(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
 
 		assertThat(first.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(second.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(second.runId()).isNotEqualTo(first.runId());
-		assertThat(second.summary()).containsEntry("rankedTheses", 1);
+		assertThat(second.summary()).containsEntry("screenedStudyModels", 1);
 		assertThat(thesisRepository.findAll()).hasSize(1);
 		assertThat(jobRunRepository.findByReferenceDateOrderByStartedAtDesc(REFERENCE_DATE)).hasSize(2);
 	}
@@ -271,10 +271,10 @@ class OperationalJobServiceTests {
 	@Test
 	void runningJobForSameNameAndDateBlocksConflictingExecution() {
 		User admin = saveAdmin();
-		jobRunRepository.saveAndFlush(new JobRun(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin,
+		jobRunRepository.saveAndFlush(new JobRun(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin,
 				"{\"referenceDate\":\"2026-07-07\"}"));
 
-		assertThatThrownBy(() -> service.execute(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId()))
+		assertThatThrownBy(() -> service.execute(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId()))
 				.isInstanceOf(ResponseStatusException.class)
 				.hasMessageContaining("409 CONFLICT");
 	}

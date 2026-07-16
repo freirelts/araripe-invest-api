@@ -49,7 +49,7 @@ class RiskAllocationServiceTests {
 		assertThat(result.valid()).isFalse();
 		assertThat(result.suggestedQuantity()).isZero();
 		assertThat(result.recommendedAction()).isEqualTo("BLOQUEADO");
-		assertThat(result.invalidReason()).contains("preco teto");
+		assertThat(result.invalidReason()).contains("referencia do estudo");
 	}
 
 	@Test
@@ -90,7 +90,7 @@ class RiskAllocationServiceTests {
 				.build());
 
 		assertThat(drawdown.valid()).isFalse();
-		assertThat(drawdown.recommendedAction()).isEqualTo(ThesisStatus.REAVALIAR.name());
+		assertThat(drawdown.recommendedAction()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS.name());
 		assertThat(trend.invalidReason()).contains("Tendencia longa");
 		assertThat(fundamentals.invalidReason()).contains("Fundamentos");
 	}
@@ -98,7 +98,7 @@ class RiskAllocationServiceTests {
 	private RiskAllocationInputBuilder validInputBuilder() {
 		return new RiskAllocationInputBuilder()
 				.settings(RiskAllocationSettings.conservativeDefault())
-				.thesisStatus(ThesisStatus.APORTE_PLANEJADO)
+				.thesisStatus(ThesisStatus.CRITERIOS_ATENDIDOS)
 				.currentPrice(new BigDecimal("25.00"))
 				.fairPriceEstimate(new BigDecimal("32.00"))
 				.priceCeiling(new BigDecimal("27.20"))

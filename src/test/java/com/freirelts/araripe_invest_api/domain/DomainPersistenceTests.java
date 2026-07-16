@@ -376,7 +376,7 @@ class DomainPersistenceTests {
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,
 			String ruleVersion) {
-		PositionThesis thesis = new PositionThesis(asset, referenceDate, thesisType, ThesisStatus.OPORTUNIDADE, score,
+		PositionThesis thesis = new PositionThesis(asset, referenceDate, thesisType, ThesisStatus.CRITERIOS_ATENDIDOS, score,
 				ruleVersion);
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));

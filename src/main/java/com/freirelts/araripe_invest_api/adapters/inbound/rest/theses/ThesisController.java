@@ -1,6 +1,8 @@
 package com.freirelts.araripe_invest_api.adapters.inbound.rest.theses;
 
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService;
+import com.freirelts.araripe_invest_api.application.api.ApiQueryService.ScreenerSortBy;
+import com.freirelts.araripe_invest_api.application.api.ApiQueryService.SortDirection;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService.ThesisDetailResponse;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService.ThesisSummaryResponse;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -25,11 +27,11 @@ class ThesisController {
 	}
 
 	@GetMapping("/ranking")
-	List<ThesisSummaryResponse> ranking(
+	List<ThesisSummaryResponse> legacyScreener(
 			@RequestParam(required = false)
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
 			LocalDate date) {
-		return apiQueryService.ranking(date);
+		return apiQueryService.legacyScreener(date);
 	}
 
 	@GetMapping("/{thesisId}")
@@ -46,5 +48,28 @@ class ThesisController {
 			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
 			LocalDate to) {
 		return apiQueryService.thesisHistory(symbol, from, to);
+	}
+}
+
+@RestController
+@RequestMapping("/api/v1/screener")
+class ScreenerController {
+
+	private final ApiQueryService apiQueryService;
+
+	ScreenerController(ApiQueryService apiQueryService) {
+		this.apiQueryService = apiQueryService;
+	}
+
+	@GetMapping
+	List<ThesisSummaryResponse> screener(
+			@RequestParam(required = false)
+			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+			LocalDate date,
+			@RequestParam(required = false)
+			ScreenerSortBy sortBy,
+			@RequestParam(required = false)
+			SortDirection direction) {
+		return apiQueryService.screener(date, sortBy, direction);
 	}
 }

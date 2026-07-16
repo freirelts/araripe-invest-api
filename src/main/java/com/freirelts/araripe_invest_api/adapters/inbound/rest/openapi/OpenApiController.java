@@ -25,9 +25,11 @@ class OpenApiController {
 		add(paths, "/api/v1/auth/register", "post", "Cadastro de usuario CUSTOMER.");
 		add(paths, "/api/v1/auth/login", "post", "Login com JWT assinado.");
 		add(paths, "/api/v1/auth/me", "get", "Usuario autenticado.");
-		add(paths, "/api/v1/theses/ranking", "get", "Ranking diario de teses com score, valuation e risco.");
+		add(paths, "/api/v1/screener", "get",
+				"Screener de modelos de estudo ordenavel por criterio escolhido pelo usuario.");
+		add(paths, "/api/v1/theses/ranking", "get", "Alias legado do screener, sem ordenacao padrao por score.");
 		add(paths, "/api/v1/theses/{thesisId}", "get",
-				"Detalhe da tese com filtros, score, fundamentos, alocacao e contexto de IA validado quando existir.");
+				"Detalhe da tese com filtros, aderencia a criterios, fundamentos, alocacao e contexto de IA validado quando existir.");
 		add(paths, "/api/v1/theses/history", "get", "Historico de teses por ativo.");
 		add(paths, "/api/v1/assets", "get", "Ativos monitorados ativos.");
 		add(paths, "/api/v1/assets/{symbol}/fundamentals", "get",
@@ -95,9 +97,12 @@ class OpenApiController {
 					"sources", List.of("OpenAI Web Search"), "tokenUsage",
 					Map.of("inputTokens", 1200, "outputTokens", 450, "totalTokens", 1650, "reasoningTokens", 300));
 		}
-		if (path.contains("theses")) {
-			return Map.of("status", "OPORTUNIDADE", "score", 82, "priceCeiling", 42.0,
-					"failedFilters", List.of());
+		if (path.contains("screener") || path.contains("theses")) {
+			return Map.of("status", "CRITERIOS_ATENDIDOS", "criteriaAdherenceScore", 82,
+					"scoreLabel", "Aderencia a criterios do estudo", "studyPriceReference", 42.0,
+					"methodology", "Pontuacao deterministica de aderencia aos criterios do estudo.",
+					"sources", List.of("brapi", "araripe-indicators", "araripe-rules"),
+					"limitations", List.of("Conteudo educacional e informativo."), "failedFilters", List.of());
 		}
 		return Map.of("status", "OK");
 	}
