@@ -43,8 +43,9 @@ class OpenApiController {
 		add(paths, "/api/v1/portfolio/positions/{positionId}/close", "patch", "Encerra posicao mantendo historico.");
 		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "post", "Associa tese principal.");
 		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "patch", "Troca tese principal.");
-		add(paths, "/api/v1/recommendations", "get", "Recomendacoes por posicao do usuario.");
-		add(paths, "/api/v1/recommendations/{recommendationId}", "get", "Detalhe de recomendacao por posicao.");
+		add(paths, "/api/v1/recommendations", "get", "Endpoint legado de registros por posicao, sem tipo operacional no DTO.");
+		add(paths, "/api/v1/recommendations/{recommendationId}", "get",
+				"Detalhe legado de registro por posicao, sem tipo operacional no DTO.");
 		add(paths, "/api/v1/notifications", "get", "Eventos de notificacao do usuario.");
 		add(paths, "/api/v1/notifications/{notificationId}/read", "patch", "Marca notificacao como lida na web.");
 		add(paths, "/api/v1/ai/context-analyses", "get", "Lista analises economicas de IA persistidas.");
@@ -83,11 +84,11 @@ class OpenApiController {
 			return Map.of("symbol", "WEGE3", "status", "APPROVED", "failedFilters", List.of());
 		}
 		if (path.contains("recommendations")) {
-			return Map.of("recommendationType", "REAVALIAR", "severity", "HIGH",
-					"deterministicReasons", List.of("Posicao exige reavaliacao por regra deterministica."));
+			return Map.of("severity", "HIGH",
+					"deterministicReasons", List.of("Indicador observado fora do intervalo de estudo."));
 		}
 		if (path.contains("notifications")) {
-			return Map.of("eventType", "REASSESSMENT_REQUIRED", "status", "PENDING", "readAt", "");
+			return Map.of("eventType", "STUDY_ASSUMPTION_CHANGED", "status", "PENDING", "readAt", "");
 		}
 		if (path.contains("context-analyses")) {
 			return Map.of("analysisId", "uuid", "validationStatus", "VALID", "processingStatus", "COMPLETED",

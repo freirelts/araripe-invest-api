@@ -148,9 +148,9 @@ class PortfolioServiceTests {
 		var associated = portfolioService.associateMainThesis(customer.getId(), position.id(),
 				sameAssetThesis.getId(), "Tese principal aceita");
 
-		assertThat(associated.mainThesis()).isNotNull();
-		assertThat(associated.mainThesis().acceptedThesisId()).isEqualTo(sameAssetThesis.getId());
-		assertThat(associated.mainThesis().thesisType()).isEqualTo(ThesisType.QUALITY_REASONABLE_PRICE);
+		assertThat(associated.accompaniedStudyModel()).isNotNull();
+		assertThat(associated.accompaniedStudyModel().acceptedThesisId()).isEqualTo(sameAssetThesis.getId());
+		assertThat(associated.accompaniedStudyModel().thesisType()).isEqualTo(ThesisType.QUALITY_REASONABLE_PRICE);
 	}
 
 	@Test
@@ -190,7 +190,7 @@ class PortfolioServiceTests {
 		var replaced = portfolioService.replaceMainThesis(customer.getId(), position.id(), second.getId(),
 				"Tese revisada pelo cliente");
 
-		assertThat(replaced.mainThesis().acceptedThesisId()).isEqualTo(second.getId());
+		assertThat(replaced.accompaniedStudyModel().acceptedThesisId()).isEqualTo(second.getId());
 		var history = positionThesisRepository.findByPositionIdOrderByCreatedAtDesc(position.id());
 		assertThat(history).hasSize(2);
 		assertThat(history).anySatisfy(association -> {

@@ -36,6 +36,7 @@ import java.util.UUID;
 @Table(name = "position_recommendations", uniqueConstraints = @UniqueConstraint(name = "uk_position_recommendations_idempotency", columnNames = {
 		"user_id", "position_id", "reference_date", "rule_version" }))
 @NoArgsConstructor
+@Deprecated(since = "2026-07-16", forRemoval = false)
 public class PositionRecommendation {
 
 	@Id

@@ -116,7 +116,7 @@ class PortfolioPositionControllerTests {
 								{"thesisId":"%s","notes":"Tese principal aceita"}
 								""".formatted(thesis.getId())))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.mainThesis.acceptedThesisId").value(thesis.getId().toString()));
+				.andExpect(jsonPath("$.accompaniedStudyModel.acceptedThesisId").value(thesis.getId().toString()));
 
 		mockMvc.perform(post("/api/v1/portfolio/positions/{positionId}/contributions", positionId)
 						.header("Authorization", bearer(token))

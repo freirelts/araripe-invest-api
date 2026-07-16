@@ -9,6 +9,7 @@ import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerat
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.assets.AssetType;
 import com.freirelts.araripe_invest_api.domain.assets.Market;
@@ -29,7 +30,6 @@ import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
 import com.freirelts.araripe_invest_api.domain.risk.UserRiskAllocationSettings;
 import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
@@ -154,7 +154,7 @@ public class ApiQueryService {
 				fundamental == null ? null : FundamentalResponse.from(fundamental),
 				allocationPlan == null ? null : AllocationPlanResponse.from(allocationPlan),
 				aiContext == null ? null : AiContextAnalysisSummaryResponse.from(aiContext, this::jsonValue),
-				"Recomendacao de position trade sujeita a risco; o sistema nao executa ordens e nao garante retorno.");
+				"Conteudo educacional e informativo; nao indica compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.");
 	}
 
 	@Transactional(readOnly = true)
@@ -279,10 +279,8 @@ public class ApiQueryService {
 		return new ThesisSummaryResponse(thesis.getId(), AssetResponse.from(asset), thesis.getReferenceDate(),
 				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), thesis.getPriceCeiling(),
 				thesis.getFairPriceEstimate(), percent(thesis.getSafetyMarginPercent()), thesis.getStopPrice(),
-				thesis.getTargetPrice(), allocationPlan == null ? null : allocationPlan.getTargetAllocationPercent(),
-				allocationPlan == null ? null : allocationPlan.getSuggestedQuantity(),
-				allocationPlan == null ? null : allocationPlan.isValid(), list(thesis.getReasonsJson()),
-				thesis.getRuleVersion(), thesis.getCreatedAt());
+				thesis.getTargetPrice(), allocationPlan == null ? null : allocationPlan.isValid(),
+				list(thesis.getReasonsJson()), thesis.getRuleVersion(), thesis.getCreatedAt());
 	}
 
 	private RecommendationResponse recommendationResponse(PositionRecommendation recommendation) {
@@ -290,12 +288,12 @@ public class ApiQueryService {
 				AssetResponse.from(recommendation.getAsset()),
 				recommendation.getCustomerPositionThesis() == null ? null : recommendation.getCustomerPositionThesis().getId(),
 				recommendation.getCurrentThesis() == null ? null : recommendation.getCurrentThesis().getId(),
-				recommendation.getThesisType(), recommendation.getReferenceDate(), recommendation.getRecommendationType(),
-				recommendation.getSeverity(), recommendation.getCurrentPrice(), recommendation.getAveragePrice(),
+				recommendation.getThesisType(), recommendation.getReferenceDate(), recommendation.getSeverity(),
+				recommendation.getCurrentPrice(), recommendation.getAveragePrice(),
 				recommendation.getStopPrice(), recommendation.getTargetPrice(), recommendation.getPriceCeiling(),
 				recommendation.getFairPriceEstimate(), recommendation.getSafetyMarginPercent(),
-				recommendation.getEstimatedUpsidePercent(), recommendation.getSuggestedQuantity(),
-				recommendation.getCurrentAssetExposureValue(), recommendation.getCurrentSectorExposureValue(),
+				recommendation.getEstimatedUpsidePercent(), recommendation.getCurrentAssetExposureValue(),
+				recommendation.getCurrentSectorExposureValue(),
 				recommendation.getCurrentTotalExposureValue(), recommendation.getAvailableForAsset(),
 				recommendation.getAvailableForSector(), recommendation.getAvailableForCash(),
 				recommendation.getAllocationValid(), recommendation.getAllocationInvalidReason(), recommendation.getScore(),
@@ -412,8 +410,7 @@ public class ApiQueryService {
 	public record ThesisSummaryResponse(UUID id, AssetResponse asset, LocalDate referenceDate, ThesisType thesisType,
 			ThesisStatus status, int score, BigDecimal priceCeiling, BigDecimal fairPriceEstimate,
 			BigDecimal safetyMarginPercent, BigDecimal stopPrice, BigDecimal targetPrice,
-			BigDecimal targetAllocationPercent, Integer suggestedQuantity, Boolean allocationValid, List<Object> reasons,
-			String ruleVersion, Instant createdAt) {
+			Boolean allocationValid, List<Object> reasons, String ruleVersion, Instant createdAt) {
 	}
 
 	public record ThesisDetailResponse(ThesisSummaryResponse thesis, Map<String, Object> scoreBreakdown,
@@ -484,23 +481,23 @@ public class ApiQueryService {
 		}
 	}
 
-	public record AllocationPlanResponse(UUID id, BigDecimal capitalBase, BigDecimal targetAllocationPercent,
+	public record AllocationPlanResponse(UUID id, BigDecimal capitalBase,
 			BigDecimal maxAllocationPerAssetPercent, BigDecimal maxAllocationPerSectorPercent,
 			BigDecimal minimumCashReservePercent, BigDecimal maxPositionValue, BigDecimal availableForAsset,
 			BigDecimal availableForSector, BigDecimal currentPrice, BigDecimal priceCeiling,
 			BigDecimal fairPriceEstimate, BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent,
-			int suggestedQuantity, String recommendedAction, BigDecimal firstTrancheValue,
-			BigDecimal secondTrancheValue, BigDecimal thirdTrancheValue, BigDecimal remainingPlannedValue,
-			BigDecimal stopPrice, BigDecimal targetPrice, boolean valid, String invalidReason) {
+			BigDecimal firstTrancheValue, BigDecimal secondTrancheValue, BigDecimal thirdTrancheValue,
+			BigDecimal remainingPlannedValue, BigDecimal stopPrice, BigDecimal targetPrice, boolean valid,
+			String invalidReason) {
 		static AllocationPlanResponse from(AllocationPlan plan) {
-			return new AllocationPlanResponse(plan.getId(), plan.getCapitalBase(), plan.getTargetAllocationPercent(),
+			return new AllocationPlanResponse(plan.getId(), plan.getCapitalBase(),
 					plan.getMaxAllocationPerAssetPercent(), plan.getMaxAllocationPerSectorPercent(),
 					plan.getMinimumCashReservePercent(), plan.getMaxPositionValue(), plan.getAvailableForAsset(),
 					plan.getAvailableForSector(), plan.getCurrentPrice(), plan.getPriceCeiling(),
 					plan.getFairPriceEstimate(), plan.getSafetyMarginPercent(), plan.getEstimatedUpsidePercent(),
-					plan.getSuggestedQuantity(), plan.getRecommendedAction(), plan.getFirstTrancheValue(),
-					plan.getSecondTrancheValue(), plan.getThirdTrancheValue(), plan.getRemainingPlannedValue(),
-					plan.getStopPrice(), plan.getTargetPrice(), plan.isValid(), plan.getInvalidReason());
+					plan.getFirstTrancheValue(), plan.getSecondTrancheValue(), plan.getThirdTrancheValue(),
+					plan.getRemainingPlannedValue(), plan.getStopPrice(), plan.getTargetPrice(), plan.isValid(),
+					plan.getInvalidReason());
 		}
 	}
 
@@ -523,10 +520,10 @@ public class ApiQueryService {
 	}
 
 	public record RecommendationResponse(UUID id, UUID positionId, AssetResponse asset, UUID customerPositionThesisId,
-			UUID currentThesisId, ThesisType thesisType, LocalDate referenceDate, RecommendationType recommendationType,
-			Severity severity, BigDecimal currentPrice, BigDecimal averagePrice, BigDecimal stopPrice,
+			UUID currentThesisId, ThesisType thesisType, LocalDate referenceDate, Severity severity,
+			BigDecimal currentPrice, BigDecimal averagePrice, BigDecimal stopPrice,
 			BigDecimal targetPrice, BigDecimal priceCeiling, BigDecimal fairPriceEstimate,
-			BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent, Integer suggestedQuantity,
+			BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent,
 			BigDecimal currentAssetExposureValue, BigDecimal currentSectorExposureValue,
 			BigDecimal currentTotalExposureValue, BigDecimal availableForAsset, BigDecimal availableForSector,
 			BigDecimal availableForCash, Boolean allocationValid, String allocationInvalidReason, Integer score,
@@ -535,16 +532,24 @@ public class ApiQueryService {
 	}
 
 	public record NotificationResponse(UUID id, UUID recommendationId, UUID positionId, AssetResponse asset,
-			LocalDate referenceDate, NotificationChannel channel, NotificationEventType eventType,
-			RecommendationType recommendationType, Severity severity, String summary, NotificationStatus status,
-			String provider, String providerMessageId, int attemptCount, String lastError, String ruleVersion,
-			Instant createdAt, Instant sentAt, Instant readAt) {
+			LocalDate referenceDate, NotificationChannel channel, InformationalEventType eventType,
+			Severity severity, String summary, NotificationStatus status, String provider, String providerMessageId,
+			int attemptCount, String lastError, String ruleVersion, Instant createdAt, Instant sentAt, Instant readAt) {
 		static NotificationResponse from(NotificationEvent event) {
 			return new NotificationResponse(event.getId(), event.getRecommendation().getId(), event.getPosition().getId(),
-					AssetResponse.from(event.getAsset()), event.getReferenceDate(), event.getChannel(), event.getEventType(),
-					event.getRecommendationType(), event.getSeverity(), event.getSummary(), event.getStatus(),
-					event.getProvider(), event.getProviderMessageId(), event.getAttemptCount(), event.getLastError(),
-					event.getRuleVersion(), event.getCreatedAt(), event.getSentAt(), event.getReadAt());
+					AssetResponse.from(event.getAsset()), event.getReferenceDate(), event.getChannel(),
+					informationalEventType(event.getEventType()),
+					event.getSeverity(), event.getSummary(), event.getStatus(), event.getProvider(),
+					event.getProviderMessageId(), event.getAttemptCount(), event.getLastError(), event.getRuleVersion(),
+					event.getCreatedAt(), event.getSentAt(), event.getReadAt());
+		}
+
+		private static InformationalEventType informationalEventType(NotificationEventType legacyEventType) {
+			return switch (legacyEventType) {
+				case STOP_TRIGGERED, TARGET_REACHED -> InformationalEventType.PRICE_THRESHOLD_REACHED;
+				case REDUCE_EXPOSURE -> InformationalEventType.INDICATOR_THRESHOLD_REACHED;
+				case REASSESSMENT_REQUIRED, EXIT_THESIS -> InformationalEventType.STUDY_ASSUMPTION_CHANGED;
+			};
 		}
 	}
 

@@ -1,6 +1,10 @@
 package com.freirelts.araripe_invest_api.domain;
 
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
+import com.freirelts.araripe_invest_api.domain.alerts.AssetWatchItem;
+import com.freirelts.araripe_invest_api.domain.alerts.AssetWatchStatus;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
 import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
@@ -20,11 +24,13 @@ import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetWatchItemRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
@@ -42,6 +48,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -60,6 +67,9 @@ class DomainPersistenceTests {
 
 	@Autowired
 	private AssetRepository assetRepository;
+
+	@Autowired
+	private AssetWatchItemRepository assetWatchItemRepository;
 
 	@Autowired
 	private DailyCandleRepository dailyCandleRepository;
@@ -81,6 +91,9 @@ class DomainPersistenceTests {
 
 	@Autowired
 	private NotificationEventRepository notificationEventRepository;
+
+	@Autowired
+	private InformationalAlertRepository informationalAlertRepository;
 
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
@@ -279,6 +292,59 @@ class DomainPersistenceTests {
 		assertThat(persisted.getCustomerPositionThesis()).isEqualTo(association);
 		assertThat(persisted.getCurrentThesis()).isEqualTo(currentThesis);
 		assertThat(persisted.getThesisType()).isEqualTo(ThesisType.SUSTAINABLE_DIVIDENDS);
+	}
+
+	@Test
+	void assetWatchItemCanAccompanyAssetWithoutInvestmentCommand() {
+		User user = saveCustomer("watch-item@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("BBSE3", "BB Seguridade ON", "Financeiro"));
+		CustomerPosition position = customerPositionRepository.saveAndFlush(new CustomerPosition(user, asset,
+				new BigDecimal("50"), new BigDecimal("34.00"), LocalDate.of(2026, 7, 7)));
+		PositionThesis studyModel = positionThesisRepository.saveAndFlush(thesis(asset, LocalDate.of(2026, 7, 7),
+				ThesisType.SUSTAINABLE_DIVIDENDS, 80, "rules-v1"));
+		CustomerPositionThesis association = customerPositionThesisRepository.saveAndFlush(new CustomerPositionThesis(
+				user, position, studyModel, new BigDecimal("34.00")));
+
+		AssetWatchItem watchItem = new AssetWatchItem(user, asset);
+		watchItem.setSourcePosition(position);
+		watchItem.setAccompaniedStudyModel(association);
+		watchItem.setUserLowerPriceThreshold(new BigDecimal("30.00"));
+		watchItem.setUserUpperPriceThreshold(new BigDecimal("42.00"));
+		assetWatchItemRepository.saveAndFlush(watchItem);
+
+		assertThat(assetWatchItemRepository.findByUserIdAndStatusOrderByCreatedAtDesc(user.getId(),
+				AssetWatchStatus.ACTIVE)).singleElement().satisfies(persisted -> {
+					assertThat(persisted.getAsset()).isEqualTo(asset);
+					assertThat(persisted.getAccompaniedStudyModel()).isEqualTo(association);
+				});
+	}
+
+	@Test
+	void informationalAlertUsesOnlyNeutralEventTypes() {
+		assertThat(Arrays.stream(InformationalEventType.values()).map(Enum::name)).containsExactly(
+				"PRICE_THRESHOLD_REACHED",
+				"DATA_UPDATED",
+				"DATA_STALE",
+				"INDICATOR_THRESHOLD_REACHED",
+				"STUDY_ASSUMPTION_CHANGED",
+				"QUALITY_DATA_BLOCKED");
+
+		User user = saveCustomer("informational-alert@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("SAPR11", "Sanepar UNT", "Utilidade Pública"));
+		AssetWatchItem watchItem = assetWatchItemRepository.saveAndFlush(new AssetWatchItem(user, asset));
+
+		InformationalAlert alert = new InformationalAlert(user, asset, LocalDate.of(2026, 7, 7),
+				InformationalEventType.PRICE_THRESHOLD_REACHED, Severity.MEDIUM,
+				"Limiar de preço atingido",
+				"Preço observado cruzou limiar informativo definido para acompanhamento.",
+				"rules-v1");
+		alert.setWatchItem(watchItem);
+		alert.setEvidenceJson("{\"source\":\"daily_candles\",\"threshold\":\"42.00\"}");
+
+		InformationalAlert persisted = informationalAlertRepository.saveAndFlush(alert);
+
+		assertThat(persisted.getEventType()).isEqualTo(InformationalEventType.PRICE_THRESHOLD_REACHED);
+		assertThat(persisted.getSummary()).doesNotContain("compr", "vend", "manten", "aument", "reduz");
 	}
 
 	private User saveCustomer(String email) {
