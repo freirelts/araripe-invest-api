@@ -1,6 +1,6 @@
 # Araripe Invest API
 
-Backend Spring Boot do Araripe Invest. Este projeto concentra dados de mercado, fundamentos, regras financeiras deterministicas, risco, recomendacoes de position trade, auditoria, integracoes externas e APIs para o frontend.
+Backend Spring Boot do Araripe Invest. Este projeto concentra dados de mercado, fundamentos, regras financeiras deterministicas, risco analitico, modelos de estudo, screener, alertas informativos, auditoria, integracoes externas e APIs para o frontend.
 
 ## Stack
 
@@ -152,4 +152,4 @@ Depois do primeiro login, desabilite o bootstrap em ambientes compartilhados.
 - Nunca expor token da brapi, OpenAI ou credenciais de e-mail/SMTP no frontend.
 - Nunca gravar senhas em texto puro.
 - Nunca registrar tokens, senhas ou prompts com dados sensiveis em logs.
-- Falha externa deve gerar status rastreavel, nao recomendacao falsa.
+- Falha externa deve gerar status rastreavel, nao alerta falso.
