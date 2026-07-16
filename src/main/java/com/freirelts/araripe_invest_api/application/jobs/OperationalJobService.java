@@ -95,7 +95,7 @@ public class OperationalJobService {
 		catch (RuntimeException ex) {
 			finish(run, JobRunStatus.FAILED, Map.of("failed", true), summarize(ex));
 			log.warn("Job {} failed for referenceDate={} runId={} durationMs={} error={}", jobName, effectiveDate,
-					run.getId(), elapsedMs(startedAtNanos), summarize(ex));
+					run.getId(), elapsedMs(startedAtNanos), summarize(ex), ex);
 		}
 		return toResult(run);
 	}

@@ -15,6 +15,8 @@ import com.freirelts.araripe_invest_api.application.marketdata.ProviderRawRespon
 import com.freirelts.araripe_invest_api.application.marketdata.ProviderResponseStatus;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -33,6 +35,7 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 	static final String TOKEN_MISSING = "BRAPI_TOKEN_MISSING";
 	static final String NO_ACTIVE_ASSETS = "NO_ACTIVE_MONITORED_ASSETS";
 	static final int SYMBOL_BATCH_SIZE = 5;
+	private static final Logger log = LoggerFactory.getLogger(BrapiDataProvider.class);
 
 	private final RestClient restClient;
 	private final BrapiProperties properties;
@@ -146,12 +149,13 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 
 	private ProviderRawResponse aggregateBatchResponses(String endpoint, List<String> requestedSymbols,
 			List<String> queriedSymbols, List<ProviderRawResponse> responses) {
+		String aggregatedEndpoint = aggregateEndpoints(endpoint, responses);
 		List<ProviderRawResponse> successfulResponses = responses.stream()
 				.filter(response -> response.status() == ProviderResponseStatus.SUCCESS)
 				.toList();
 		if (successfulResponses.isEmpty()) {
 			ProviderRawResponse firstFailure = responses.getFirst();
-			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, queriedSymbols,
+			return ProviderRawResponse.failed(PROVIDER, aggregatedEndpoint, requestedSymbols, queriedSymbols,
 					firstFailure.requestedAt(), totalTookMillis(responses), firstFailure.errorCode(),
 					firstFailure.errorMessage());
 		}
@@ -180,12 +184,26 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 		long tookMillis = totalTookMillis(responses);
 		boolean hasFailure = responses.stream().anyMatch(response -> response.status() == ProviderResponseStatus.FAILED);
 		if (!hasFailure) {
-			return ProviderRawResponse.success(PROVIDER, endpoint, requestedSymbols, queriedSymbols,
+			return ProviderRawResponse.success(PROVIDER, aggregatedEndpoint, requestedSymbols, queriedSymbols,
 					firstSuccess.requestedAt(), tookMillis, aggregatedPayload);
 		}
-		return new ProviderRawResponse(PROVIDER, endpoint, List.copyOf(requestedSymbols), List.copyOf(queriedSymbols),
+		return new ProviderRawResponse(PROVIDER, aggregatedEndpoint, List.copyOf(requestedSymbols), List.copyOf(queriedSymbols),
 				firstSuccess.requestedAt(), tookMillis, ProviderResponseStatus.PARTIAL, aggregatedPayload,
 				"BRAPI_PARTIAL_FAILURE", "At least one brapi batch failed while other batches returned data.");
+	}
+
+	private static String aggregateEndpoints(String fallback, List<ProviderRawResponse> responses) {
+		List<String> endpoints = responses.stream()
+				.map(ProviderRawResponse::endpoint)
+				.distinct()
+				.toList();
+		if (endpoints.isEmpty()) {
+			return fallback;
+		}
+		if (endpoints.size() == 1) {
+			return endpoints.getFirst();
+		}
+		return String.join(",", endpoints);
 	}
 
 	private static List<List<String>> batches(List<String> symbols, int batchSize) {
@@ -213,34 +231,42 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 
 	private ProviderRawResponse fetch(String endpoint, List<String> requestedSymbols, List<String> queriedSymbols,
 			Query query) {
+		String requestUri = query.toUriString();
 		if (!properties.hasToken()) {
-			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, queriedSymbols, Instant.now(), 0,
+			return ProviderRawResponse.failed(PROVIDER, requestUri, requestedSymbols, queriedSymbols, Instant.now(), 0,
 					TOKEN_MISSING, "Brapi token is not configured for protected endpoint access.");
 		}
 
 		Instant requestedAt = Instant.now();
 		try {
 			String rawPayload = restClient.get()
-					.uri(query.toUriString())
+					.uri(requestUri)
 					.headers(headers -> headers.setBearerAuth(properties.token()))
 					.retrieve()
 					.body(String.class);
 			JsonNode payload = objectMapper.readTree(rawPayload);
-			return ProviderRawResponse.success(PROVIDER, endpoint, requestedSymbols, queriedSymbols, requestedAt,
+			return ProviderRawResponse.success(PROVIDER, requestUri, requestedSymbols, queriedSymbols, requestedAt,
 					Duration.between(requestedAt, Instant.now()).toMillis(), payload);
 		}
 		catch (JsonProcessingException ex) {
-			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, queriedSymbols, requestedAt,
+			log.warn("Brapi provider failed to parse JSON endpoint={} requestedSymbols={} queriedSymbols={}",
+					requestUri, requestedSymbols, queriedSymbols, ex);
+			return ProviderRawResponse.failed(PROVIDER, requestUri, requestedSymbols, queriedSymbols, requestedAt,
 					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_INVALID_JSON",
 					"Brapi response could not be parsed as JSON.");
 		}
 		catch (RestClientResponseException ex) {
-			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, queriedSymbols, requestedAt,
+			log.warn("Brapi provider HTTP failure endpoint={} status={} responseBody={} requestedSymbols={} queriedSymbols={}",
+					requestUri, ex.getStatusCode().value(), ex.getResponseBodyAsString(), requestedSymbols,
+					queriedSymbols, ex);
+			return ProviderRawResponse.failed(PROVIDER, requestUri, requestedSymbols, queriedSymbols, requestedAt,
 					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_HTTP_" + ex.getStatusCode().value(),
 					"Brapi request failed with HTTP status " + ex.getStatusCode().value() + ".");
 		}
 		catch (RuntimeException ex) {
-			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, queriedSymbols, requestedAt,
+			log.warn("Brapi provider request failed endpoint={} requestedSymbols={} queriedSymbols={}",
+					requestUri, requestedSymbols, queriedSymbols, ex);
+			return ProviderRawResponse.failed(PROVIDER, requestUri, requestedSymbols, queriedSymbols, requestedAt,
 					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_REQUEST_FAILED",
 					"Brapi request failed before a valid response was received: " + ex.getClass().getSimpleName() + ".");
 		}

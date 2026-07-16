@@ -38,7 +38,7 @@ public class DataCollectionRecord {
 	@Column(nullable = false, length = 80)
 	private String provider;
 
-	@Column(nullable = false, length = 160)
+	@Column(nullable = false, length = 2048)
 	private String endpoint;
 
 	@Column(name = "reference_date", nullable = false)

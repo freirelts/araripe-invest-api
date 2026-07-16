@@ -157,6 +157,7 @@ class BrapiDataProviderIntegrationTests {
 		assertThat(response.status()).as(response.toString()).isEqualTo(ProviderResponseStatus.SUCCESS);
 		assertThat(response.requestedSymbols()).containsExactly("PETR4", "VALE3", "MISSING11");
 		assertThat(response.queriedSymbols()).containsExactly("PETR4");
+		assertThat(response.endpoint()).isEqualTo("/v2/stocks/quote?symbols=PETR4");
 		assertThat(BRAPI_SERVER.requestUris()).hasSize(1);
 		assertThat(BRAPI_SERVER.requestUris().getFirst().getRawQuery()).isEqualTo("symbols=PETR4");
 		assertThat(BRAPI_SERVER.authorizationHeaders()).containsExactly("Bearer test-brapi-token");
@@ -175,6 +176,10 @@ class BrapiDataProviderIntegrationTests {
 		assertThat(response.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
 		assertThat(response.requestedSymbols()).containsExactlyElementsOf(symbols);
 		assertThat(response.queriedSymbols()).containsExactlyElementsOf(symbols);
+		assertThat(response.endpoint()).isEqualTo(
+				"/v2/stocks/quote?symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3,"
+						+ "/v2/stocks/quote?symbols=WEGE3,BBAS3,MGLU3,RENT3,LREN3,"
+						+ "/v2/stocks/quote?symbols=SUZB3,RAIL3");
 		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getRawQuery)
 				.containsExactly("symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3",
 						"symbols=WEGE3,BBAS3,MGLU3,RENT3,LREN3", "symbols=SUZB3,RAIL3");
@@ -193,6 +198,8 @@ class BrapiDataProviderIntegrationTests {
 
 		assertThat(annual.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
 		assertThat(quarterly.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(annual.endpoint()).isEqualTo("/v2/stocks/income-statement?symbols=PETR4&period=annual");
+		assertThat(quarterly.endpoint()).isEqualTo("/v2/stocks/income-statement?symbols=PETR4&period=quarterly");
 		assertThat(BRAPI_SERVER.requestUris()).hasSize(2);
 		assertThat(BRAPI_SERVER.requestUris().get(0).getRawQuery()).isEqualTo("symbols=PETR4&period=annual");
 		assertThat(BRAPI_SERVER.requestUris().get(1).getRawQuery()).isEqualTo("symbols=PETR4&period=quarterly");
@@ -206,6 +213,8 @@ class BrapiDataProviderIntegrationTests {
 				new DividendDataRequest(LocalDate.of(2026, 3, 4), LocalDate.of(2026, 3, 9), "desc"));
 
 		assertThat(response.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
+		assertThat(response.endpoint())
+				.isEqualTo("/v2/stocks/dividends?symbols=VALE3&sortOrder=desc&startDate=2026-03-04&endDate=2026-03-09");
 		assertThat(BRAPI_SERVER.requestUris()).hasSize(1);
 		assertThat(BRAPI_SERVER.requestUris().getFirst().getRawQuery())
 				.isEqualTo("symbols=VALE3&sortOrder=desc&startDate=2026-03-04&endDate=2026-03-09");
@@ -248,6 +257,7 @@ class BrapiDataProviderIntegrationTests {
 		ProviderRawResponse response = providerWithoutToken.fetchCurrentQuotes(List.of("ITUB4"));
 
 		assertThat(response.status()).isEqualTo(ProviderResponseStatus.FAILED);
+		assertThat(response.endpoint()).isEqualTo("/v2/stocks/quote?symbols=ITUB4");
 		assertThat(response.errorCode()).isEqualTo(BrapiDataProvider.TOKEN_MISSING);
 		assertThat(response.queriedSymbols()).containsExactly("ITUB4");
 		assertThat(BRAPI_SERVER.requestUris()).isEmpty();

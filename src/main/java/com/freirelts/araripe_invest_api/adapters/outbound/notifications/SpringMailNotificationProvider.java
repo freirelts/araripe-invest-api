@@ -4,6 +4,8 @@ import com.freirelts.araripe_invest_api.application.notifications.DailyNotificat
 import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestItem;
 import com.freirelts.araripe_invest_api.application.notifications.NotificationProvider;
 import com.freirelts.araripe_invest_api.application.notifications.NotificationPublishResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 
@@ -12,6 +14,7 @@ import java.util.UUID;
 class SpringMailNotificationProvider implements NotificationProvider {
 
 	static final String PROVIDER_NAME = "spring-mail";
+	private static final Logger log = LoggerFactory.getLogger(SpringMailNotificationProvider.class);
 
 	private final JavaMailSender mailSender;
 	private final EmailNotificationProperties properties;
@@ -37,7 +40,14 @@ class SpringMailNotificationProvider implements NotificationProvider {
 		if (properties.replyTo() != null && !properties.replyTo().isBlank()) {
 			message.setReplyTo(properties.replyTo());
 		}
-		mailSender.send(message);
+		try {
+			mailSender.send(message);
+		}
+		catch (RuntimeException ex) {
+			log.warn("Notification provider failed to send email provider={} messageId={} userId={} recipient={} items={}",
+					PROVIDER_NAME, internalMessageId, digest.userId(), digest.recipientEmail(), digest.items().size(), ex);
+			throw ex;
+		}
 		return new NotificationPublishResult(PROVIDER_NAME, internalMessageId);
 	}
 

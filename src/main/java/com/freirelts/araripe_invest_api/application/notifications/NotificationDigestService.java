@@ -64,7 +64,7 @@ public class NotificationDigestService {
 				eventsFailed += events.size();
 				log.warn("Daily informational alert digest failed referenceDate={} userId={} items={} provider={} error={}",
 						referenceDate, digest.userId(), digest.items().size(), notificationProvider.providerName(),
-						summarize(ex));
+						summarize(ex), ex);
 			}
 		}
 		alertRepository.saveAllAndFlush(pendingEvents);

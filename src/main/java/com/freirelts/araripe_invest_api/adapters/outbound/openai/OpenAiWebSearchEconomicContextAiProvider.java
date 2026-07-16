@@ -94,6 +94,8 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 				response = objectMapper.readTree(responseBody);
 			}
 			catch (JsonProcessingException ex) {
+				log.warn("OpenAI web search provider returned invalid JSON model={} promptVersion={} latencyMs={}",
+						properties.webSearchModel(), properties.promptVersion(), latencyMs(startedAt), ex);
 				return failed(promptHash, inputSummaryJson, "OpenAI web search returned invalid JSON response.",
 						latencyMs(startedAt));
 			}
@@ -101,6 +103,8 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		}
 		catch (RuntimeException ex) {
 			AiValidationStatus status = isTimeout(ex) ? AiValidationStatus.TIMEOUT : AiValidationStatus.FAILED;
+			log.warn("OpenAI web search provider failed status={} model={} promptVersion={} latencyMs={}",
+					status, properties.webSearchModel(), properties.promptVersion(), latencyMs(startedAt), ex);
 			return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
 					promptHash, inputSummaryJson, null, json(request.sources()), status, latencyMs(startedAt),
 					"OpenAI web search " + status.name().toLowerCase() + ": " + ex.getClass().getSimpleName() + ".");
@@ -185,6 +189,8 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 					validation.status(), latencyMs(startedAt), validation.errorMessage(), tokenUsage(response));
 		}
 		catch (JsonProcessingException ex) {
+			log.warn("OpenAI web search provider returned non-structured JSON output model={} promptVersion={} latencyMs={}",
+					properties.webSearchModel(), properties.promptVersion(), latencyMs(startedAt), ex);
 			return new EconomicContextAiResult(PROVIDER, properties.webSearchModel(), properties.promptVersion(),
 					promptHash, inputSummaryJson, outputText, sourcesJson(request, citations, responseAudit),
 					AiValidationStatus.INVALID, latencyMs(startedAt),

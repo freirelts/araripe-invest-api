@@ -20,6 +20,8 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.MacroIndicato
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,7 @@ import java.util.UUID;
 @Service
 public class EconomicContextAnalysisService {
 
+	private static final Logger log = LoggerFactory.getLogger(EconomicContextAnalysisService.class);
 	private static final String DERIVED_FUNDAMENTAL_SOURCE = "araripe-indicators";
 	private static final String COLLECTOR_FUNDAMENTAL_SOURCE = "brapi";
 	private static final String AI_SOURCE_NAME = "Araripe Invest deterministic engine";
@@ -113,6 +116,9 @@ public class EconomicContextAnalysisService {
 			result = aiProvider.analyze(request);
 		}
 		catch (RuntimeException ex) {
+			log.warn("AI provider threw before returning a traceable result provider={} model={} promptVersion={} thesisId={} referenceDate={}",
+					aiProvider.provider(), aiProvider.model(), aiProvider.promptVersion(), thesis.getId(),
+					thesis.getReferenceDate(), ex);
 			result = EconomicContextAiResult.failed("unhandled-ai-provider", "unknown", "unknown", "unavailable",
 					inputSummaryJson, "[]", 0L, "AI provider failed before returning a traceable result: "
 							+ ex.getClass().getSimpleName() + ".");
