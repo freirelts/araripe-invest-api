@@ -167,7 +167,7 @@ public class EconomicContextAnalysisService {
 			data.put("macroIndicators", macroIndicators);
 		}
 		return new EconomicContextAiRequest(AiAssetContext.from(thesis.getAsset()), thesis.getReferenceDate(),
-				thesis.getThesisType(), null, thesis.getScore(), data,
+				thesis.getThesisType(), thesis.getScore(), data,
 				List.of(new AiContextSource(AI_SOURCE_NAME, "internal://position-theses/" + thesis.getId(),
 						"Modelo de estudo deterministico, aderencia a criterios, valuation educacional e margem de seguranca."),
 						new AiContextSource(WEB_SEARCH_SOURCE_NAME, "openai://web_search",

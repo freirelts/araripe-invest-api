@@ -6,7 +6,6 @@ import com.freirelts.araripe_invest_api.application.ai.AiContextSource;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiRequest;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiResult;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import org.junit.jupiter.api.Test;
 
@@ -29,16 +28,15 @@ class DeterministicFallbackEconomicContextAiProviderTests {
 				new AiAssetContext("WEGE3", "WEG S.A.", "Bens Industriais", "Motores"),
 				LocalDate.of(2026, 7, 9),
 				ThesisType.QUALITY_REASONABLE_PRICE,
-				RecommendationType.MANTER,
 				82,
 				Map.of("score", 82),
 				List.of(new AiContextSource("Banco Central SGS", "https://www3.bcb.gov.br/sgspub/",
 						"Juros e inflacao de referencia.")),
-				List.of("IA nao pode alterar recomendacao deterministica.")));
+				List.of("IA nao orienta compra, venda, manutencao, aumento, reducao, alocacao ou encerramento.")));
 
 		assertThat(result.provider()).isEqualTo(DeterministicFallbackEconomicContextAiProvider.PROVIDER);
 		assertThat(result.validationStatus()).isEqualTo(AiValidationStatus.UNAVAILABLE);
 		assertThat(result.outputJson()).isNull();
-		assertThat(result.errorMessage()).contains("deterministic recommendation remains unchanged");
+		assertThat(result.errorMessage()).contains("deterministic study model remains unchanged");
 	}
 }

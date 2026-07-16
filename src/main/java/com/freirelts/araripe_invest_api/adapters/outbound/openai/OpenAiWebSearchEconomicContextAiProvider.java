@@ -148,12 +148,10 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		propertiesSchema.put("confidenceLevel", Map.of("type", "string"));
 		propertiesSchema.put("sources", stringArray);
 		propertiesSchema.put("sourceUrls", stringArray);
-		propertiesSchema.put("recommendationExplanation", Map.of("type", "string"));
-		propertiesSchema.put("conflictsWithDeterministicRecommendation", Map.of("type", "boolean"));
+		propertiesSchema.put("sourceReferenceDates", stringArray);
 		return Map.of("type", "object", "additionalProperties", false, "properties", propertiesSchema, "required",
 				List.of("contextSummary", "positiveFactors", "riskFactors", "thesisImpact", "confidenceLevel",
-						"sources", "sourceUrls", "recommendationExplanation",
-						"conflictsWithDeterministicRecommendation"));
+						"sources", "sourceUrls", "sourceReferenceDates"));
 	}
 
 	private EconomicContextAiResult resultFromResponse(EconomicContextAiRequest request, JsonNode response,
@@ -281,7 +279,7 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 		}
 		return new AiContextStructuredOutput(output.contextSummary(), output.positiveFactors(), output.riskFactors(),
 				output.thesisImpact(), output.confidenceLevel(), output.sources(), merged,
-				output.recommendationExplanation(), output.conflictsWithDeterministicRecommendation());
+				output.sourceReferenceDates());
 	}
 
 	private String outputText(JsonNode response) {
@@ -383,6 +381,7 @@ public class OpenAiWebSearchEconomicContextAiProvider implements EconomicContext
 				- analise contexto economico, macro, setorial e noticias recentes relacionadas ao ativo, setor e Brasil;
 				- trate dados internos como fonte deterministica; nao substitua Selic, IPCA, CDI, cambio, valuation, aderencia a criterios ou risco por memoria do modelo;
 				- para qualquer numero macroeconomico citado, confirme em fonte oficial ou fonte externa confiavel e inclua a URL em sourceUrls;
+				- inclua em sourceReferenceDates datas no formato ISO yyyy-MM-dd que indiquem a data de referencia ou publicacao das fontes externas usadas;
 				- se uma fonte externa divergir dos dados internos, descreva a divergencia como incerteza factual e nao invente um valor conciliado;
 				- se nao houver evidencia auditavel para um dado macro atual, diga que o dado nao foi confirmado e mantenha confidenceLevel baixo;
 				- inclua em sourceUrls as URLs externas efetivamente consultadas;

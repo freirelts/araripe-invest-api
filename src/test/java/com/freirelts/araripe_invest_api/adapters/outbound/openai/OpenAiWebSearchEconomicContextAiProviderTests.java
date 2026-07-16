@@ -7,7 +7,6 @@ import com.freirelts.araripe_invest_api.application.ai.AiContextSource;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiRequest;
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiResult;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +44,8 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 				.andExpect(jsonPath("$.tool_choice").value("required"))
 				.andExpect(jsonPath("$.max_output_tokens").value(16000))
 				.andExpect(jsonPath("$.instructions").value(containsString("nao substitua Selic")))
+				.andExpect(jsonPath("$.instructions").value(containsString("sourceReferenceDates")))
+				.andExpect(jsonPath("$.instructions").value(containsString("nao oriente compra, venda")))
 				.andExpect(jsonPath("$.input").value(containsString("Banco Central/SGS")))
 				.andRespond(withSuccess(openAiResponse(), MediaType.APPLICATION_JSON));
 
@@ -111,8 +112,7 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 				"confidenceLevel", "MEDIA",
 				"sources", List.of("OpenAI Web Search", "Valor Economico"),
 				"sourceUrls", List.of("https://valor.example/noticia-wege"),
-				"recommendationExplanation", "Contexto apenas explica a recomendacao deterministica.",
-				"conflictsWithDeterministicRecommendation", false));
+				"sourceReferenceDates", List.of("2026-07-08")));
 		return objectMapper.writeValueAsString(Map.of(
 				"status", "completed",
 				"usage", Map.of(
@@ -149,14 +149,13 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 				new AiAssetContext("WEGE3", "WEG S.A.", "Bens Industriais", "Motores"),
 				LocalDate.of(2026, 7, 9),
 				ThesisType.QUALITY_REASONABLE_PRICE,
-				RecommendationType.MANTER,
 				82,
 				Map.of("priceCeiling", "42.00"),
 				List.of(new AiContextSource("Araripe Invest deterministic engine", "internal://position-theses/1",
 						"Tese deterministica."),
 						new AiContextSource("OpenAI Web Search", "openai://web_search",
 								"Busca web obrigatoria por noticias recentes.")),
-				List.of("IA nao pode alterar recomendacao deterministica."));
+				List.of("IA nao orienta compra, venda, manutencao, aumento, reducao, alocacao ou encerramento."));
 	}
 
 	private OpenAiProperties properties(String apiKey) {
