@@ -82,7 +82,7 @@ class PortfolioPositionControllerTests {
 		PositionThesis thesis = thesisRepository.saveAndFlush(thesis(asset));
 		String token = login(customer, "senha-portfolio-123");
 
-		String created = mockMvc.perform(post("/api/v1/portfolio/positions")
+		String created = mockMvc.perform(post("/api/v1/position-records")
 						.header("Authorization", bearer(token))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -91,8 +91,8 @@ class PortfolioPositionControllerTests {
 								  "quantity":10,
 								  "averagePrice":38.40,
 								  "entryDate":"2026-07-07",
-								  "stopPrice":33.00,
-								  "targetPrice":48.00,
+								  "userLowerPriceThreshold":33.00,
+								  "userUpperPriceThreshold":48.00,
 								  "notes":"Posicao acompanhada pelo cliente"
 								}
 								""".formatted(asset.getId())))
@@ -104,21 +104,24 @@ class PortfolioPositionControllerTests {
 				.getContentAsString();
 		String positionId = objectMapper.readTree(created).get("id").asText();
 
-		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/position-records").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
-				.andExpect(jsonPath("$[0].symbol").value("WEGE3"));
+				.andExpect(jsonPath("$[0].symbol").value("WEGE3"))
+				.andExpect(jsonPath("$[0].userLowerPriceThreshold").value(33.0))
+				.andExpect(jsonPath("$[0].userUpperPriceThreshold").value(48.0))
+				.andExpect(jsonPath("$[0].regulatoryNotice").isString());
 
-		mockMvc.perform(post("/api/v1/portfolio/positions/{positionId}/main-thesis", positionId)
+		mockMvc.perform(post("/api/v1/position-records/{positionId}/main-thesis", positionId)
 						.header("Authorization", bearer(token))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
 								{"thesisId":"%s","notes":"Tese principal aceita"}
 								""".formatted(thesis.getId())))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.mainThesis.acceptedThesisId").value(thesis.getId().toString()));
+				.andExpect(jsonPath("$.accompaniedStudyModel.acceptedThesisId").value(thesis.getId().toString()));
 
-		mockMvc.perform(post("/api/v1/portfolio/positions/{positionId}/contributions", positionId)
+		mockMvc.perform(post("/api/v1/position-records/{positionId}/quantity-adjustments", positionId)
 						.header("Authorization", bearer(token))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
@@ -134,7 +137,7 @@ class PortfolioPositionControllerTests {
 				.andExpect(jsonPath("$.averagePrice").value(39.6))
 				.andExpect(jsonPath("$.notes").value("Aporte executado na corretora"));
 
-		mockMvc.perform(patch("/api/v1/portfolio/positions/{positionId}/close", positionId)
+		mockMvc.perform(patch("/api/v1/position-records/{positionId}/close", positionId)
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("CLOSED"));
@@ -151,7 +154,7 @@ class PortfolioPositionControllerTests {
 				new BigDecimal("100"), new BigDecimal("28.00"), LocalDate.of(2026, 7, 7)));
 		String token = login(other, "senha-other-123");
 
-		mockMvc.perform(patch("/api/v1/portfolio/positions/{positionId}/close", position.getId())
+		mockMvc.perform(patch("/api/v1/position-records/{positionId}/close", position.getId())
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isNotFound());
 	}
@@ -162,7 +165,7 @@ class PortfolioPositionControllerTests {
 				SubscriptionStatus.NONE, UserRoleType.ADMIN);
 		String token = login(admin, "senha-admin-123");
 
-		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/position-records").header("Authorization", bearer(token)))
 				.andExpect(status().isForbidden());
 	}
 
@@ -189,12 +192,10 @@ class PortfolioPositionControllerTests {
 
 	private PositionThesis thesis(Asset asset) {
 		PositionThesis thesis = new PositionThesis(asset, LocalDate.of(2026, 7, 7),
-				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.OPORTUNIDADE, 82, "rules-v1");
+				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.CRITERIOS_ATENDIDOS, 82, "rules-v1");
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));
-		thesis.setStopPrice(new BigDecimal("34.00"));
-		thesis.setTargetPrice(new BigDecimal("52.00"));
 		return thesis;
 	}
 

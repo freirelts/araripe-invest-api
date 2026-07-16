@@ -1,6 +1,5 @@
 package com.freirelts.araripe_invest_api.application.ai;
 
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 
 import java.time.LocalDate;
@@ -11,7 +10,6 @@ public record EconomicContextAiRequest(
 		AiAssetContext asset,
 		LocalDate referenceDate,
 		ThesisType thesisType,
-		RecommendationType deterministicRecommendation,
 		Integer deterministicScore,
 		Map<String, Object> deterministicData,
 		List<AiContextSource> sources,

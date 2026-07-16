@@ -24,7 +24,7 @@ class DeterministicFallbackEconomicContextAiProvider implements EconomicContextA
 		String sourcesJson = json(request.sources());
 		return EconomicContextAiResult.unavailable(PROVIDER, properties.model(), properties.promptVersion(),
 				"openai-disabled", inputSummaryJson, sourcesJson,
-				"OpenAI integration is not configured; deterministic recommendation remains unchanged.");
+				"OpenAI integration is not configured; deterministic study model remains unchanged.");
 	}
 
 	@Override

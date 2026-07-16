@@ -30,17 +30,17 @@ public class ScoringService {
 	public ScoreResult score(ScoringInput input) {
 		List<ScoreComponent> components = List.of(
 				component("FUNDAMENTAL_QUALITY", "Qualidade fundamentalista", 30,
-						fundamentalQuality(input), "Lucro, margens e retorno sobre capital sustentam a tese."),
+						fundamentalQuality(input), "Lucro, margens e retorno sobre capital sustentam o modelo de estudo."),
 				component("VALUATION_SAFETY_MARGIN", "Valuation e margem de seguranca", 20,
-						valuation(input), "Preco atual, preco teto e margem de seguranca limitam entrada cara."),
+						valuation(input), "Preco atual, referencia do estudo e margem de seguranca limitam valuation esticado."),
 				component("CASH_GENERATION", "Geracao de caixa", 15,
 						cashGeneration(input), "Caixa operacional e fluxo de caixa livre reduzem risco financeiro."),
 				component(thesisSpecificCode(input.thesisType()), thesisSpecificLabel(input.thesisType()), 10,
 						thesisSpecific(input), thesisSpecificMessage(input.thesisType())),
 				component("LONG_TREND", "Tendencia longa", 10,
-						longTrend(input), "Media de 200 periodos, retorno e drawdown evitam tese contra tendencia deteriorada."),
+						longTrend(input), "Media de 200 periodos, retorno e drawdown evitam estudo contra tendencia deteriorada."),
 				component("RISK_VOLATILITY", "Risco e volatilidade", 10,
-						risk(input), "Volatilidade e endividamento reduzem a nota quando elevam risco de position trade."),
+						risk(input), "Volatilidade e endividamento reduzem a aderencia quando elevam risco analitico."),
 				component("MACRO_SECTOR_CONTEXT", "Contexto macro/setorial", 5,
 						macroSectorContext(input), "Juros, inflacao e cambio penalizam setores sensiveis quando o contexto esta desfavoravel."));
 		int finalScore = components.stream()
@@ -81,10 +81,11 @@ public class ScoringService {
 	private ScoreRuleEvaluation valuation(ScoringInput input) {
 		int points = 0;
 		List<String> evidence = new ArrayList<>();
-		// Valuation so pontua bem quando ha preco teto calculavel e margem minima; multiplo barato sozinho nao compensa
+		// Valuation so pontua bem quando ha referencia de preco calculavel e margem minima; multiplo barato sozinho nao compensa
 		// fundamento fraco porque os blocos de qualidade e caixa continuam limitando a nota final.
 		points += pass(evidence, positive(input.priceCeiling()) && positive(input.currentPrice())
-				&& input.currentPrice().compareTo(input.priceCeiling()) <= 0, 35, "preco atual abaixo do preco teto");
+				&& input.currentPrice().compareTo(input.priceCeiling()) <= 0, 35,
+				"preco atual abaixo da referencia do estudo");
 		points += pass(evidence, input.safetyMargin() != null
 				&& input.safetyMargin().compareTo(MIN_SAFETY_MARGIN) >= 0, 35, "margem de seguranca minima atingida");
 		points += pass(evidence, lessOrEqual(input.trailingPe(), new BigDecimal("18.000000"))
@@ -142,11 +143,11 @@ public class ScoringService {
 	private ScoreRuleEvaluation qualitySpecificScore(ScoringInput input) {
 		int points = 0;
 		List<String> evidence = new ArrayList<>();
-		// Na tese de qualidade, o bloco especifico substitui dividendos/crescimento por resiliencia financeira adicional.
+		// No modelo de qualidade, o bloco especifico substitui dividendos/crescimento por resiliencia financeira adicional.
 		points += pass(evidence, lessOrEqual(input.debtToEquity(), MAX_REASONABLE_DEBT_TO_EQUITY), 35,
 				"endividamento controlado");
 		points += pass(evidence, greaterOrEqual(input.roe(), new BigDecimal("0.150000")), 35,
-				"ROE forte para tese de qualidade");
+				"ROE forte para modelo de qualidade");
 		points += pass(evidence, positive(input.operatingCashflow()) && positive(input.freeCashflow()), 30,
 				"caixa recorrente para sustentar qualidade");
 		return new ScoreRuleEvaluation(points, evidence);
@@ -155,7 +156,7 @@ public class ScoringService {
 	private ScoreRuleEvaluation longTrend(ScoringInput input) {
 		int points = 0;
 		List<String> evidence = new ArrayList<>();
-		// Tendencia longa evita aprovar position trade contra perda estrutural da media de 200 periodos.
+		// Tendencia longa evita aprovar estudo contra perda estrutural da media de 200 periodos.
 		points += pass(evidence, input.trendStatus() == TrendStatus.HEALTHY, 45, "tendencia longa saudavel");
 		points += pass(evidence, positive(input.currentPrice()) && positive(input.sma200())
 				&& input.currentPrice().compareTo(input.sma200()) >= 0, 35, "preco acima da media de 200");
@@ -168,10 +169,10 @@ public class ScoringService {
 	private ScoreRuleEvaluation risk(ScoringInput input) {
 		int points = 0;
 		List<String> evidence = new ArrayList<>();
-		// Risco combina volatilidade e alavancagem; quanto menor a oscilacao e a divida, maior a capacidade de manter a tese.
+		// Risco combina volatilidade e alavancagem; quanto menor a oscilacao e a divida, maior a aderencia ao estudo.
 		points += pass(evidence, input.historicalVolatility() != null
 				&& input.historicalVolatility().compareTo(MAX_REASONABLE_VOLATILITY) <= 0, 55,
-				"volatilidade compativel com position trade conservador");
+				"volatilidade compativel com acompanhamento educacional conservador");
 		points += pass(evidence, input.debtToEquity() == null
 				|| input.debtToEquity().compareTo(MAX_REASONABLE_DEBT_TO_EQUITY) <= 0, 45,
 				"divida/patrimonio dentro do limite inicial");

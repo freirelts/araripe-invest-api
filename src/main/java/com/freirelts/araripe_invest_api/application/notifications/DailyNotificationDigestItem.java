@@ -1,18 +1,21 @@
 package com.freirelts.araripe_invest_api.application.notifications;
 
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 public record DailyNotificationDigestItem(
-		UUID notificationId,
-		UUID recommendationId,
+		UUID alertId,
+		UUID watchItemId,
 		UUID positionId,
 		String symbol,
-		RecommendationType recommendationType,
-		NotificationEventType eventType,
+		LocalDate referenceDate,
+		InformationalEventType eventType,
 		Severity severity,
+		String title,
+		String source,
+		String ruleVersion,
 		String summary) {
 }

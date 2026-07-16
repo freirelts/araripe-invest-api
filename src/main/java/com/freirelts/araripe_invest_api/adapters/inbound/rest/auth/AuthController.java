@@ -29,7 +29,8 @@ class AuthController {
 	@PostMapping("/register")
 	@ResponseStatus(HttpStatus.CREATED)
 	AuthResult register(@Valid @RequestBody RegisterRequest request) {
-		return authService.registerCustomer(request.name(), request.email(), request.password());
+		return authService.registerCustomer(request.name(), request.email(), request.password(), request.acceptedTerms(),
+				request.acceptedTermsVersion());
 	}
 
 	@PostMapping("/login")
@@ -52,7 +53,11 @@ class AuthController {
 			String email,
 			@NotBlank
 			@Size(min = 8, max = 120)
-			String password) {
+			String password,
+			boolean acceptedTerms,
+			@NotBlank
+			@Size(max = 40)
+			String acceptedTermsVersion) {
 
 		@Override
 		public String toString() {

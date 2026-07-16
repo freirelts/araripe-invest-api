@@ -150,7 +150,7 @@ public class EliminatoryFilterEvaluator {
 	}
 
 	private void evaluateLongTrend(EliminatoryFilterInput input, List<EliminatoryFilterReason> reasons) {
-		// Tendencia longa deteriorada bloqueia position trade porque sugere perda estrutural de interesse do mercado.
+		// Tendencia longa deteriorada bloqueia o modelo de estudo porque sugere perda estrutural de interesse do mercado.
 		boolean belowDamagedSma200 = input.getCurrentPrice() != null && input.getSma200() != null
 				&& input.getCurrentPrice().compareTo(input.getSma200().multiply(SMA200_DAMAGE_LIMIT)) < 0;
 		if (input.getTrendStatus() == TrendStatus.DOWN_TREND || belowDamagedSma200
@@ -165,7 +165,7 @@ public class EliminatoryFilterEvaluator {
 		if (greaterThan(input.getHistoricalVolatility(), EXTREME_ANNUAL_VOLATILITY)
 				|| lessOrEqual(input.getRecentDrawdown(), EXTREME_DRAWDOWN)) {
 			reasons.add(reason(EliminatoryFilterCode.EXTREME_VOLATILITY,
-					"Volatilidade ou drawdown incompativel com position trade conservador."));
+					"Volatilidade ou drawdown incompativel com acompanhamento educacional conservador."));
 		}
 	}
 

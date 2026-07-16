@@ -32,6 +32,9 @@ public interface PositionThesisRepository extends JpaRepository<PositionThesis, 
 			String ruleVersion);
 
 	@EntityGraph(attributePaths = "asset")
+	List<PositionThesis> findByReferenceDateAndRuleVersion(LocalDate referenceDate, String ruleVersion);
+
+	@EntityGraph(attributePaths = "asset")
 	List<PositionThesis> findByAssetIdAndReferenceDateBetweenOrderByReferenceDateDescScoreDesc(UUID assetId,
 			LocalDate from, LocalDate to);
 }

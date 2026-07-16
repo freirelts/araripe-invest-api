@@ -1,12 +1,12 @@
 package com.freirelts.araripe_invest_api.application.jobs;
 
 import com.freirelts.araripe_invest_api.application.ai.EconomicContextAnalysisService;
+import com.freirelts.araripe_invest_api.application.alerts.InformationalEventService;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
 import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestSummary;
 import com.freirelts.araripe_invest_api.application.notifications.NotificationDigestService;
-import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
@@ -96,7 +96,7 @@ class OperationalJobServiceTests {
 	private PositionThesisGenerationService thesisGenerationService;
 
 	@Autowired
-	private PositionRecommendationService positionRecommendationService;
+	private InformationalEventService informationalEventService;
 
 	@Autowired
 	private NotificationDigestService notificationDigestService;
@@ -111,7 +111,7 @@ class OperationalJobServiceTests {
 	@BeforeEach
 	void resetMocks() {
 		reset(marketDataCollectionService, indicatorCalculationService, assetScreeningService, thesisGenerationService,
-				positionRecommendationService, notificationDigestService);
+				informationalEventService, notificationDigestService);
 	}
 
 	@Test
@@ -190,7 +190,7 @@ class OperationalJobServiceTests {
 		when(indicatorCalculationService.calculateForActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
 		when(assetScreeningService.screenActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
 		when(thesisGenerationService.generateForActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
-		when(positionRecommendationService.recommendOpenPositions(REFERENCE_DATE)).thenReturn(List.of());
+		when(informationalEventService.scanOpenPositions(REFERENCE_DATE)).thenReturn(List.of());
 		when(notificationDigestService.publishDailyDigest(REFERENCE_DATE))
 				.thenReturn(new DailyNotificationDigestSummary(0, 0, 0, 0, 0, 0, true, false));
 
@@ -201,7 +201,7 @@ class OperationalJobServiceTests {
 
 		assertThat(result.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(steps).extracting(step -> step.get("jobName")).containsExactly("DAILY_MARKET_DATA_COLLECTION",
-				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "RANKING", "PORTFOLIO_SCAN", "DAILY_NOTIFICATION_DIGEST");
+				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "SCREENER", "PORTFOLIO_SCAN", "DAILY_NOTIFICATION_DIGEST");
 		verify(marketDataCollectionService, times(1)).collectActiveAssetData(DEFAULT_MACRO_SLUGS);
 	}
 
@@ -225,7 +225,7 @@ class OperationalJobServiceTests {
 				.containsExactly("DAILY_MARKET_DATA_COLLECTION", "INDICATOR_CALCULATION");
 		verify(assetScreeningService, never()).screenActiveAssets(any());
 		verify(thesisGenerationService, never()).generateForActiveAssets(any());
-		verify(positionRecommendationService, never()).recommendOpenPositions(any());
+		verify(informationalEventService, never()).scanOpenPositions(any());
 		verify(notificationDigestService, never()).publishDailyDigest(any());
 	}
 
@@ -246,24 +246,24 @@ class OperationalJobServiceTests {
 		assertThat(steps).extracting(step -> step.get("jobName"))
 				.containsExactly("DAILY_MARKET_DATA_COLLECTION");
 		verify(indicatorCalculationService, never()).calculateForActiveAssets(any());
-		verify(positionRecommendationService, never()).recommendOpenPositions(any());
+		verify(informationalEventService, never()).scanOpenPositions(any());
 	}
 
 	@Test
-	void rankingJobIsAuditedAndCanBeRerunWithoutDuplicatingFinancialRecords() {
+	void screenerJobIsAuditedAndCanBeRerunWithoutDuplicatingFinancialRecords() {
 		User admin = saveAdmin();
 		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG ON", "Industrial"));
 		thesisRepository.saveAndFlush(new PositionThesis(asset, REFERENCE_DATE,
-				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.OPORTUNIDADE, 82,
+				ThesisType.QUALITY_REASONABLE_PRICE, ThesisStatus.CRITERIOS_ATENDIDOS, 82,
 				PositionThesisGenerationService.RULE_VERSION));
 
-		JobRunResult first = service.execute(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
-		JobRunResult second = service.execute(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
+		JobRunResult first = service.execute(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
+		JobRunResult second = service.execute(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId());
 
 		assertThat(first.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(second.status()).isEqualTo(JobRunStatus.SUCCESS);
 		assertThat(second.runId()).isNotEqualTo(first.runId());
-		assertThat(second.summary()).containsEntry("rankedTheses", 1);
+		assertThat(second.summary()).containsEntry("screenedStudyModels", 1);
 		assertThat(thesisRepository.findAll()).hasSize(1);
 		assertThat(jobRunRepository.findByReferenceDateOrderByStartedAtDesc(REFERENCE_DATE)).hasSize(2);
 	}
@@ -271,10 +271,10 @@ class OperationalJobServiceTests {
 	@Test
 	void runningJobForSameNameAndDateBlocksConflictingExecution() {
 		User admin = saveAdmin();
-		jobRunRepository.saveAndFlush(new JobRun(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin,
+		jobRunRepository.saveAndFlush(new JobRun(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin,
 				"{\"referenceDate\":\"2026-07-07\"}"));
 
-		assertThatThrownBy(() -> service.execute(JobName.RANKING, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId()))
+		assertThatThrownBy(() -> service.execute(JobName.SCREENER, REFERENCE_DATE, JobRunTrigger.MANUAL, admin.getId()))
 				.isInstanceOf(ResponseStatusException.class)
 				.hasMessageContaining("409 CONFLICT");
 	}
@@ -327,8 +327,8 @@ class OperationalJobServiceTests {
 		}
 
 		@Bean
-		PositionRecommendationService positionRecommendationService() {
-			return mock(PositionRecommendationService.class);
+		InformationalEventService informationalEventService() {
+			return mock(InformationalEventService.class);
 		}
 
 		@Bean

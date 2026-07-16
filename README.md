@@ -1,6 +1,6 @@
 # Araripe Invest API
 
-Backend Spring Boot do Araripe Invest. Este projeto concentra dados de mercado, fundamentos, regras financeiras deterministicas, risco, recomendacoes de position trade, auditoria, integracoes externas e APIs para o frontend.
+Backend Spring Boot do Araripe Invest. Este projeto concentra dados de mercado, fundamentos, regras financeiras deterministicas, risco analitico, modelos de estudo, screener, alertas informativos, auditoria, integracoes externas e APIs para o frontend.
 
 ## Stack
 
@@ -109,6 +109,40 @@ Authorization: Bearer <token>
 
 O endpoint `GET /api/v1/auth/me` retorna o usuario autenticado. Rotas `/api/v1/admin/**` exigem perfil `ADMIN`.
 
+O cadastro de cliente exige aceite versionado dos termos educacionais vigentes:
+
+```json
+{
+  "name": "Cliente",
+  "email": "cliente@exemplo.com",
+  "password": "senha-forte",
+  "acceptedTerms": true,
+  "acceptedTermsVersion": "terms-educational-v1"
+}
+```
+
+Os termos atuais ficam publicos em:
+
+```http
+GET /api/v1/legal/terms/current
+```
+
+## Contratos regulatoriamente neutros
+
+Contratos principais expostos ao frontend:
+
+```http
+GET /api/v1/screener
+GET /api/v1/asset-studies/{studyId}
+GET /api/v1/asset-studies/history
+GET /api/v1/watched-assets
+GET /api/v1/alerts
+GET /api/v1/alerts/{alertId}
+PATCH /api/v1/alerts/{alertId}/read
+```
+
+Contratos antigos de conduta, aliases e parametros pessoais de decisao nao fazem parte da API atual. Use `/api/v1/alerts` para eventos factuais rastreados por fonte, data de referencia e regra informativa.
+
 ## Universo monitorado e brapi.dev
 
 O cadastro administrativo de ativos define o universo monitorado. A integracao com brapi.dev consulta somente simbolos cadastrados e com `active=true`; simbolos ausentes ou inativos sao ignorados antes de qualquer chamada externa.
@@ -152,4 +186,5 @@ Depois do primeiro login, desabilite o bootstrap em ambientes compartilhados.
 - Nunca expor token da brapi, OpenAI ou credenciais de e-mail/SMTP no frontend.
 - Nunca gravar senhas em texto puro.
 - Nunca registrar tokens, senhas ou prompts com dados sensiveis em logs.
-- Falha externa deve gerar status rastreavel, nao recomendacao falsa.
+- Falha externa deve gerar status rastreavel, nao alerta falso.
+- E-mails consolidados devem conter apenas alertas informativos dos ativos acompanhados, sem tipo de recomendacao ou comando operacional.

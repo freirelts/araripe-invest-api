@@ -3,12 +3,12 @@ package com.freirelts.araripe_invest_api.application.jobs;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.freirelts.araripe_invest_api.application.alerts.InformationalEventService;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
 import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestSummary;
 import com.freirelts.araripe_invest_api.application.notifications.NotificationDigestService;
-import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.jobs.JobName;
@@ -30,6 +30,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,7 +51,7 @@ public class OperationalJobService {
 	private final IndicatorCalculationService indicatorCalculationService;
 	private final AssetScreeningService assetScreeningService;
 	private final PositionThesisGenerationService thesisGenerationService;
-	private final PositionRecommendationService positionRecommendationService;
+	private final InformationalEventService informationalEventService;
 	private final NotificationDigestService notificationDigestService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -59,7 +60,7 @@ public class OperationalJobService {
 			MarketDataCollectionService marketDataCollectionService,
 			IndicatorCalculationService indicatorCalculationService, AssetScreeningService assetScreeningService,
 			PositionThesisGenerationService thesisGenerationService,
-			PositionRecommendationService positionRecommendationService,
+			InformationalEventService informationalEventService,
 			NotificationDigestService notificationDigestService) {
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
@@ -68,7 +69,7 @@ public class OperationalJobService {
 		this.indicatorCalculationService = indicatorCalculationService;
 		this.assetScreeningService = assetScreeningService;
 		this.thesisGenerationService = thesisGenerationService;
-		this.positionRecommendationService = positionRecommendationService;
+		this.informationalEventService = informationalEventService;
 		this.notificationDigestService = notificationDigestService;
 	}
 
@@ -112,9 +113,9 @@ public class OperationalJobService {
 			case INDICATOR_CALCULATION -> count("indicatorResults",
 					() -> indicatorCalculationService.calculateForActiveAssets(referenceDate).size());
 			case FILTERS_AND_THESES -> filtersAndTheses(referenceDate);
-			case RANKING -> ranking(referenceDate);
-			case PORTFOLIO_SCAN -> count("recommendations",
-					() -> positionRecommendationService.recommendOpenPositions(referenceDate).size());
+			case SCREENER -> screener(referenceDate);
+			case PORTFOLIO_SCAN -> count("informationalEvents",
+					() -> informationalEventService.scanOpenPositions(referenceDate).size());
 			case DAILY_NOTIFICATION_DIGEST -> notificationDigest(referenceDate);
 			case DAILY_OPERATIONAL_FLOW -> dailyOperationalFlow(referenceDate, trigger, requestedByUserId);
 		};
@@ -125,9 +126,9 @@ public class OperationalJobService {
 		List<Map<String, Object>> steps = new ArrayList<>();
 		boolean failed = false;
 		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses
-		// e varredura de carteira antes de qualquer notificacao.
+		// e varredura de ativos acompanhados antes de qualquer notificacao.
 		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
-				JobName.FILTERS_AND_THESES, JobName.RANKING, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
+				JobName.FILTERS_AND_THESES, JobName.SCREENER, JobName.PORTFOLIO_SCAN, JobName.DAILY_NOTIFICATION_DIGEST);
 		log.info("Daily operational flow started for referenceDate={} steps={}", referenceDate, orderedSteps.size());
 		for (JobName step : orderedSteps) {
 			log.info("Daily operational flow executing step={} referenceDate={}", step, referenceDate);
@@ -141,7 +142,7 @@ public class OperationalJobService {
 			if ((result.status() == JobRunStatus.FAILED || result.status() == JobRunStatus.PARTIAL_SUCCESS)
 					&& step != JobName.DAILY_NOTIFICATION_DIGEST) {
 				log.warn(
-						"Daily operational flow interrupted after incomplete prerequisite step={} referenceDate={} to avoid recommendations based on stale data",
+						"Daily operational flow interrupted after incomplete prerequisite step={} referenceDate={} to avoid informational events based on stale data",
 						step, referenceDate);
 				break;
 			}
@@ -180,25 +181,25 @@ public class OperationalJobService {
 		log.info("Running screening filters for referenceDate={}", referenceDate);
 		int diagnostics = assetScreeningService.screenActiveAssets(referenceDate).size();
 		log.info("Screening filters finished for referenceDate={} diagnostics={}", referenceDate, diagnostics);
-		log.info("Generating position trade theses for referenceDate={}", referenceDate);
+		log.info("Generating study models for referenceDate={}", referenceDate);
 		int theses = thesisGenerationService.generateForActiveAssets(referenceDate).size();
-		log.info("Position trade theses generated for referenceDate={} thesesGenerated={}", referenceDate, theses);
+		log.info("Study models generated for referenceDate={} thesesGenerated={}", referenceDate, theses);
 		return Map.of("screeningDiagnostics", diagnostics, "thesesGenerated", theses);
 	}
 
-	private Map<String, Object> ranking(LocalDate referenceDate) {
-		log.info("Building thesis ranking for referenceDate={} ruleVersion={}", referenceDate,
+	private Map<String, Object> screener(LocalDate referenceDate) {
+		log.info("Building thesis screener for referenceDate={} ruleVersion={}", referenceDate,
 				PositionThesisGenerationService.RULE_VERSION);
-		List<PositionThesis> ranking = positionThesisRepository
-				.findByReferenceDateAndRuleVersionOrderByScoreDesc(referenceDate,
-						PositionThesisGenerationService.RULE_VERSION);
-		List<String> topSymbols = ranking.stream()
+		List<PositionThesis> studyModels = positionThesisRepository
+				.findByReferenceDateAndRuleVersion(referenceDate, PositionThesisGenerationService.RULE_VERSION);
+		List<String> sampleSymbols = studyModels.stream()
+				.sorted(Comparator.comparing(thesis -> thesis.getAsset().getSymbol(), String.CASE_INSENSITIVE_ORDER))
 				.limit(10)
 				.map(thesis -> thesis.getAsset().getSymbol())
 				.toList();
-		log.info("Thesis ranking finished for referenceDate={} rankedTheses={} topSymbols={}", referenceDate,
-				ranking.size(), topSymbols);
-		return Map.of("rankedTheses", ranking.size(), "topSymbols", topSymbols);
+		log.info("Thesis screener finished for referenceDate={} screenedStudyModels={} sampleSymbols={}", referenceDate,
+				studyModels.size(), sampleSymbols);
+		return Map.of("screenedStudyModels", studyModels.size(), "sampleSymbols", sampleSymbols);
 	}
 
 	private Map<String, Object> notificationDigest(LocalDate referenceDate) {
@@ -207,10 +208,12 @@ public class OperationalJobService {
 				"Daily notification digest finished referenceDate={} pendingEvents={} digestsCreated={} digestsSent={} digestsFailed={} eventsSent={} eventsFailed={}",
 				referenceDate, summary.pendingEvents(), summary.digestsCreated(), summary.digestsSent(),
 				summary.digestsFailed(), summary.eventsSent(), summary.eventsFailed());
-		return Map.of("pendingActionableEvents", summary.pendingEvents(), "digestsCreated", summary.digestsCreated(),
-				"digestsSent", summary.digestsSent(), "digestsFailed", summary.digestsFailed(), "eventsSent",
-				summary.eventsSent(), "eventsFailed", summary.eventsFailed(), "skipped", summary.skipped(), "partial",
-				summary.partial());
+		return Map.ofEntries(Map.entry("pendingInformationalEvents", summary.pendingEvents()),
+				Map.entry("pendingActionableEvents", summary.pendingEvents()),
+				Map.entry("digestsCreated", summary.digestsCreated()), Map.entry("digestsSent", summary.digestsSent()),
+				Map.entry("digestsFailed", summary.digestsFailed()), Map.entry("eventsSent", summary.eventsSent()),
+				Map.entry("eventsFailed", summary.eventsFailed()), Map.entry("skipped", summary.skipped()),
+				Map.entry("partial", summary.partial()));
 	}
 
 	private Map<String, Object> count(String key, Supplier<Integer> supplier) {

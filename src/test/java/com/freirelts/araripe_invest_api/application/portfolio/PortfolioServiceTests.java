@@ -148,9 +148,9 @@ class PortfolioServiceTests {
 		var associated = portfolioService.associateMainThesis(customer.getId(), position.id(),
 				sameAssetThesis.getId(), "Tese principal aceita");
 
-		assertThat(associated.mainThesis()).isNotNull();
-		assertThat(associated.mainThesis().acceptedThesisId()).isEqualTo(sameAssetThesis.getId());
-		assertThat(associated.mainThesis().thesisType()).isEqualTo(ThesisType.QUALITY_REASONABLE_PRICE);
+		assertThat(associated.accompaniedStudyModel()).isNotNull();
+		assertThat(associated.accompaniedStudyModel().acceptedThesisId()).isEqualTo(sameAssetThesis.getId());
+		assertThat(associated.accompaniedStudyModel().thesisType()).isEqualTo(ThesisType.QUALITY_REASONABLE_PRICE);
 	}
 
 	@Test
@@ -159,7 +159,7 @@ class PortfolioServiceTests {
 		Asset asset = assetRepository.saveAndFlush(new Asset("BBAS3", "Banco do Brasil", "Financeiro"));
 		var position = portfolioService.createPosition(customer.getId(), input(asset, "100", "27.00"));
 		PositionThesis ignoredThesis = thesisRepository.saveAndFlush(thesis(asset, LocalDate.of(2026, 7, 7),
-				ThesisType.QUALITY_REASONABLE_PRICE, 55, "rules-v1", ThesisStatus.IGNORAR));
+				ThesisType.QUALITY_REASONABLE_PRICE, 55, "rules-v1", ThesisStatus.DADOS_INSUFICIENTES));
 			PositionThesis dataBlockedThesis = thesis(asset, LocalDate.of(2026, 7, 8),
 					ThesisType.SUSTAINABLE_DIVIDENDS, 75, "rules-v1");
 			dataBlockedThesis.setFailedFiltersJson("[{\"code\":\"DATA_QUALITY_BLOCKED\"}]");
@@ -190,7 +190,7 @@ class PortfolioServiceTests {
 		var replaced = portfolioService.replaceMainThesis(customer.getId(), position.id(), second.getId(),
 				"Tese revisada pelo cliente");
 
-		assertThat(replaced.mainThesis().acceptedThesisId()).isEqualTo(second.getId());
+		assertThat(replaced.accompaniedStudyModel().acceptedThesisId()).isEqualTo(second.getId());
 		var history = positionThesisRepository.findByPositionIdOrderByCreatedAtDesc(position.id());
 		assertThat(history).hasSize(2);
 		assertThat(history).anySatisfy(association -> {
@@ -241,7 +241,7 @@ class PortfolioServiceTests {
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,
 			String ruleVersion) {
-		return thesis(asset, referenceDate, thesisType, score, ruleVersion, ThesisStatus.OPORTUNIDADE);
+		return thesis(asset, referenceDate, thesisType, score, ruleVersion, ThesisStatus.CRITERIOS_ATENDIDOS);
 	}
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, int score,
@@ -250,8 +250,6 @@ class PortfolioServiceTests {
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));
-		thesis.setStopPrice(new BigDecimal("34.00"));
-		thesis.setTargetPrice(new BigDecimal("52.00"));
 		return thesis;
 	}
 }

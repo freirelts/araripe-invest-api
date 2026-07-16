@@ -32,6 +32,7 @@ public class PortfolioService {
 
 	private static final String REPLACED_BY_CUSTOMER = "Tese principal substituida pelo cliente.";
 	private static final String CLOSED_WITH_POSITION = "Posicao encerrada pelo cliente.";
+	private static final String INFORMATIONAL_POSITION_NOTICE = "Cadastro informativo declarado pelo usuario; nao e usado para recomendar compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.";
 	private static final int PRICE_SCALE = 6;
 
 	private final UserRepository userRepository;
@@ -127,7 +128,7 @@ public class PortfolioService {
 		positionThesisRepository.findByPositionIdAndStatus(positionId, CustomerPositionThesisStatus.ACTIVE)
 				.ifPresent(active -> {
 					throw new ResponseStatusException(HttpStatus.CONFLICT,
-							"Position already has an active main thesis.");
+							"Position already has an active accompanied study model.");
 				});
 		createAssociation(userId, position, thesisId, notes);
 		return summary(positionRepository.saveAndFlush(position));
@@ -161,11 +162,11 @@ public class PortfolioService {
 	}
 
 	private PositionSummary summary(CustomerPosition position) {
-		MainThesisSummary mainThesis = positionThesisRepository
+		AccompaniedStudyModelSummary accompaniedStudyModel = positionThesisRepository
 				.findByPositionIdAndStatus(position.getId(), CustomerPositionThesisStatus.ACTIVE)
-				.map(MainThesisSummary::from)
+				.map(AccompaniedStudyModelSummary::from)
 				.orElse(null);
-		return PositionSummary.from(position, mainThesis);
+		return PositionSummary.from(position, accompaniedStudyModel);
 	}
 
 	private User requireCustomer(UUID userId) {
@@ -196,8 +197,8 @@ public class PortfolioService {
 		if (input.entryDate() == null || input.entryDate().isAfter(LocalDate.now())) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Entry date must be present and not in the future.");
 		}
-		validatePositiveOptional(input.stopPrice(), "Stop price");
-		validatePositiveOptional(input.targetPrice(), "Target price");
+		validatePositiveOptional(input.userLowerPriceThreshold(), "User lower price threshold");
+		validatePositiveOptional(input.userUpperPriceThreshold(), "User upper price threshold");
 		validatePositiveOptional(input.targetReturnPercent(), "Target return percent");
 	}
 
@@ -215,8 +216,8 @@ public class PortfolioService {
 	}
 
 	private void applyEditableFields(CustomerPosition position, PositionInput input) {
-		position.setStopPrice(input.stopPrice());
-		position.setTargetPrice(input.targetPrice());
+		position.setUserLowerPriceThreshold(input.userLowerPriceThreshold());
+		position.setUserUpperPriceThreshold(input.userUpperPriceThreshold());
 		position.setTargetReturnPercent(input.targetReturnPercent());
 		position.setNotes(trimToNull(input.notes()));
 		position.setUpdatedAt(Instant.now());
@@ -234,16 +235,16 @@ public class PortfolioService {
 	}
 
 	private void validateAssociableThesis(PositionThesis thesis) {
-		if (thesis.getStatus() != ThesisStatus.MONITORAR && thesis.getStatus() != ThesisStatus.OPORTUNIDADE
-				&& thesis.getStatus() != ThesisStatus.APORTE_PLANEJADO) {
+		if (thesis.getStatus() != ThesisStatus.EM_ESTUDO
+				&& thesis.getStatus() != ThesisStatus.CRITERIOS_ATENDIDOS
+				&& thesis.getStatus() != ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-					"Only monitorable or actionable theses can be associated as a main thesis.");
+					"Only monitorable study models can be accompanied.");
 		}
 		if (thesis.getScore() < 60 || !positive(thesis.getFairPriceEstimate()) || !positive(thesis.getPriceCeiling())
-				|| thesis.getSafetyMarginPercent() == null || !positive(thesis.getStopPrice())
-				|| !positive(thesis.getTargetPrice()) || hasDataBlockingFilter(thesis.getFailedFiltersJson())) {
+				|| thesis.getSafetyMarginPercent() == null || hasDataBlockingFilter(thesis.getFailedFiltersJson())) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-					"Main thesis requires complete data, valuation, risk controls and no data quality blockers.");
+					"Accompanied study model requires complete data, valuation references and no data quality blockers.");
 		}
 	}
 
@@ -275,8 +276,8 @@ public class PortfolioService {
 			BigDecimal quantity,
 			BigDecimal averagePrice,
 			LocalDate entryDate,
-			BigDecimal stopPrice,
-			BigDecimal targetPrice,
+			BigDecimal userLowerPriceThreshold,
+			BigDecimal userUpperPriceThreshold,
 			BigDecimal targetReturnPercent,
 			String notes) {
 	}
@@ -296,26 +297,26 @@ public class PortfolioService {
 			BigDecimal quantity,
 			BigDecimal averagePrice,
 			LocalDate entryDate,
-			BigDecimal stopPrice,
-			BigDecimal targetPrice,
-			BigDecimal targetReturnPercent,
+			BigDecimal userLowerPriceThreshold,
+			BigDecimal userUpperPriceThreshold,
 			String notes,
 			PositionStatus status,
 			Instant createdAt,
 			Instant updatedAt,
 			Instant closedAt,
-			MainThesisSummary mainThesis) {
+			AccompaniedStudyModelSummary accompaniedStudyModel,
+			String regulatoryNotice) {
 
-		static PositionSummary from(CustomerPosition position, MainThesisSummary mainThesis) {
+		static PositionSummary from(CustomerPosition position, AccompaniedStudyModelSummary accompaniedStudyModel) {
 			return new PositionSummary(position.getId(), position.getAsset().getId(), position.getAsset().getSymbol(),
 					position.getAsset().getName(), position.getQuantity(), position.getAveragePrice(),
-					position.getEntryDate(), position.getStopPrice(), position.getTargetPrice(),
-					position.getTargetReturnPercent(), position.getNotes(), position.getStatus(), position.getCreatedAt(),
-					position.getUpdatedAt(), position.getClosedAt(), mainThesis);
+					position.getEntryDate(), position.getUserLowerPriceThreshold(), position.getUserUpperPriceThreshold(),
+					position.getNotes(), position.getStatus(), position.getCreatedAt(), position.getUpdatedAt(),
+					position.getClosedAt(), accompaniedStudyModel, INFORMATIONAL_POSITION_NOTICE);
 		}
 	}
 
-	public record MainThesisSummary(
+	public record AccompaniedStudyModelSummary(
 			UUID id,
 			UUID acceptedThesisId,
 			ThesisType thesisType,
@@ -328,8 +329,8 @@ public class PortfolioService {
 			Instant acceptedAt,
 			String notes) {
 
-			static MainThesisSummary from(CustomerPositionThesis association) {
-				return new MainThesisSummary(association.getId(), association.getAcceptedThesis().getId(),
+			static AccompaniedStudyModelSummary from(CustomerPositionThesis association) {
+				return new AccompaniedStudyModelSummary(association.getId(), association.getAcceptedThesis().getId(),
 						association.getThesisType(), association.getStatus(), association.getAcceptedScore(),
 						association.getAcceptedPrice(), association.getAcceptedPriceCeiling(),
 						percent(association.getAcceptedSafetyMarginPercent()), association.getRuleVersion(),

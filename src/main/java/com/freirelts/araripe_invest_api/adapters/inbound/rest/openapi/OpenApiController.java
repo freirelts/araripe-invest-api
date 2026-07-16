@@ -25,28 +25,36 @@ class OpenApiController {
 		add(paths, "/api/v1/auth/register", "post", "Cadastro de usuario CUSTOMER.");
 		add(paths, "/api/v1/auth/login", "post", "Login com JWT assinado.");
 		add(paths, "/api/v1/auth/me", "get", "Usuario autenticado.");
-		add(paths, "/api/v1/theses/ranking", "get", "Ranking diario de teses com score, valuation e risco.");
-		add(paths, "/api/v1/theses/{thesisId}", "get",
-				"Detalhe da tese com filtros, score, fundamentos, alocacao e contexto de IA validado quando existir.");
-		add(paths, "/api/v1/theses/history", "get", "Historico de teses por ativo.");
+		add(paths, "/api/v1/legal/terms/current", "get", "Termos atuais de uso educacional e informativo.");
+		add(paths, "/api/v1/screener", "get",
+				"Screener de modelos de estudo ordenavel por criterio escolhido pelo usuario.");
+		add(paths, "/api/v1/asset-studies/{studyId}", "get",
+				"Detalhe do modelo de estudo com filtros, aderencia a criterios, fundamentos, referencias analiticas e contexto de IA validado quando existir.");
+		add(paths, "/api/v1/asset-studies/history", "get", "Historico de modelos de estudo por ativo.");
 		add(paths, "/api/v1/assets", "get", "Ativos monitorados ativos.");
 		add(paths, "/api/v1/assets/{symbol}/fundamentals", "get",
 				"Fundamentos, indicadores, demonstrativos e dividendos.");
 		add(paths, "/api/v1/assets/{symbol}/diagnostics", "get", "Diagnostico de filtros eliminatorios.");
-		add(paths, "/api/v1/allocation-settings", "get", "Parametros pessoais de risco e alocacao.");
-		add(paths, "/api/v1/allocation-settings", "put", "Atualiza parametros pessoais de risco e alocacao.");
-		add(paths, "/api/v1/portfolio/positions", "get", "Carteira do cliente.");
-		add(paths, "/api/v1/portfolio/positions", "post", "Cria posicao do cliente.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}", "put", "Edita posicao aberta.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/contributions", "post",
-				"Registra aporte e recalcula quantidade e preco medio.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/close", "patch", "Encerra posicao mantendo historico.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "post", "Associa tese principal.");
-		add(paths, "/api/v1/portfolio/positions/{positionId}/main-thesis", "patch", "Troca tese principal.");
-		add(paths, "/api/v1/recommendations", "get", "Recomendacoes por posicao do usuario.");
-		add(paths, "/api/v1/recommendations/{recommendationId}", "get", "Detalhe de recomendacao por posicao.");
-		add(paths, "/api/v1/notifications", "get", "Eventos de notificacao do usuario.");
-		add(paths, "/api/v1/notifications/{notificationId}/read", "patch", "Marca notificacao como lida na web.");
+		add(paths, "/api/v1/watched-assets", "get", "Ativos acompanhados pelo usuario para alertas informativos.");
+		add(paths, "/api/v1/watched-assets", "post",
+				"Cadastra ou atualiza ativo acompanhado com limiares informativos definidos pelo usuario.");
+		add(paths, "/api/v1/watched-assets/{watchItemId}", "put",
+				"Atualiza preferencias de alerta de ativo acompanhado, sem inferir suitability.");
+		add(paths, "/api/v1/watched-assets/{watchItemId}/archive", "patch", "Arquiva ativo acompanhado.");
+		add(paths, "/api/v1/position-records", "get", "Registros informativos de posicao real declarados pelo usuario.");
+		add(paths, "/api/v1/position-records", "post", "Cria cadastro informativo de posicao real do usuario.");
+		add(paths, "/api/v1/position-records/{positionId}", "put", "Edita cadastro informativo de posicao real.");
+		add(paths, "/api/v1/position-records/{positionId}/quantity-adjustments", "post",
+				"Atualiza quantidade e preco medio informados pelo usuario para fins de registro.");
+		add(paths, "/api/v1/position-records/{positionId}/close", "patch",
+				"Arquiva cadastro informativo de posicao real mantendo historico.");
+		add(paths, "/api/v1/position-records/{positionId}/main-thesis", "post",
+				"Associa modelo de estudo acompanhado.");
+		add(paths, "/api/v1/position-records/{positionId}/main-thesis", "patch",
+				"Troca modelo de estudo acompanhado.");
+		add(paths, "/api/v1/alerts", "get", "Alertas informativos factuais dos ativos acompanhados.");
+		add(paths, "/api/v1/alerts/{alertId}", "get", "Detalhe rastreavel de alerta informativo factual.");
+		add(paths, "/api/v1/alerts/{alertId}/read", "patch", "Marca alerta informativo como lido na web.");
 		add(paths, "/api/v1/ai/context-analyses", "get", "Lista analises economicas de IA persistidas.");
 		add(paths, "/api/v1/ai/context-analyses/{analysisId}", "get", "Detalhe e status da analise economica de IA.");
 		add(paths, "/api/v1/jobs/status", "get", "Status de coleta e jobs por data.");
@@ -82,21 +90,36 @@ class OpenApiController {
 		if (path.contains("diagnostics")) {
 			return Map.of("symbol", "WEGE3", "status", "APPROVED", "failedFilters", List.of());
 		}
-		if (path.contains("recommendations")) {
-			return Map.of("recommendationType", "REAVALIAR", "severity", "HIGH",
-					"deterministicReasons", List.of("Posicao exige reavaliacao por regra deterministica."));
+		if (path.contains("legal/terms")) {
+			return Map.of("version", "terms-educational-v1", "title",
+					"Termos de uso educacionais e informativos do Araripe Invest");
 		}
-		if (path.contains("notifications")) {
-			return Map.of("eventType", "REASSESSMENT_REQUIRED", "status", "PENDING", "readAt", "");
+		if (path.contains("alerts")) {
+			return Map.of("eventType", "PRICE_THRESHOLD_REACHED", "notificationStatus", "PENDING",
+					"title", "Limiar superior de preco atingido",
+					"source", "araripe-rules", "referenceDate", "2026-07-07",
+					"regulatoryNotice", "Alerta informativo factual.");
+		}
+		if (path.contains("watched-assets")) {
+			return Map.of("symbol", "WEGE3", "userLowerPriceThreshold", 33.0, "userUpperPriceThreshold", 48.0,
+					"regulatoryNotice", "Ativo acompanhado para alertas informativos definidos pelo usuario.");
+		}
+		if (path.contains("position-records")) {
+			return Map.of("symbol", "WEGE3", "quantity", 10, "userLowerPriceThreshold", 33.0,
+					"userUpperPriceThreshold", 48.0,
+					"regulatoryNotice", "Cadastro informativo declarado pelo usuario.");
 		}
 		if (path.contains("context-analyses")) {
 			return Map.of("analysisId", "uuid", "validationStatus", "VALID", "processingStatus", "COMPLETED",
 					"sources", List.of("OpenAI Web Search"), "tokenUsage",
 					Map.of("inputTokens", 1200, "outputTokens", 450, "totalTokens", 1650, "reasoningTokens", 300));
 		}
-		if (path.contains("theses")) {
-			return Map.of("status", "OPORTUNIDADE", "score", 82, "priceCeiling", 42.0,
-					"failedFilters", List.of());
+		if (path.contains("screener") || path.contains("asset-studies")) {
+			return Map.of("status", "CRITERIOS_ATENDIDOS", "criteriaAdherenceScore", 82,
+					"scoreLabel", "Aderencia a criterios do estudo", "studyPriceReference", 42.0,
+					"methodology", "Pontuacao deterministica de aderencia aos criterios do estudo.",
+					"sources", List.of("brapi", "araripe-indicators", "araripe-rules"),
+					"limitations", List.of("Conteudo educacional e informativo."), "failedFilters", List.of());
 		}
 		return Map.of("status", "OK");
 	}

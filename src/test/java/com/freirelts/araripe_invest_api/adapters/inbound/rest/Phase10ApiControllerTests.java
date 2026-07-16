@@ -3,11 +3,12 @@ package com.freirelts.araripe_invest_api.adapters.inbound.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
-import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.jobs.JobName;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRun;
@@ -26,14 +27,10 @@ import com.freirelts.araripe_invest_api.domain.marketdata.StatementType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
-import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
@@ -48,9 +45,8 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.DataCollectio
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FinancialStatementSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
@@ -77,7 +73,6 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -126,10 +121,7 @@ class Phase10ApiControllerTests {
 	private CustomerPositionThesisRepository positionThesisRepository;
 
 	@Autowired
-	private PositionRecommendationRepository recommendationRepository;
-
-	@Autowired
-	private NotificationEventRepository notificationEventRepository;
+	private InformationalAlertRepository informationalAlertRepository;
 
 	@Autowired
 	private DataCollectionRecordRepository dataCollectionRecordRepository;
@@ -152,12 +144,13 @@ class Phase10ApiControllerTests {
 		mockMvc.perform(get("/v3/api-docs"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.openapi").value("3.0.3"))
-				.andExpect(jsonPath("$.paths['/api/v1/recommendations'].get.summary").isString())
+				.andExpect(jsonPath("$.paths['/api/v1/alerts'].get.summary").isString())
+				.andExpect(jsonPath("$.paths['/api/v1/asset-studies/{studyId}'].get.summary").isString())
 				.andExpect(jsonPath("$.paths['/api/v1/admin/jobs/{jobName}/runs'].post.summary").isString());
 	}
 
 	@Test
-	void customerCanReadPhase10ContractsAndCannotReadOtherCustomerRecommendations() throws Exception {
+	void customerCanReadPhase10ContractsAndAlerts() throws Exception {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 7);
 		User customer = saveUser("Phase 10 Customer", "phase10-customer@araripe.test", "senha-phase10-123",
 				SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
@@ -180,30 +173,33 @@ class Phase10ApiControllerTests {
 				new BigDecimal("10"), new BigDecimal("38.00"), referenceDate));
 		CustomerPositionThesis association = positionThesisRepository.saveAndFlush(new CustomerPositionThesis(customer,
 				position, thesis, new BigDecimal("38.00")));
-		PositionRecommendation recommendation = recommendationRepository.saveAndFlush(recommendation(customer, position,
-				asset, association, thesis, referenceDate));
-		NotificationEvent notification = notificationEventRepository.saveAndFlush(notification(customer, position, asset,
-				recommendation, referenceDate));
+		InformationalAlert alert = informationalAlertRepository.saveAndFlush(alert(customer, position, asset,
+				association, thesis, referenceDate));
 		saveJobStatus(customer, referenceDate);
 
 		String token = login(customer, "senha-phase10-123");
 		String adminToken = login(admin, "senha-phase10-admin-123");
-		String otherToken = login(other, "senha-phase10-other-123");
+		login(other, "senha-phase10-other-123");
 
-		mockMvc.perform(get("/api/v1/theses/ranking?date=2026-07-07"))
+		mockMvc.perform(get("/api/v1/screener?date=2026-07-07"))
 				.andExpect(status().isUnauthorized());
 
 		mockMvc.perform(get("/api/v1/assets").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].symbol").value("WEGE3"));
 
-		mockMvc.perform(get("/api/v1/theses/ranking?date=2026-07-07").header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/screener?date=2026-07-07&sortBy=CRITERIA_ADHERENCE_SCORE&direction=DESC")
+						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$", hasSize(1)))
-				.andExpect(jsonPath("$[0].score").value(82))
-				.andExpect(jsonPath("$[0].priceCeiling").value(42.0));
+				.andExpect(jsonPath("$[0].criteriaAdherenceScore").value(82))
+				.andExpect(jsonPath("$[0].scoreLabel").value("Aderencia a criterios do estudo"))
+				.andExpect(jsonPath("$[0].studyPriceReference").value(42.0))
+				.andExpect(jsonPath("$[0].methodology").isString())
+				.andExpect(jsonPath("$[0].sources[0]").value("brapi"))
+				.andExpect(jsonPath("$[0].limitations[0]").value("Conteudo educacional e informativo."));
 
-		mockMvc.perform(get("/api/v1/theses/{thesisId}", thesis.getId()).header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/asset-studies/{studyId}", thesis.getId()).header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.thesis.asset.symbol").value("WEGE3"))
 				.andExpect(jsonPath("$.aiContext.analysisId").value(validAiContext.getId().toString()))
@@ -213,7 +209,7 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$.aiContext.sources.webCitations[0].url").value("https://example.com/macro"))
 				.andExpect(jsonPath("$.riskNotice").isString());
 
-		mockMvc.perform(get("/api/v1/theses/history?symbol=WEGE3&from=2026-07-01&to=2026-07-12")
+		mockMvc.perform(get("/api/v1/asset-studies/history?symbol=WEGE3&from=2026-07-01&to=2026-07-12")
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].id").value(thesis.getId().toString()));
@@ -225,47 +221,20 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$.technicalIndicators.trendStatus").value("HEALTHY"))
 				.andExpect(jsonPath("$.financialStatements[0].statementType").value("BALANCE_SHEET"));
 
-		mockMvc.perform(get("/api/v1/allocation-settings").header("Authorization", bearer(token)))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.persisted").value(false));
-
-		mockMvc.perform(put("/api/v1/allocation-settings").header("Authorization", bearer(token))
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{
-								  "capitalBase":15000.00,
-								  "maxAllocationPerAssetPercent":10.000000,
-								  "maxAllocationPerSectorPercent":25.000000,
-								  "toleratedDrawdownPercent":25.000000,
-								  "minimumCashReservePercent":10.000000,
-								  "minimumSafetyMarginPercent":15.000000,
-								  "firstTranchePercent":50.000000,
-								  "secondTranchePercent":25.000000,
-								  "thirdTranchePercent":25.000000,
-								  "defaultStopPercent":15.000000,
-								  "defaultTargetReturnPercent":25.000000
-								}
-								"""))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.capitalBase").value(15000.0))
-				.andExpect(jsonPath("$.persisted").value(true));
-
-		mockMvc.perform(get("/api/v1/recommendations?date=2026-07-07").header("Authorization", bearer(token)))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].id").value(recommendation.getId().toString()))
-				.andExpect(jsonPath("$[0].deterministicReasons[0]").value("Tese principal segue valida."));
-
-		mockMvc.perform(get("/api/v1/recommendations/{recommendationId}", recommendation.getId())
-						.header("Authorization", bearer(otherToken)))
-				.andExpect(status().isNotFound());
-
-		mockMvc.perform(get("/api/v1/notifications?from=2026-07-01&to=2026-07-12")
+		mockMvc.perform(get("/api/v1/alerts?from=2026-07-01&to=2026-07-12")
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[0].id").value(notification.getId().toString()))
-				.andExpect(jsonPath("$[0].readAt").doesNotExist());
+				.andExpect(jsonPath("$[0].id").value(alert.getId().toString()))
+				.andExpect(jsonPath("$[0].eventType").value("STUDY_ASSUMPTION_CHANGED"))
+				.andExpect(jsonPath("$[0].notificationStatus").value("PENDING"))
+				.andExpect(jsonPath("$[0].regulatoryNotice").isString())
+				.andExpect(jsonPath("$[0].evidence.studyReferenceDate").value("2026-07-07"));
 
-		mockMvc.perform(patch("/api/v1/notifications/{notificationId}/read", notification.getId())
+		mockMvc.perform(get("/api/v1/alerts/{alertId}", alert.getId()).header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.source").value("araripe-rules"));
+
+		mockMvc.perform(patch("/api/v1/alerts/{alertId}/read", alert.getId())
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.readAt", notNullValue()));
@@ -273,7 +242,7 @@ class Phase10ApiControllerTests {
 		mockMvc.perform(get("/api/v1/jobs/status?date=2026-07-07").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.collectionRecords[0].category").value("DAILY_HISTORY"))
-				.andExpect(jsonPath("$.jobRuns[0].jobName").value("RANKING"));
+				.andExpect(jsonPath("$.jobRuns[0].jobName").value("SCREENER"));
 
 		String aiResponse = mockMvc.perform(post("/api/v1/admin/ai/context-analyses")
 						.header("Authorization", bearer(adminToken))
@@ -326,13 +295,11 @@ class Phase10ApiControllerTests {
 
 	private PositionThesis thesis(Asset asset, LocalDate referenceDate) {
 		PositionThesis thesis = new PositionThesis(asset, referenceDate, ThesisType.QUALITY_REASONABLE_PRICE,
-				ThesisStatus.OPORTUNIDADE, 82, PositionThesisGenerationService.RULE_VERSION);
+				ThesisStatus.CRITERIOS_ATENDIDOS, 82, PositionThesisGenerationService.RULE_VERSION);
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));
-		thesis.setStopPrice(new BigDecimal("34.00"));
-		thesis.setTargetPrice(new BigDecimal("52.00"));
-		thesis.setReasonsJson("[\"Fundamentos consistentes e preco dentro da zona de entrada.\"]");
+		thesis.setReasonsJson("[\"Fundamentos consistentes e preco dentro da faixa de observacao do estudo.\"]");
 		thesis.setScoreBreakdownJson("{\"quality\":30,\"valuation\":18}");
 		thesis.setReviewPointsJson("[\"Reavaliar se perder tendencia longa.\"]");
 		return thesis;
@@ -372,45 +339,22 @@ class Phase10ApiControllerTests {
 		return aiContextAnalysisRepository.saveAndFlush(analysis);
 	}
 
-	private PositionRecommendation recommendation(User user, CustomerPosition position, Asset asset,
+	private InformationalAlert alert(User user, CustomerPosition position, Asset asset,
 			CustomerPositionThesis association, PositionThesis thesis, LocalDate referenceDate) {
-		PositionRecommendation recommendation = new PositionRecommendation();
-		recommendation.setUser(user);
-		recommendation.setPosition(position);
-		recommendation.setAsset(asset);
-		recommendation.setCustomerPositionThesis(association);
-		recommendation.setCurrentThesis(thesis);
-		recommendation.setThesisType(thesis.getThesisType());
-		recommendation.setReferenceDate(referenceDate);
-		recommendation.setRecommendationType(RecommendationType.MANTER);
-		recommendation.setSeverity(Severity.LOW);
-		recommendation.setCurrentPrice(new BigDecimal("39.00"));
-		recommendation.setAveragePrice(position.getAveragePrice());
-		recommendation.setStopPrice(new BigDecimal("34.00"));
-		recommendation.setTargetPrice(new BigDecimal("52.00"));
-		recommendation.setScore(82);
-		recommendation.setDeterministicReasonJson("[\"Tese principal segue valida.\"]");
-		recommendation.setFinalMessage("Tese principal segue valida.");
-		recommendation.setRuleVersion(PositionRecommendationService.RULE_VERSION);
-		return recommendation;
-	}
-
-	private NotificationEvent notification(User user, CustomerPosition position, Asset asset,
-			PositionRecommendation recommendation, LocalDate referenceDate) {
-		NotificationEvent notification = new NotificationEvent();
-		notification.setUser(user);
-		notification.setPosition(position);
-		notification.setAsset(asset);
-		notification.setRecommendation(recommendation);
-		notification.setReferenceDate(referenceDate);
-		notification.setChannel(NotificationChannel.EMAIL);
-		notification.setEventType(NotificationEventType.REASSESSMENT_REQUIRED);
-		notification.setRecommendationType(RecommendationType.REAVALIAR);
-		notification.setSeverity(Severity.HIGH);
-		notification.setStatus(NotificationStatus.PENDING);
-		notification.setSummary("Reavaliar posicao por evento critico.");
-		notification.setRuleVersion(PositionRecommendationService.RULE_VERSION);
-		return notification;
+		InformationalAlert alert = new InformationalAlert(user, asset, referenceDate,
+				InformationalEventType.STUDY_ASSUMPTION_CHANGED, Severity.HIGH,
+				"Premissas do modelo de estudo alteradas",
+				"Premissas do estudo alteradas por evento critico.", "informational-events-v1");
+		alert.setSourcePosition(position);
+		alert.setStudyModel(association);
+		alert.setCurrentStudyModelSnapshot(thesis);
+		alert.setSource("araripe-rules");
+		alert.setEvidenceJson("""
+				{"assetSymbol":"WEGE3","sourcePositionId":"%s","studyReferenceDate":"2026-07-07","rule":"informational-events-v1"}
+				""".formatted(position.getId()));
+		alert.setNotificationChannel(NotificationChannel.EMAIL);
+		alert.setNotificationStatus(NotificationStatus.PENDING);
+		return alert;
 	}
 
 	private void saveJobStatus(User requester, LocalDate referenceDate) {
@@ -419,7 +363,7 @@ class Phase10ApiControllerTests {
 		record.setStatus(DataCollectionStatus.SUCCESS);
 		dataCollectionRecordRepository.saveAndFlush(record);
 
-		JobRun run = new JobRun(JobName.RANKING, referenceDate, JobRunTrigger.MANUAL, requester,
+		JobRun run = new JobRun(JobName.SCREENER, referenceDate, JobRunTrigger.MANUAL, requester,
 				"{\"referenceDate\":\"2026-07-07\"}");
 		run.setStatus(JobRunStatus.SUCCESS);
 		run.setCompletedAt(Instant.now());

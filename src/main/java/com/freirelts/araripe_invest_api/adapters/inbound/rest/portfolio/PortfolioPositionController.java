@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/v1/portfolio/positions")
+@RequestMapping("/api/v1/position-records")
 @PreAuthorize("hasRole('CUSTOMER')")
 class PortfolioPositionController {
 
@@ -68,6 +68,12 @@ class PortfolioPositionController {
 		return portfolioService.registerContribution(userId(authentication), positionId, request.toInput());
 	}
 
+	@PostMapping("/{positionId}/quantity-adjustments")
+	PositionSummary registerQuantityAdjustment(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
+			@Valid @RequestBody ContributionRequest request) {
+		return portfolioService.registerContribution(userId(authentication), positionId, request.toInput());
+	}
+
 	@PostMapping("/{positionId}/main-thesis")
 	@ResponseStatus(HttpStatus.CREATED)
 	PositionSummary associateMainThesis(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
@@ -101,17 +107,15 @@ class PortfolioPositionController {
 			@PastOrPresent
 			LocalDate entryDate,
 			@Positive
-			BigDecimal stopPrice,
+			BigDecimal userLowerPriceThreshold,
 			@Positive
-			BigDecimal targetPrice,
-			@Positive
-			BigDecimal targetReturnPercent,
+			BigDecimal userUpperPriceThreshold,
 			@Size(max = 1000)
 			String notes) {
 
 		PositionInput toInput() {
-			return new PositionInput(assetId, quantity, averagePrice, entryDate, stopPrice, targetPrice,
-					targetReturnPercent, notes);
+			return new PositionInput(assetId, quantity, averagePrice, entryDate, userLowerPriceThreshold,
+					userUpperPriceThreshold, null, notes);
 		}
 	}
 

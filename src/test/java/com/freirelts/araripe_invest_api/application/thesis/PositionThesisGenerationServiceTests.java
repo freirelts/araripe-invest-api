@@ -1,7 +1,6 @@
 package com.freirelts.araripe_invest_api.application.thesis;
 
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
-import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
 import com.freirelts.araripe_invest_api.application.screening.EliminatoryFilterEvaluator;
 import com.freirelts.araripe_invest_api.application.screening.FundamentalEvidenceService;
@@ -17,7 +16,6 @@ import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.AllocationPlanRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
@@ -47,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({ PositionThesisGenerationService.class, EliminatoryFilterEvaluator.class, ScoringService.class,
-		FundamentalEvidenceService.class, RiskAllocationService.class })
+		FundamentalEvidenceService.class })
 class PositionThesisGenerationServiceTests {
 
 	@Container
@@ -74,9 +72,6 @@ class PositionThesisGenerationServiceTests {
 	@Autowired
 	private PositionThesisRepository positionThesisRepository;
 
-	@Autowired
-	private AllocationPlanRepository allocationPlanRepository;
-
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -85,7 +80,7 @@ class PositionThesisGenerationServiceTests {
 	}
 
 	@Test
-	void generatesThreeActionableMvpThesesWithValuationRiskAndAllocation() {
+	void generatesThreeActionableMvpThesesWithValuationAndAuditData() {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
 		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG S.A.", "Bens Industriais"));
 		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
@@ -99,14 +94,11 @@ class PositionThesisGenerationServiceTests {
 
 		assertThat(theses).hasSize(3);
 		assertThat(positionThesisRepository.findAll()).hasSize(3);
-		assertThat(allocationPlanRepository.findAll()).hasSize(3);
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.APORTE_PLANEJADO);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.CRITERIOS_ATENDIDOS);
 			assertThat(thesis.getFairPriceEstimate()).isPositive();
 			assertThat(thesis.getPriceCeiling()).isPositive();
 			assertThat(thesis.getSafetyMarginPercent()).isGreaterThanOrEqualTo(new BigDecimal("0.150000"));
-			assertThat(thesis.getStopPrice()).isPositive();
-			assertThat(thesis.getTargetPrice()).isPositive();
 			assertThat(thesis.getRuleVersion()).isEqualTo(ScoringService.RULE_VERSION);
 			assertThat(thesis.getScore()).isBetween(0, 100);
 			assertThat(thesis.getScoreBreakdownJson()).contains("FUNDAMENTAL_QUALITY",
@@ -114,46 +106,6 @@ class PositionThesisGenerationServiceTests {
 					"MACRO_SECTOR_CONTEXT");
 			assertThat(thesis.getReasonsJson()).contains("ENTRY_ZONE");
 			assertThat(thesis.getReviewPointsJson()).contains("preco", "fundamentos", "tendencia");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().isValid()).isTrue();
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getSuggestedQuantity())
-					.isEqualTo(50);
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow()
-					.getMaxAllocationPerSectorPercent()).isEqualByComparingTo("25.000000");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow()
-					.getMinimumCashReservePercent()).isEqualByComparingTo("10.000000");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getFirstTrancheValue())
-					.isEqualByComparingTo("500.00");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getSecondTrancheValue())
-					.isEqualByComparingTo("250.00");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getThirdTrancheValue())
-					.isEqualByComparingTo("250.00");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getStopPrice())
-					.isEqualByComparingTo(thesis.getStopPrice());
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getTargetPrice())
-					.isEqualByComparingTo(thesis.getTargetPrice());
-		});
-	}
-
-	@Test
-	void persistsBlockedAllocationPlanWhenPriceIsAboveCeiling() {
-		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
-		Asset asset = assetRepository.saveAndFlush(new Asset("CARO3", "Companhia Cara", "Consumo"));
-		saveValidCandle(asset, referenceDate, new BigDecimal("34.50"));
-		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY);
-		saveStrongFundamental(asset, referenceDate);
-		saveDividend(asset, LocalDate.of(2025, 4, 1));
-		saveDividend(asset, LocalDate.of(2026, 4, 1));
-
-		service.generateForAsset(asset, referenceDate);
-
-		PositionThesis qualityThesis = positionThesisRepository
-				.findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(asset.getId(), referenceDate,
-						ThesisType.QUALITY_REASONABLE_PRICE, PositionThesisGenerationService.RULE_VERSION)
-				.orElseThrow();
-		assertThat(allocationPlanRepository.findByThesisId(qualityThesis.getId())).hasValueSatisfying(plan -> {
-			assertThat(plan.isValid()).isFalse();
-			assertThat(plan.getSuggestedQuantity()).isZero();
-			assertThat(plan.getInvalidReason()).contains("preco teto");
 		});
 	}
 
@@ -192,7 +144,7 @@ class PositionThesisGenerationServiceTests {
 				.findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(asset.getId(), referenceDate,
 						ThesisType.SUSTAINABLE_DIVIDENDS, PositionThesisGenerationService.RULE_VERSION)
 				.orElseThrow();
-		assertThat(dividendThesis.getStatus()).isNotEqualTo(ThesisStatus.APORTE_PLANEJADO);
+		assertThat(dividendThesis.getStatus()).isNotEqualTo(ThesisStatus.CRITERIOS_ATENDIDOS);
 		assertThat(dividendThesis.getReasonsJson()).contains("DIVIDEND_RECURRENCE_FAILED");
 	}
 
@@ -207,7 +159,7 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses)
-				.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.REDUZIR_EXPOSICAO));
+				.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS));
 	}
 
 	@Test
@@ -227,7 +179,7 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.REDUZIR_EXPOSICAO);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS);
 			assertThat(thesis.getFailedFiltersJson()).contains("STRONG_EARNINGS_DETERIORATION")
 				.doesNotContain("STRONG_REVENUE_DETERIORATION", "NEGATIVE_PROFIT_MARGIN");
 		});
@@ -247,12 +199,9 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.MONITORAR);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.EM_ESTUDO);
 			assertThat(thesis.getScore()).isGreaterThanOrEqualTo(80);
 			assertThat(thesis.getFailedFiltersJson()).contains("INSUFFICIENT_LIQUIDITY");
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().isValid()).isFalse();
-			assertThat(allocationPlanRepository.findByThesisId(thesis.getId()).orElseThrow().getInvalidReason())
-					.contains("Status da tese");
 		});
 	}
 
@@ -272,7 +221,7 @@ class PositionThesisGenerationServiceTests {
 		assertThat(theses).hasSize(3)
 				.allSatisfy(thesis -> {
 					assertThat(thesis.getReferenceDate()).isEqualTo(referenceDate);
-					assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.APORTE_PLANEJADO);
+					assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.CRITERIOS_ATENDIDOS);
 					assertThat(thesis.getFailedFiltersJson()).isEqualTo("[]");
 				});
 	}
@@ -294,7 +243,6 @@ class PositionThesisGenerationServiceTests {
 		assertThat(theses)
 				.anySatisfy(thesis -> assertThat(thesis.getSafetyMarginPercent())
 						.isLessThan(new BigDecimal("-9999.999999")));
-		assertThat(allocationPlanRepository.findAll()).hasSize(3);
 	}
 
 	private void saveValidCandle(Asset asset, LocalDate referenceDate, BigDecimal close) {

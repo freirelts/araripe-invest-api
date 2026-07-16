@@ -67,6 +67,12 @@ public class User {
 	@Column(name = "last_login_at")
 	private Instant lastLoginAt;
 
+	@Column(name = "terms_version_accepted", length = 40)
+	private String termsVersionAccepted;
+
+	@Column(name = "terms_accepted_at")
+	private Instant termsAcceptedAt;
+
 	@OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
 	private Set<UserRole> roles = new LinkedHashSet<>();
 
@@ -102,5 +108,11 @@ public class User {
 		}
 		return hasRole(UserRoleType.CUSTOMER)
 				&& (subscriptionStatus == SubscriptionStatus.ACTIVE || subscriptionStatus == SubscriptionStatus.TRIALING);
+	}
+
+	public void acceptTerms(String version, Instant acceptedAt) {
+		this.termsVersionAccepted = version;
+		this.termsAcceptedAt = acceptedAt;
+		this.updatedAt = acceptedAt;
 	}
 }

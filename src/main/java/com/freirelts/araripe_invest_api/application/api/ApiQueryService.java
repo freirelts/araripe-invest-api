@@ -4,11 +4,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
-import com.freirelts.araripe_invest_api.application.risk.RiskAllocationSettings;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
+import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.assets.AssetType;
 import com.freirelts.araripe_invest_api.domain.assets.Market;
@@ -25,33 +27,23 @@ import com.freirelts.araripe_invest_api.domain.marketdata.StatementType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEvent;
-import com.freirelts.araripe_invest_api.domain.notifications.NotificationEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
-import com.freirelts.araripe_invest_api.domain.recommendations.RecommendationType;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
-import com.freirelts.araripe_invest_api.domain.risk.UserRiskAllocationSettings;
-import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.AllocationPlanRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AiContextAnalysisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DataCollectionRecordRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FinancialStatementSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
+import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.JobRunRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.TechnicalIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRiskAllocationSettingsRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,6 +53,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -77,43 +70,35 @@ public class ApiQueryService {
 
 	private final AssetRepository assetRepository;
 	private final PositionThesisRepository thesisRepository;
-	private final AllocationPlanRepository allocationPlanRepository;
 	private final TechnicalIndicatorSnapshotRepository technicalIndicatorRepository;
 	private final FundamentalSnapshotRepository fundamentalRepository;
 	private final FinancialStatementSnapshotRepository financialStatementRepository;
 	private final DividendEventRepository dividendEventRepository;
-	private final PositionRecommendationRepository recommendationRepository;
-	private final NotificationEventRepository notificationEventRepository;
+	private final InformationalAlertRepository informationalAlertRepository;
 	private final DataCollectionRecordRepository dataCollectionRecordRepository;
 	private final JobRunRepository jobRunRepository;
 	private final UserRepository userRepository;
-	private final UserRiskAllocationSettingsRepository riskSettingsRepository;
 	private final AiContextAnalysisRepository aiContextAnalysisRepository;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public ApiQueryService(AssetRepository assetRepository, PositionThesisRepository thesisRepository,
-			AllocationPlanRepository allocationPlanRepository,
 			TechnicalIndicatorSnapshotRepository technicalIndicatorRepository,
 			FundamentalSnapshotRepository fundamentalRepository,
 			FinancialStatementSnapshotRepository financialStatementRepository,
-			DividendEventRepository dividendEventRepository, PositionRecommendationRepository recommendationRepository,
-			NotificationEventRepository notificationEventRepository,
+			DividendEventRepository dividendEventRepository, InformationalAlertRepository informationalAlertRepository,
 			DataCollectionRecordRepository dataCollectionRecordRepository, JobRunRepository jobRunRepository,
-			UserRepository userRepository, UserRiskAllocationSettingsRepository riskSettingsRepository,
+			UserRepository userRepository,
 			AiContextAnalysisRepository aiContextAnalysisRepository) {
 		this.assetRepository = assetRepository;
 		this.thesisRepository = thesisRepository;
-		this.allocationPlanRepository = allocationPlanRepository;
 		this.technicalIndicatorRepository = technicalIndicatorRepository;
 		this.fundamentalRepository = fundamentalRepository;
 		this.financialStatementRepository = financialStatementRepository;
 		this.dividendEventRepository = dividendEventRepository;
-		this.recommendationRepository = recommendationRepository;
-		this.notificationEventRepository = notificationEventRepository;
+		this.informationalAlertRepository = informationalAlertRepository;
 		this.dataCollectionRecordRepository = dataCollectionRecordRepository;
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
-		this.riskSettingsRepository = riskSettingsRepository;
 		this.aiContextAnalysisRepository = aiContextAnalysisRepository;
 	}
 
@@ -125,12 +110,20 @@ public class ApiQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<ThesisSummaryResponse> ranking(LocalDate referenceDate) {
+	public List<ThesisSummaryResponse> screener(LocalDate referenceDate, ScreenerSortBy sortBy,
+			SortDirection direction) {
+		ScreenerSortBy effectiveSort = sortBy == null ? ScreenerSortBy.ASSET_SYMBOL : sortBy;
+		SortDirection effectiveDirection = direction == null ? SortDirection.ASC : direction;
+		Comparator<PositionThesis> comparator = comparator(effectiveSort);
+		if (effectiveDirection == SortDirection.DESC) {
+			comparator = comparator.reversed();
+		}
 		return thesisRepository
-				.findByReferenceDateAndRuleVersionOrderByScoreDesc(effectiveDate(referenceDate),
+				.findByReferenceDateAndRuleVersion(effectiveDate(referenceDate),
 						PositionThesisGenerationService.RULE_VERSION)
 				.stream()
-				.map(thesis -> thesisSummary(thesis, allocationPlanRepository.findByThesisId(thesis.getId()).orElse(null)))
+				.sorted(comparator.thenComparing(thesis -> thesis.getId().toString()))
+				.map(this::thesisSummary)
 				.toList();
 	}
 
@@ -138,7 +131,6 @@ public class ApiQueryService {
 	public ThesisDetailResponse thesisDetail(UUID thesisId) {
 		PositionThesis thesis = thesisRepository.findById(thesisId)
 				.orElseThrow(() -> notFound("Thesis not found."));
-		AllocationPlan allocationPlan = allocationPlanRepository.findByThesisId(thesisId).orElse(null);
 		TechnicalIndicatorSnapshot technical = technicalIndicatorRepository
 				.findTopByAssetIdAndTradeDateLessThanEqualAndCalculationVersionOrderByTradeDateDescCreatedAtDesc(
 						thesis.getAsset().getId(), thesis.getReferenceDate(), IndicatorCalculationService.CALCULATION_VERSION)
@@ -148,13 +140,12 @@ public class ApiQueryService {
 				.findTopByThesisIdAndReferenceDateLessThanEqualAndValidationStatusOrderByReferenceDateDescCreatedAtDesc(
 						thesis.getId(), thesis.getReferenceDate(), AiValidationStatus.VALID)
 				.orElse(null);
-		return new ThesisDetailResponse(thesisSummary(thesis, allocationPlan), map(thesis.getScoreBreakdownJson()),
+		return new ThesisDetailResponse(thesisSummary(thesis), map(thesis.getScoreBreakdownJson()),
 				list(thesis.getReasonsJson()), list(thesis.getFailedFiltersJson()), list(thesis.getReviewPointsJson()),
 				technical == null ? null : TechnicalIndicatorResponse.from(technical),
 				fundamental == null ? null : FundamentalResponse.from(fundamental),
-				allocationPlan == null ? null : AllocationPlanResponse.from(allocationPlan),
 				aiContext == null ? null : AiContextAnalysisSummaryResponse.from(aiContext, this::jsonValue),
-				"Recomendacao de position trade sujeita a risco; o sistema nao executa ordens e nao garante retorno.");
+				"Conteudo educacional e informativo; nao indica compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.");
 	}
 
 	@Transactional(readOnly = true)
@@ -165,7 +156,7 @@ public class ApiQueryService {
 		return thesisRepository.findByAssetIdAndReferenceDateBetweenOrderByReferenceDateDescScoreDesc(asset.getId(),
 						effectiveFrom, effectiveTo)
 				.stream()
-				.map(thesis -> thesisSummary(thesis, allocationPlanRepository.findByThesisId(thesis.getId()).orElse(null)))
+				.map(this::thesisSummary)
 				.toList();
 	}
 
@@ -200,62 +191,35 @@ public class ApiQueryService {
 	}
 
 	@Transactional(readOnly = true)
-	public List<RecommendationResponse> recommendations(UUID userId, LocalDate date) {
-		requireCustomer(userId);
-		return recommendationRepository.findByUserIdAndReferenceDateOrderByCreatedAtDesc(userId, effectiveDate(date))
-				.stream()
-				.map(this::recommendationResponse)
-				.toList();
-	}
-
-	@Transactional(readOnly = true)
-	public RecommendationResponse recommendation(UUID userId, UUID recommendationId) {
-		requireCustomer(userId);
-		return recommendationRepository.findByIdAndUserId(recommendationId, userId)
-				.map(this::recommendationResponse)
-				.orElseThrow(() -> notFound("Recommendation not found."));
-	}
-
-	@Transactional(readOnly = true)
-	public List<NotificationResponse> notifications(UUID userId, LocalDate from, LocalDate to) {
+	public List<InformationalAlertResponse> alerts(UUID userId, LocalDate from, LocalDate to) {
 		requireCustomer(userId);
 		LocalDate effectiveTo = effectiveDate(to);
 		LocalDate effectiveFrom = from == null ? effectiveTo.minusDays(30) : from;
-		return notificationEventRepository
-				.findByUserIdAndReferenceDateBetweenOrderByReferenceDateDescCreatedAtDesc(userId, effectiveFrom, effectiveTo)
+		return informationalAlertRepository
+				.findByUserIdAndReferenceDateBetweenOrderByReferenceDateDescCreatedAtDesc(userId, effectiveFrom,
+						effectiveTo)
 				.stream()
-				.map(NotificationResponse::from)
+				.map(alert -> InformationalAlertResponse.from(alert, this::map))
 				.toList();
 	}
 
 	@Transactional
-	public NotificationResponse markNotificationRead(UUID userId, UUID notificationId) {
+	public InformationalAlertResponse alert(UUID userId, UUID alertId) {
 		requireCustomer(userId);
-		NotificationEvent event = notificationEventRepository.findByIdAndUserId(notificationId, userId)
-				.orElseThrow(() -> notFound("Notification not found."));
-		if (event.getReadAt() == null) {
-			event.setReadAt(Instant.now());
-		}
-		return NotificationResponse.from(notificationEventRepository.saveAndFlush(event));
-	}
-
-	@Transactional(readOnly = true)
-	public RiskSettingsResponse riskSettings(UUID userId) {
-		requireCustomer(userId);
-		return riskSettingsRepository.findByUserId(userId)
-				.map(RiskSettingsResponse::from)
-				.orElseGet(() -> RiskSettingsResponse.fromDefaults(userId));
+		InformationalAlert alert = informationalAlertRepository.findByIdAndUserId(alertId, userId)
+				.orElseThrow(() -> notFound("Alert not found."));
+		return InformationalAlertResponse.from(alert, this::map);
 	}
 
 	@Transactional
-	public RiskSettingsResponse updateRiskSettings(UUID userId, RiskAllocationSettings settings) {
-		User user = requireCustomer(userId);
-		validateRiskSettings(settings);
-		UserRiskAllocationSettings entity = riskSettingsRepository.findByUserId(userId)
-				.orElseGet(() -> new UserRiskAllocationSettings(user));
-		apply(entity, settings);
-		entity.setUpdatedAt(Instant.now());
-		return RiskSettingsResponse.from(riskSettingsRepository.saveAndFlush(entity));
+	public InformationalAlertResponse markAlertRead(UUID userId, UUID alertId) {
+		requireCustomer(userId);
+		InformationalAlert event = informationalAlertRepository.findByIdAndUserId(alertId, userId)
+				.orElseThrow(() -> notFound("Alert not found."));
+		if (event.getReadAt() == null) {
+			event.setReadAt(Instant.now());
+		}
+		return InformationalAlertResponse.from(informationalAlertRepository.saveAndFlush(event), this::map);
 	}
 
 	@Transactional(readOnly = true)
@@ -274,34 +238,42 @@ public class ApiQueryService {
 		return new JobStatusResponse(referenceDate, records, runs);
 	}
 
-	private ThesisSummaryResponse thesisSummary(PositionThesis thesis, AllocationPlan allocationPlan) {
+	private ThesisSummaryResponse thesisSummary(PositionThesis thesis) {
 		Asset asset = thesis.getAsset();
 		return new ThesisSummaryResponse(thesis.getId(), AssetResponse.from(asset), thesis.getReferenceDate(),
-				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), thesis.getPriceCeiling(),
-				thesis.getFairPriceEstimate(), percent(thesis.getSafetyMarginPercent()), thesis.getStopPrice(),
-				thesis.getTargetPrice(), allocationPlan == null ? null : allocationPlan.getTargetAllocationPercent(),
-				allocationPlan == null ? null : allocationPlan.getSuggestedQuantity(),
-				allocationPlan == null ? null : allocationPlan.isValid(), list(thesis.getReasonsJson()),
-				thesis.getRuleVersion(), thesis.getCreatedAt());
+				thesis.getThesisType(), thesis.getStatus(), thesis.getScore(), "Aderencia a criterios do estudo",
+				thesis.getPriceCeiling(),
+				thesis.getFairPriceEstimate(), percent(thesis.getSafetyMarginPercent()), list(thesis.getReasonsJson()),
+				methodology(), sources(), thesis.getReferenceDate(), limitations(), thesis.getRuleVersion(),
+				thesis.getCreatedAt());
 	}
 
-	private RecommendationResponse recommendationResponse(PositionRecommendation recommendation) {
-		return new RecommendationResponse(recommendation.getId(), recommendation.getPosition().getId(),
-				AssetResponse.from(recommendation.getAsset()),
-				recommendation.getCustomerPositionThesis() == null ? null : recommendation.getCustomerPositionThesis().getId(),
-				recommendation.getCurrentThesis() == null ? null : recommendation.getCurrentThesis().getId(),
-				recommendation.getThesisType(), recommendation.getReferenceDate(), recommendation.getRecommendationType(),
-				recommendation.getSeverity(), recommendation.getCurrentPrice(), recommendation.getAveragePrice(),
-				recommendation.getStopPrice(), recommendation.getTargetPrice(), recommendation.getPriceCeiling(),
-				recommendation.getFairPriceEstimate(), recommendation.getSafetyMarginPercent(),
-				recommendation.getEstimatedUpsidePercent(), recommendation.getSuggestedQuantity(),
-				recommendation.getCurrentAssetExposureValue(), recommendation.getCurrentSectorExposureValue(),
-				recommendation.getCurrentTotalExposureValue(), recommendation.getAvailableForAsset(),
-				recommendation.getAvailableForSector(), recommendation.getAvailableForCash(),
-				recommendation.getAllocationValid(), recommendation.getAllocationInvalidReason(), recommendation.getScore(),
-				list(recommendation.getDeterministicReasonJson()), recommendation.getAiContextAnalysis() != null,
-				recommendation.getAiModel(), recommendation.getFinalMessage(), recommendation.getRuleVersion(),
-				recommendation.getCreatedAt());
+	private Comparator<PositionThesis> comparator(ScreenerSortBy sortBy) {
+		return switch (sortBy) {
+			case ASSET_SYMBOL -> Comparator.comparing(thesis -> thesis.getAsset().getSymbol(),
+					String.CASE_INSENSITIVE_ORDER);
+			case UPDATED_AT -> Comparator.comparing(PositionThesis::getCreatedAt);
+			case CRITERIA_ADHERENCE_SCORE -> Comparator.comparingInt(PositionThesis::getScore);
+			case SAFETY_MARGIN -> Comparator.comparing(PositionThesis::getSafetyMarginPercent,
+					Comparator.nullsLast(BigDecimal::compareTo));
+			case STATUS -> Comparator.comparing(thesis -> thesis.getStatus().name());
+			case STUDY_TYPE -> Comparator.comparing(thesis -> thesis.getThesisType().name());
+		};
+	}
+
+	private String methodology() {
+		return "Pontuacao deterministica de 0 a 100 que mede aderencia aos criterios do modelo de estudo, "
+				+ "com filtros obrigatorios, valuation educacional, risco analitico e trilha de auditoria.";
+	}
+
+	private List<String> sources() {
+		return List.of(COLLECTOR_FUNDAMENTAL_SOURCE, DERIVED_FUNDAMENTAL_SOURCE, "araripe-rules");
+	}
+
+	private List<String> limitations() {
+		return List.of("Conteudo educacional e informativo.",
+				"Nao recomenda compra, venda, manutencao, aumento, reducao, alocacao ou encerramento de posicao.",
+				"Dados incompletos, desatualizados ou inconsistentes bloqueiam modelos de estudo e alertas informativos.");
 	}
 
 	private FundamentalSnapshot latestFundamental(UUID assetId, LocalDate referenceDate) {
@@ -324,38 +296,6 @@ public class ApiQueryService {
 	private Asset findAsset(String symbol) {
 		return assetRepository.findBySymbolIgnoreCase(symbol)
 				.orElseThrow(() -> notFound("Asset not found."));
-	}
-
-	private void validateRiskSettings(RiskAllocationSettings settings) {
-		if (!positive(settings.capitalBase()) || !positive(settings.maxAllocationPerAssetPercent())
-				|| !positive(settings.maxAllocationPerSectorPercent()) || !positive(settings.toleratedDrawdownPercent())
-				|| !positive(settings.defaultStopPercent()) || !positive(settings.defaultTargetReturnPercent())) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Risk settings must be positive where required.");
-		}
-		BigDecimal trancheSum = settings.firstTranchePercent()
-				.add(settings.secondTranchePercent())
-				.add(settings.thirdTranchePercent());
-		if (trancheSum.compareTo(new BigDecimal("100.000000")) != 0) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tranche percentages must sum to 100.");
-		}
-	}
-
-	private void apply(UserRiskAllocationSettings entity, RiskAllocationSettings settings) {
-		entity.setCapitalBase(settings.capitalBase());
-		entity.setMaxAllocationPerAssetPercent(settings.maxAllocationPerAssetPercent());
-		entity.setMaxAllocationPerSectorPercent(settings.maxAllocationPerSectorPercent());
-		entity.setToleratedDrawdownPercent(settings.toleratedDrawdownPercent());
-		entity.setMinimumCashReservePercent(settings.minimumCashReservePercent());
-		entity.setMinimumSafetyMarginPercent(settings.minimumSafetyMarginPercent());
-		entity.setFirstTranchePercent(settings.firstTranchePercent());
-		entity.setSecondTranchePercent(settings.secondTranchePercent());
-		entity.setThirdTranchePercent(settings.thirdTranchePercent());
-		entity.setDefaultStopPercent(settings.defaultStopPercent());
-		entity.setDefaultTargetReturnPercent(settings.defaultTargetReturnPercent());
-	}
-
-	private boolean positive(BigDecimal value) {
-		return value != null && value.signum() > 0;
 	}
 
 	private BigDecimal percent(BigDecimal ratio) {
@@ -409,17 +349,31 @@ public class ApiQueryService {
 		}
 	}
 
+	public enum ScreenerSortBy {
+		ASSET_SYMBOL,
+		UPDATED_AT,
+		CRITERIA_ADHERENCE_SCORE,
+		SAFETY_MARGIN,
+		STATUS,
+		STUDY_TYPE
+	}
+
+	public enum SortDirection {
+		ASC,
+		DESC
+	}
+
 	public record ThesisSummaryResponse(UUID id, AssetResponse asset, LocalDate referenceDate, ThesisType thesisType,
-			ThesisStatus status, int score, BigDecimal priceCeiling, BigDecimal fairPriceEstimate,
-			BigDecimal safetyMarginPercent, BigDecimal stopPrice, BigDecimal targetPrice,
-			BigDecimal targetAllocationPercent, Integer suggestedQuantity, Boolean allocationValid, List<Object> reasons,
-			String ruleVersion, Instant createdAt) {
+			ThesisStatus status, int criteriaAdherenceScore, String scoreLabel, BigDecimal studyPriceReference,
+			BigDecimal fairPriceEstimate, BigDecimal safetyMarginPercent, List<Object> reasons, String methodology,
+			List<String> sources, LocalDate dataReferenceDate, List<String> limitations, String ruleVersion,
+			Instant createdAt) {
 	}
 
 	public record ThesisDetailResponse(ThesisSummaryResponse thesis, Map<String, Object> scoreBreakdown,
 			List<Object> reasons, List<Object> failedFilters, List<Object> reviewPoints,
 			TechnicalIndicatorResponse technicalIndicators, FundamentalResponse fundamentals,
-			AllocationPlanResponse allocationPlan, AiContextAnalysisSummaryResponse aiContext, String riskNotice) {
+			AiContextAnalysisSummaryResponse aiContext, String riskNotice) {
 	}
 
 	public record AiContextAnalysisSummaryResponse(UUID analysisId, String model, String promptVersion,
@@ -484,26 +438,6 @@ public class ApiQueryService {
 		}
 	}
 
-	public record AllocationPlanResponse(UUID id, BigDecimal capitalBase, BigDecimal targetAllocationPercent,
-			BigDecimal maxAllocationPerAssetPercent, BigDecimal maxAllocationPerSectorPercent,
-			BigDecimal minimumCashReservePercent, BigDecimal maxPositionValue, BigDecimal availableForAsset,
-			BigDecimal availableForSector, BigDecimal currentPrice, BigDecimal priceCeiling,
-			BigDecimal fairPriceEstimate, BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent,
-			int suggestedQuantity, String recommendedAction, BigDecimal firstTrancheValue,
-			BigDecimal secondTrancheValue, BigDecimal thirdTrancheValue, BigDecimal remainingPlannedValue,
-			BigDecimal stopPrice, BigDecimal targetPrice, boolean valid, String invalidReason) {
-		static AllocationPlanResponse from(AllocationPlan plan) {
-			return new AllocationPlanResponse(plan.getId(), plan.getCapitalBase(), plan.getTargetAllocationPercent(),
-					plan.getMaxAllocationPerAssetPercent(), plan.getMaxAllocationPerSectorPercent(),
-					plan.getMinimumCashReservePercent(), plan.getMaxPositionValue(), plan.getAvailableForAsset(),
-					plan.getAvailableForSector(), plan.getCurrentPrice(), plan.getPriceCeiling(),
-					plan.getFairPriceEstimate(), plan.getSafetyMarginPercent(), plan.getEstimatedUpsidePercent(),
-					plan.getSuggestedQuantity(), plan.getRecommendedAction(), plan.getFirstTrancheValue(),
-					plan.getSecondTrancheValue(), plan.getThirdTrancheValue(), plan.getRemainingPlannedValue(),
-					plan.getStopPrice(), plan.getTargetPrice(), plan.isValid(), plan.getInvalidReason());
-		}
-	}
-
 	public record AssetFundamentalsResponse(AssetResponse asset, FundamentalResponse fundamentals,
 			TechnicalIndicatorResponse technicalIndicators, List<FinancialStatementResponse> financialStatements,
 			List<DividendResponse> dividends) {
@@ -522,56 +456,27 @@ public class ApiQueryService {
 		}
 	}
 
-	public record RecommendationResponse(UUID id, UUID positionId, AssetResponse asset, UUID customerPositionThesisId,
-			UUID currentThesisId, ThesisType thesisType, LocalDate referenceDate, RecommendationType recommendationType,
-			Severity severity, BigDecimal currentPrice, BigDecimal averagePrice, BigDecimal stopPrice,
-			BigDecimal targetPrice, BigDecimal priceCeiling, BigDecimal fairPriceEstimate,
-			BigDecimal safetyMarginPercent, BigDecimal estimatedUpsidePercent, Integer suggestedQuantity,
-			BigDecimal currentAssetExposureValue, BigDecimal currentSectorExposureValue,
-			BigDecimal currentTotalExposureValue, BigDecimal availableForAsset, BigDecimal availableForSector,
-			BigDecimal availableForCash, Boolean allocationValid, String allocationInvalidReason, Integer score,
-			List<Object> deterministicReasons, boolean aiContextAvailable,
-			String aiModel, String finalMessage, String ruleVersion, Instant createdAt) {
-	}
-
-	public record NotificationResponse(UUID id, UUID recommendationId, UUID positionId, AssetResponse asset,
-			LocalDate referenceDate, NotificationChannel channel, NotificationEventType eventType,
-			RecommendationType recommendationType, Severity severity, String summary, NotificationStatus status,
-			String provider, String providerMessageId, int attemptCount, String lastError, String ruleVersion,
-			Instant createdAt, Instant sentAt, Instant readAt) {
-		static NotificationResponse from(NotificationEvent event) {
-			return new NotificationResponse(event.getId(), event.getRecommendation().getId(), event.getPosition().getId(),
-					AssetResponse.from(event.getAsset()), event.getReferenceDate(), event.getChannel(), event.getEventType(),
-					event.getRecommendationType(), event.getSeverity(), event.getSummary(), event.getStatus(),
-					event.getProvider(), event.getProviderMessageId(), event.getAttemptCount(), event.getLastError(),
-					event.getRuleVersion(), event.getCreatedAt(), event.getSentAt(), event.getReadAt());
-		}
-	}
-
-	public record RiskSettingsResponse(UUID userId, BigDecimal capitalBase, BigDecimal maxAllocationPerAssetPercent,
-			BigDecimal maxAllocationPerSectorPercent, BigDecimal toleratedDrawdownPercent,
-			BigDecimal minimumCashReservePercent, BigDecimal minimumSafetyMarginPercent, BigDecimal firstTranchePercent,
-			BigDecimal secondTranchePercent, BigDecimal thirdTranchePercent, BigDecimal defaultStopPercent,
-			BigDecimal defaultTargetReturnPercent, boolean persisted) {
-		static RiskSettingsResponse fromDefaults(UUID userId) {
-			return from(userId, RiskAllocationSettings.conservativeDefault(), false);
-		}
-
-		static RiskSettingsResponse from(UserRiskAllocationSettings settings) {
-			return new RiskSettingsResponse(settings.getUser().getId(), settings.getCapitalBase(),
-					settings.getMaxAllocationPerAssetPercent(), settings.getMaxAllocationPerSectorPercent(),
-					settings.getToleratedDrawdownPercent(), settings.getMinimumCashReservePercent(),
-					settings.getMinimumSafetyMarginPercent(), settings.getFirstTranchePercent(),
-					settings.getSecondTranchePercent(), settings.getThirdTranchePercent(), settings.getDefaultStopPercent(),
-					settings.getDefaultTargetReturnPercent(), true);
-		}
-
-		static RiskSettingsResponse from(UUID userId, RiskAllocationSettings settings, boolean persisted) {
-			return new RiskSettingsResponse(userId, settings.capitalBase(), settings.maxAllocationPerAssetPercent(),
-					settings.maxAllocationPerSectorPercent(), settings.toleratedDrawdownPercent(),
-					settings.minimumCashReservePercent(), settings.minimumSafetyMarginPercent(),
-					settings.firstTranchePercent(), settings.secondTranchePercent(), settings.thirdTranchePercent(),
-					settings.defaultStopPercent(), settings.defaultTargetReturnPercent(), persisted);
+	public record InformationalAlertResponse(UUID id, UUID watchItemId, UUID positionId, AssetResponse asset,
+			UUID studyModelId, UUID currentStudyModelSnapshotId, LocalDate referenceDate,
+			NotificationChannel notificationChannel, InformationalEventType eventType, Severity severity, String title,
+			String summary, Map<String, Object> evidence, String source, NotificationStatus notificationStatus,
+			String notificationProvider, String notificationProviderMessageId, int notificationAttemptCount,
+			String notificationLastError, String ruleVersion, Instant createdAt, Instant notificationSentAt,
+			Instant readAt, String regulatoryNotice) {
+		static InformationalAlertResponse from(InformationalAlert alert,
+				java.util.function.Function<String, Map<String, Object>> jsonReader) {
+			return new InformationalAlertResponse(alert.getId(),
+					alert.getWatchItem() == null ? null : alert.getWatchItem().getId(),
+					alert.getSourcePosition() == null ? null : alert.getSourcePosition().getId(),
+					AssetResponse.from(alert.getAsset()), alert.getStudyModel() == null ? null : alert.getStudyModel().getId(),
+					alert.getCurrentStudyModelSnapshot() == null ? null : alert.getCurrentStudyModelSnapshot().getId(),
+					alert.getReferenceDate(), alert.getNotificationChannel(), alert.getEventType(), alert.getSeverity(),
+					alert.getTitle(), alert.getSummary(), jsonReader.apply(alert.getEvidenceJson()), alert.getSource(),
+					alert.getNotificationStatus(), alert.getNotificationProvider(),
+					alert.getNotificationProviderMessageId(), alert.getNotificationAttemptCount(),
+					alert.getNotificationLastError(), alert.getRuleVersion(), alert.getCreatedAt(),
+					alert.getNotificationSentAt(), alert.getReadAt(),
+					"Alerta informativo factual; nao recomenda compra, venda, manutencao, aumento, reducao, alocacao ou encerramento.");
 		}
 	}
 

@@ -10,6 +10,5 @@ public record AiContextStructuredOutput(
 		String confidenceLevel,
 		List<String> sources,
 		List<String> sourceUrls,
-		String recommendationExplanation,
-		boolean conflictsWithDeterministicRecommendation) {
+		List<String> sourceReferenceDates) {
 }

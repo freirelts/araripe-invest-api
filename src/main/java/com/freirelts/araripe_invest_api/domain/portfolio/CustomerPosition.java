@@ -51,11 +51,11 @@ public class CustomerPosition {
 	@Column(name = "entry_date", nullable = false)
 	private LocalDate entryDate;
 
-	@Column(name = "stop_price", precision = 19, scale = 6)
-	private BigDecimal stopPrice;
+	@Column(name = "user_lower_price_threshold", precision = 19, scale = 6)
+	private BigDecimal userLowerPriceThreshold;
 
-	@Column(name = "target_price", precision = 19, scale = 6)
-	private BigDecimal targetPrice;
+	@Column(name = "user_upper_price_threshold", precision = 19, scale = 6)
+	private BigDecimal userUpperPriceThreshold;
 
 	@Column(name = "target_return_percent", precision = 10, scale = 6)
 	private BigDecimal targetReturnPercent;
