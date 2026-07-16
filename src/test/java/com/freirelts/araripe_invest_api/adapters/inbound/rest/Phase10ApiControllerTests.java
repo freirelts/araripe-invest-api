@@ -3,7 +3,6 @@ package com.freirelts.araripe_invest_api.adapters.inbound.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
-import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.ai.AiContextAnalysis;
 import com.freirelts.araripe_invest_api.domain.ai.AiProcessingStatus;
@@ -86,6 +85,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @SpringBootTest
 class Phase10ApiControllerTests {
+
+	private static final String LEGACY_RECOMMENDATION_RULE_VERSION = "position-recommendation-v1";
 
 	@Container
 	static final PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:17-alpine");
@@ -391,7 +392,7 @@ class Phase10ApiControllerTests {
 		recommendation.setScore(82);
 		recommendation.setDeterministicReasonJson("[\"Tese principal segue valida.\"]");
 		recommendation.setFinalMessage("Tese principal segue valida.");
-		recommendation.setRuleVersion(PositionRecommendationService.RULE_VERSION);
+		recommendation.setRuleVersion(LEGACY_RECOMMENDATION_RULE_VERSION);
 		return recommendation;
 	}
 
@@ -408,8 +409,8 @@ class Phase10ApiControllerTests {
 		notification.setRecommendationType(RecommendationType.REAVALIAR);
 		notification.setSeverity(Severity.HIGH);
 		notification.setStatus(NotificationStatus.PENDING);
-		notification.setSummary("Reavaliar posicao por evento critico.");
-		notification.setRuleVersion(PositionRecommendationService.RULE_VERSION);
+		notification.setSummary("Premissas do estudo alteradas por evento critico.");
+		notification.setRuleVersion(LEGACY_RECOMMENDATION_RULE_VERSION);
 		return notification;
 	}
 

@@ -3,12 +3,12 @@ package com.freirelts.araripe_invest_api.application.jobs;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.freirelts.araripe_invest_api.application.alerts.InformationalEventService;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionService;
 import com.freirelts.araripe_invest_api.application.marketdata.MarketDataCollectionSummary;
 import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestSummary;
 import com.freirelts.araripe_invest_api.application.notifications.NotificationDigestService;
-import com.freirelts.araripe_invest_api.application.recommendations.PositionRecommendationService;
 import com.freirelts.araripe_invest_api.application.screening.AssetScreeningService;
 import com.freirelts.araripe_invest_api.application.thesis.PositionThesisGenerationService;
 import com.freirelts.araripe_invest_api.domain.jobs.JobName;
@@ -50,7 +50,7 @@ public class OperationalJobService {
 	private final IndicatorCalculationService indicatorCalculationService;
 	private final AssetScreeningService assetScreeningService;
 	private final PositionThesisGenerationService thesisGenerationService;
-	private final PositionRecommendationService positionRecommendationService;
+	private final InformationalEventService informationalEventService;
 	private final NotificationDigestService notificationDigestService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -59,7 +59,7 @@ public class OperationalJobService {
 			MarketDataCollectionService marketDataCollectionService,
 			IndicatorCalculationService indicatorCalculationService, AssetScreeningService assetScreeningService,
 			PositionThesisGenerationService thesisGenerationService,
-			PositionRecommendationService positionRecommendationService,
+			InformationalEventService informationalEventService,
 			NotificationDigestService notificationDigestService) {
 		this.jobRunRepository = jobRunRepository;
 		this.userRepository = userRepository;
@@ -68,7 +68,7 @@ public class OperationalJobService {
 		this.indicatorCalculationService = indicatorCalculationService;
 		this.assetScreeningService = assetScreeningService;
 		this.thesisGenerationService = thesisGenerationService;
-		this.positionRecommendationService = positionRecommendationService;
+		this.informationalEventService = informationalEventService;
 		this.notificationDigestService = notificationDigestService;
 	}
 
@@ -113,8 +113,8 @@ public class OperationalJobService {
 					() -> indicatorCalculationService.calculateForActiveAssets(referenceDate).size());
 			case FILTERS_AND_THESES -> filtersAndTheses(referenceDate);
 			case RANKING -> ranking(referenceDate);
-			case PORTFOLIO_SCAN -> count("recommendations",
-					() -> positionRecommendationService.recommendOpenPositions(referenceDate).size());
+			case PORTFOLIO_SCAN -> count("informationalEvents",
+					() -> informationalEventService.scanOpenPositions(referenceDate).size());
 			case DAILY_NOTIFICATION_DIGEST -> notificationDigest(referenceDate);
 			case DAILY_OPERATIONAL_FLOW -> dailyOperationalFlow(referenceDate, trigger, requestedByUserId);
 		};
@@ -141,7 +141,7 @@ public class OperationalJobService {
 			if ((result.status() == JobRunStatus.FAILED || result.status() == JobRunStatus.PARTIAL_SUCCESS)
 					&& step != JobName.DAILY_NOTIFICATION_DIGEST) {
 				log.warn(
-						"Daily operational flow interrupted after incomplete prerequisite step={} referenceDate={} to avoid recommendations based on stale data",
+						"Daily operational flow interrupted after incomplete prerequisite step={} referenceDate={} to avoid informational events based on stale data",
 						step, referenceDate);
 				break;
 			}
