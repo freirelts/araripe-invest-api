@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping({ "/api/v1/position-records", "/api/v1/portfolio/positions" })
+@RequestMapping("/api/v1/position-records")
 @PreAuthorize("hasRole('CUSTOMER')")
 class PortfolioPositionController {
 
@@ -110,22 +110,13 @@ class PortfolioPositionController {
 			BigDecimal userLowerPriceThreshold,
 			@Positive
 			BigDecimal userUpperPriceThreshold,
-			@Positive
-			BigDecimal stopPrice,
-			@Positive
-			BigDecimal targetPrice,
 			@Size(max = 1000)
 			String notes) {
 
 		PositionInput toInput() {
-			return new PositionInput(assetId, quantity, averagePrice, entryDate,
-					firstNonNull(userLowerPriceThreshold, stopPrice), firstNonNull(userUpperPriceThreshold, targetPrice),
-					null, notes);
+			return new PositionInput(assetId, quantity, averagePrice, entryDate, userLowerPriceThreshold,
+					userUpperPriceThreshold, null, notes);
 		}
-	}
-
-	private static BigDecimal firstNonNull(BigDecimal primary, BigDecimal fallback) {
-		return primary == null ? fallback : primary;
 	}
 
 	record MainThesisRequest(

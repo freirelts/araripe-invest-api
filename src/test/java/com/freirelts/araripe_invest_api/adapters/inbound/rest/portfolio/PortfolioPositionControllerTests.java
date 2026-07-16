@@ -154,7 +154,7 @@ class PortfolioPositionControllerTests {
 				new BigDecimal("100"), new BigDecimal("28.00"), LocalDate.of(2026, 7, 7)));
 		String token = login(other, "senha-other-123");
 
-		mockMvc.perform(patch("/api/v1/portfolio/positions/{positionId}/close", position.getId())
+		mockMvc.perform(patch("/api/v1/position-records/{positionId}/close", position.getId())
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isNotFound());
 	}
@@ -165,18 +165,8 @@ class PortfolioPositionControllerTests {
 				SubscriptionStatus.NONE, UserRoleType.ADMIN);
 		String token = login(admin, "senha-admin-123");
 
-		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
+		mockMvc.perform(get("/api/v1/position-records").header("Authorization", bearer(token)))
 				.andExpect(status().isForbidden());
-	}
-
-	@Test
-	void legacyPortfolioAliasStillWorksForCompatibility() throws Exception {
-		User customer = saveUser("Legacy Portfolio Customer", "portfolio-legacy-rest@araripe.test",
-				"senha-portfolio-legacy-123", SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
-		String token = login(customer, "senha-portfolio-legacy-123");
-
-		mockMvc.perform(get("/api/v1/portfolio/positions").header("Authorization", bearer(token)))
-				.andExpect(status().isOk());
 	}
 
 	private String login(User user, String password) throws Exception {
@@ -206,8 +196,6 @@ class PortfolioPositionControllerTests {
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));
-		thesis.setStopPrice(new BigDecimal("34.00"));
-		thesis.setTargetPrice(new BigDecimal("52.00"));
 		return thesis;
 	}
 

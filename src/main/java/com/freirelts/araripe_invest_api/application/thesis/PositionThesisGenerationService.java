@@ -3,10 +3,6 @@ package com.freirelts.araripe_invest_api.application.thesis;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.indicators.IndicatorCalculationService;
-import com.freirelts.araripe_invest_api.application.risk.RiskAllocationInput;
-import com.freirelts.araripe_invest_api.application.risk.RiskAllocationResult;
-import com.freirelts.araripe_invest_api.application.risk.RiskAllocationService;
-import com.freirelts.araripe_invest_api.application.risk.RiskAllocationSettings;
 import com.freirelts.araripe_invest_api.application.scoring.ScoreResult;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringInput;
 import com.freirelts.araripe_invest_api.application.scoring.ScoringService;
@@ -25,11 +21,9 @@ import com.freirelts.araripe_invest_api.domain.marketdata.MacroIndicatorSnapshot
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
-import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.AllocationPlanRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DividendEventRepository;
@@ -55,8 +49,6 @@ public class PositionThesisGenerationService {
 
 	public static final String RULE_VERSION = ScoringService.RULE_VERSION;
 	private static final String DERIVED_SOURCE = "araripe-indicators";
-	private static final BigDecimal DEFAULT_TARGET_ALLOCATION_PERCENT = new BigDecimal("10.000000");
-	private static final BigDecimal REDUCED_TARGET_ALLOCATION_PERCENT = new BigDecimal("6.000000");
 	private static final BigDecimal MIN_SAFETY_MARGIN = new BigDecimal("0.150000");
 	private static final BigDecimal PRICE_REVIEW_PREMIUM = new BigDecimal("1.150000");
 	private static final List<DividendEventType> CASH_DIVIDEND_EVENTS = List.of(DividendEventType.DIVIDEND,
@@ -69,20 +61,18 @@ public class PositionThesisGenerationService {
 	private final MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository;
 	private final DividendEventRepository dividendEventRepository;
 	private final PositionThesisRepository positionThesisRepository;
-	private final AllocationPlanRepository allocationPlanRepository;
 	private final EliminatoryFilterEvaluator eliminatoryFilterEvaluator;
 	private final FundamentalEvidenceService fundamentalEvidenceService;
 	private final ScoringService scoringService;
-	private final RiskAllocationService riskAllocationService;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
 	public PositionThesisGenerationService(AssetRepository assetRepository, DailyCandleRepository dailyCandleRepository,
 			TechnicalIndicatorSnapshotRepository technicalIndicatorSnapshotRepository,
 			FundamentalSnapshotRepository fundamentalSnapshotRepository, DividendEventRepository dividendEventRepository,
 			MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository,
-			PositionThesisRepository positionThesisRepository, AllocationPlanRepository allocationPlanRepository,
+			PositionThesisRepository positionThesisRepository,
 			EliminatoryFilterEvaluator eliminatoryFilterEvaluator, FundamentalEvidenceService fundamentalEvidenceService,
-			ScoringService scoringService, RiskAllocationService riskAllocationService) {
+			ScoringService scoringService) {
 		this.assetRepository = assetRepository;
 		this.dailyCandleRepository = dailyCandleRepository;
 		this.technicalIndicatorSnapshotRepository = technicalIndicatorSnapshotRepository;
@@ -90,11 +80,9 @@ public class PositionThesisGenerationService {
 		this.macroIndicatorSnapshotRepository = macroIndicatorSnapshotRepository;
 		this.dividendEventRepository = dividendEventRepository;
 		this.positionThesisRepository = positionThesisRepository;
-		this.allocationPlanRepository = allocationPlanRepository;
 		this.eliminatoryFilterEvaluator = eliminatoryFilterEvaluator;
 		this.fundamentalEvidenceService = fundamentalEvidenceService;
 		this.scoringService = scoringService;
-		this.riskAllocationService = riskAllocationService;
 	}
 
 	@Transactional
@@ -277,7 +265,6 @@ public class PositionThesisGenerationService {
 	}
 
 	private PositionThesis save(ThesisDraft draft) {
-		RiskAllocationResult risk = riskAllocation(draft);
 		PositionThesis thesis = positionThesisRepository
 				.findByAssetIdAndReferenceDateAndThesisTypeAndRuleVersion(draft.context().asset().getId(),
 						draft.context().referenceDate(), draft.thesisType(), RULE_VERSION)
@@ -294,56 +281,9 @@ public class PositionThesisGenerationService {
 		thesis.setFairPriceEstimate(draft.fairPrice());
 		thesis.setPriceCeiling(draft.priceCeiling());
 		thesis.setSafetyMarginPercent(draft.safetyMargin());
-		thesis.setStopPrice(risk.stopPrice());
-		thesis.setTargetPrice(risk.targetPrice());
 		thesis.setReviewPointsJson(json(reviewPoints(draft)));
 		thesis.setRuleVersion(RULE_VERSION);
-		PositionThesis saved = positionThesisRepository.save(thesis);
-		upsertAllocationPlan(saved, risk);
-		return saved;
-	}
-
-	private RiskAllocationResult riskAllocation(ThesisDraft draft) {
-			return riskAllocationService.calculate(new RiskAllocationInput(RiskAllocationSettings.conservativeDefault(),
-					draft.status(), draft.context().currentPrice(), draft.fairPrice(), draft.priceCeiling(),
-					draft.safetyMargin(), allocationPercent(draft.context()), BigDecimal.ZERO, BigDecimal.ZERO,
-					BigDecimal.ZERO, null, null, null, draft.context().recentDrawdown(), draft.context().trendStatus(),
-					fundamentalsDeteriorated(draft.context())));
-	}
-
-	private void upsertAllocationPlan(PositionThesis thesis, RiskAllocationResult risk) {
-		if (!positive(risk.currentPrice()) || !positive(risk.priceCeiling())) {
-			return;
-		}
-		AllocationPlan plan = allocationPlanRepository.findByThesisId(thesis.getId())
-				.orElseGet(() -> new AllocationPlan(thesis));
-
-		// O plano persistido guarda limites analiticos usados para auditoria, sem representar comando operacional.
-		plan.setThesis(thesis);
-		plan.setCapitalBase(risk.capitalBase());
-		plan.setTargetAllocationPercent(risk.targetAllocationPercent());
-		plan.setMaxAllocationPerAssetPercent(risk.maxAllocationPerAssetPercent());
-		plan.setMaxAllocationPerSectorPercent(risk.maxAllocationPerSectorPercent());
-		plan.setMinimumCashReservePercent(risk.minimumCashReservePercent());
-		plan.setMaxPositionValue(risk.maxPositionValue());
-		plan.setAvailableForAsset(risk.availableForAsset());
-		plan.setAvailableForSector(risk.availableForSector());
-		plan.setCurrentPrice(risk.currentPrice());
-		plan.setPriceCeiling(risk.priceCeiling());
-		plan.setFairPriceEstimate(risk.fairPriceEstimate());
-		plan.setSafetyMarginPercent(risk.safetyMarginPercent());
-		plan.setEstimatedUpsidePercent(risk.estimatedUpsidePercent());
-		plan.setSuggestedQuantity(risk.suggestedQuantity());
-		plan.setRecommendedAction(risk.recommendedAction());
-		plan.setFirstTrancheValue(risk.firstTrancheValue());
-		plan.setSecondTrancheValue(risk.secondTrancheValue());
-		plan.setThirdTrancheValue(risk.thirdTrancheValue());
-		plan.setRemainingPlannedValue(risk.remainingPlannedValue());
-		plan.setStopPrice(risk.stopPrice());
-		plan.setTargetPrice(risk.targetPrice());
-		plan.setValid(risk.valid());
-		plan.setInvalidReason(risk.invalidReason());
-		allocationPlanRepository.save(plan);
+		return positionThesisRepository.save(thesis);
 	}
 
 	private ThesisMarketContext loadContext(Asset asset, LocalDate referenceDate) {
@@ -528,12 +468,6 @@ public class PositionThesisGenerationService {
 						+ ", pois a margem de seguranca fica comprimida."),
 				new ReviewPoint("fundamentos", fundamentals),
 				new ReviewPoint("tendencia", "Reavaliar se perder a media de 200 periodos ou se a tendencia virar DOWN_TREND."));
-	}
-
-	private BigDecimal allocationPercent(ThesisMarketContext context) {
-		boolean higherRisk = greaterThan(context.historicalVolatility(), new BigDecimal("0.400000"))
-				|| greaterThan(context.debtToEquity(), new BigDecimal("1.500000"));
-		return higherRisk ? REDUCED_TARGET_ALLOCATION_PERCENT : DEFAULT_TARGET_ALLOCATION_PERCENT;
 	}
 
 	private boolean fundamentalsDeteriorated(ThesisMarketContext context) {

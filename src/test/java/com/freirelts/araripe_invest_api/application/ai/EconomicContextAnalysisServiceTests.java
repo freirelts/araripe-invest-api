@@ -154,8 +154,6 @@ class EconomicContextAnalysisServiceTests {
 		thesis.setPriceCeiling(new java.math.BigDecimal("24.00"));
 		thesis.setFairPriceEstimate(new java.math.BigDecimal("28.00"));
 		thesis.setSafetyMarginPercent(new java.math.BigDecimal("12.50"));
-		thesis.setStopPrice(new java.math.BigDecimal("20.00"));
-		thesis.setTargetPrice(new java.math.BigDecimal("30.00"));
 		thesis = thesisRepository.saveAndFlush(thesis);
 		var thesisId = thesis.getId();
 		User admin = admin();
@@ -171,8 +169,6 @@ class EconomicContextAnalysisServiceTests {
 		thesis.setPriceCeiling(new java.math.BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new java.math.BigDecimal("48.00"));
 		thesis.setSafetyMarginPercent(new java.math.BigDecimal("12.50"));
-		thesis.setStopPrice(new java.math.BigDecimal("35.00"));
-		thesis.setTargetPrice(new java.math.BigDecimal("52.00"));
 		thesis = thesisRepository.saveAndFlush(thesis);
 		saveFundamentals(asset, thesis.getReferenceDate());
 		saveTechnical(asset, thesis.getReferenceDate());

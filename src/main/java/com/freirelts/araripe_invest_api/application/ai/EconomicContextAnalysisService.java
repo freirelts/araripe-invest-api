@@ -11,12 +11,10 @@ import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.MacroIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
-import com.freirelts.araripe_invest_api.domain.thesis.AllocationPlan;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AiContextAnalysisRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.AllocationPlanRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.FundamentalSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.MacroIndicatorSnapshotRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
@@ -51,7 +49,6 @@ public class EconomicContextAnalysisService {
 	private final AiContextAnalysisRepository aiContextAnalysisRepository;
 	private final PositionThesisRepository thesisRepository;
 	private final UserRepository userRepository;
-	private final AllocationPlanRepository allocationPlanRepository;
 	private final FundamentalSnapshotRepository fundamentalRepository;
 	private final TechnicalIndicatorSnapshotRepository technicalIndicatorRepository;
 	private final MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository;
@@ -59,15 +56,13 @@ public class EconomicContextAnalysisService {
 
 	public EconomicContextAnalysisService(EconomicContextAiProvider aiProvider,
 			AiContextAnalysisRepository aiContextAnalysisRepository, PositionThesisRepository thesisRepository,
-			UserRepository userRepository, AllocationPlanRepository allocationPlanRepository,
-			FundamentalSnapshotRepository fundamentalRepository,
+			UserRepository userRepository, FundamentalSnapshotRepository fundamentalRepository,
 			TechnicalIndicatorSnapshotRepository technicalIndicatorRepository,
 			MacroIndicatorSnapshotRepository macroIndicatorSnapshotRepository) {
 		this.aiProvider = aiProvider;
 		this.aiContextAnalysisRepository = aiContextAnalysisRepository;
 		this.thesisRepository = thesisRepository;
 		this.userRepository = userRepository;
-		this.allocationPlanRepository = allocationPlanRepository;
 		this.fundamentalRepository = fundamentalRepository;
 		this.technicalIndicatorRepository = technicalIndicatorRepository;
 		this.macroIndicatorSnapshotRepository = macroIndicatorSnapshotRepository;
@@ -152,10 +147,6 @@ public class EconomicContextAnalysisService {
 		data.put("studyPriceReference", thesis.getPriceCeiling());
 		data.put("fairPriceEstimate", thesis.getFairPriceEstimate());
 		data.put("safetyMarginPercent", percent(thesis.getSafetyMarginPercent()));
-		data.put("lowerUserPriceThreshold", thesis.getStopPrice());
-		data.put("upperUserPriceThreshold", thesis.getTargetPrice());
-		allocationPlanRepository.findByThesisId(thesis.getId()).map(this::allocationData)
-				.ifPresent(value -> data.put("allocationPlan", value));
 		latestFundamental(thesis).map(this::fundamentalData).ifPresent(value -> data.put("fundamentals", value));
 		latestTechnical(thesis).map(this::technicalData).ifPresent(value -> data.put("technicalIndicators", value));
 		List<Map<String, Object>> macroIndicators = macroIndicatorSnapshotRepository
@@ -173,7 +164,7 @@ public class EconomicContextAnalysisService {
 						new AiContextSource(WEB_SEARCH_SOURCE_NAME, "openai://web_search",
 								"Busca web obrigatoria por noticias economicas, institucionais e setoriais recentes.")),
 				List.of("IA nao aprova ativo bloqueado por filtro deterministico.",
-						"IA nao altera referencia de preco, limiares do usuario, margem de seguranca ou alocacao.",
+						"IA nao altera referencia de preco, margem de seguranca ou alertas informativos.",
 						"IA nao orienta compra, venda, manutencao, aumento, reducao, alocacao ou encerramento."));
 	}
 
@@ -187,10 +178,9 @@ public class EconomicContextAnalysisService {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Thesis has insufficient data for AI analysis.");
 		}
 		if (thesis.getPriceCeiling() == null || thesis.getFairPriceEstimate() == null
-				|| thesis.getSafetyMarginPercent() == null || thesis.getStopPrice() == null
-				|| thesis.getTargetPrice() == null) {
+				|| thesis.getSafetyMarginPercent() == null) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-					"Thesis valuation and risk data are required for AI analysis.");
+					"Thesis valuation data are required for AI analysis.");
 		}
 		if (latestFundamental(thesis).isEmpty() || latestTechnical(thesis).isEmpty()) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -234,15 +224,6 @@ public class EconomicContextAnalysisService {
 		return technicalIndicatorRepository
 				.findTopByAssetIdAndTradeDateLessThanEqualAndCalculationVersionOrderByTradeDateDescCreatedAtDesc(
 						thesis.getAsset().getId(), thesis.getReferenceDate(), IndicatorCalculationService.CALCULATION_VERSION);
-	}
-
-	private Map<String, Object> allocationData(AllocationPlan plan) {
-		Map<String, Object> data = new LinkedHashMap<>();
-		data.put("targetAllocationPercent", plan.getTargetAllocationPercent());
-		data.put("suggestedQuantity", plan.getSuggestedQuantity());
-		data.put("valid", plan.isValid());
-		data.put("invalidReason", plan.getInvalidReason());
-		return data;
 	}
 
 	private Map<String, Object> fundamentalData(FundamentalSnapshot snapshot) {

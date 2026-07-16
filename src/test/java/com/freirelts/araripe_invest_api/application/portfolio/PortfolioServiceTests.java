@@ -250,8 +250,6 @@ class PortfolioServiceTests {
 		thesis.setPriceCeiling(new BigDecimal("42.00"));
 		thesis.setFairPriceEstimate(new BigDecimal("49.40"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.150000"));
-		thesis.setStopPrice(new BigDecimal("34.00"));
-		thesis.setTargetPrice(new BigDecimal("52.00"));
 		return thesis;
 	}
 }

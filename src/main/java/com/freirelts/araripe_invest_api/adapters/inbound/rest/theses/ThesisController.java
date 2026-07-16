@@ -3,53 +3,15 @@ package com.freirelts.araripe_invest_api.adapters.inbound.rest.theses;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService.ScreenerSortBy;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService.SortDirection;
-import com.freirelts.araripe_invest_api.application.api.ApiQueryService.ThesisDetailResponse;
 import com.freirelts.araripe_invest_api.application.api.ApiQueryService.ThesisSummaryResponse;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.util.List;
-import java.util.UUID;
-
-@RestController
-@RequestMapping("/api/v1/theses")
-class ThesisController {
-
-	private final ApiQueryService apiQueryService;
-
-	ThesisController(ApiQueryService apiQueryService) {
-		this.apiQueryService = apiQueryService;
-	}
-
-	@GetMapping("/ranking")
-	List<ThesisSummaryResponse> legacyScreener(
-			@RequestParam(required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-			LocalDate date) {
-		return apiQueryService.legacyScreener(date);
-	}
-
-	@GetMapping("/{thesisId}")
-	ThesisDetailResponse detail(@PathVariable UUID thesisId) {
-		return apiQueryService.thesisDetail(thesisId);
-	}
-
-	@GetMapping("/history")
-	List<ThesisSummaryResponse> history(@RequestParam String symbol,
-			@RequestParam(required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-			LocalDate from,
-			@RequestParam(required = false)
-			@DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-			LocalDate to) {
-		return apiQueryService.thesisHistory(symbol, from, to);
-	}
-}
 
 @RestController
 @RequestMapping("/api/v1/screener")

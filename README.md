@@ -141,7 +141,7 @@ GET /api/v1/alerts/{alertId}
 PATCH /api/v1/alerts/{alertId}/read
 ```
 
-`/api/v1/recommendations` esta deprecado e responde `410 Gone`. Use `/api/v1/alerts` para eventos factuais rastreados por fonte, data de referencia e regra informativa.
+Contratos antigos de conduta, aliases e parametros pessoais de decisao nao fazem parte da API atual. Use `/api/v1/alerts` para eventos factuais rastreados por fonte, data de referencia e regra informativa.
 
 ## Universo monitorado e brapi.dev
 
@@ -187,4 +187,4 @@ Depois do primeiro login, desabilite o bootstrap em ambientes compartilhados.
 - Nunca gravar senhas em texto puro.
 - Nunca registrar tokens, senhas ou prompts com dados sensiveis em logs.
 - Falha externa deve gerar status rastreavel, nao alerta falso.
-- E-mails consolidados devem conter apenas alertas informativos dos ativos acompanhados, sem `RecommendationType` ou comando operacional.
+- E-mails consolidados devem conter apenas alertas informativos dos ativos acompanhados, sem tipo de recomendacao ou comando operacional.

@@ -55,9 +55,6 @@ class OpenApiController {
 		add(paths, "/api/v1/alerts", "get", "Alertas informativos factuais dos ativos acompanhados.");
 		add(paths, "/api/v1/alerts/{alertId}", "get", "Detalhe rastreavel de alerta informativo factual.");
 		add(paths, "/api/v1/alerts/{alertId}/read", "patch", "Marca alerta informativo como lido na web.");
-		add(paths, "/api/v1/notifications", "get", "Alias de notificacao para alertas informativos do usuario.");
-		add(paths, "/api/v1/notifications/{notificationId}/read", "patch",
-				"Marca alerta informativo como lido pela superficie de notificacao.");
 		add(paths, "/api/v1/ai/context-analyses", "get", "Lista analises economicas de IA persistidas.");
 		add(paths, "/api/v1/ai/context-analyses/{analysisId}", "get", "Detalhe e status da analise economica de IA.");
 		add(paths, "/api/v1/jobs/status", "get", "Status de coleta e jobs por data.");
@@ -97,7 +94,7 @@ class OpenApiController {
 			return Map.of("version", "terms-educational-v1", "title",
 					"Termos de uso educacionais e informativos do Araripe Invest");
 		}
-		if (path.contains("alerts") || path.contains("notifications")) {
+		if (path.contains("alerts")) {
 			return Map.of("eventType", "PRICE_THRESHOLD_REACHED", "notificationStatus", "PENDING",
 					"title", "Limiar superior de preco atingido",
 					"source", "araripe-rules", "referenceDate", "2026-07-07",

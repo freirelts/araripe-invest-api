@@ -4,7 +4,7 @@ import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
 import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import com.freirelts.araripe_invest_api.domain.users.UserRoleType;

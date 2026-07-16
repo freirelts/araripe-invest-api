@@ -13,7 +13,7 @@ import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesisStatus;
 import com.freirelts.araripe_invest_api.domain.portfolio.PositionStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetWatchItemRepository;
@@ -169,14 +169,14 @@ public class InformationalEventService {
 					"O fechamento mais recente esta ausente, inconsistente ou sem qualidade valida.", evidence,
 					activeAssociation.orElse(null), currentStudyModel.orElse(null)));
 		}
-		if (positive(position.getStopPrice()) && currentPrice.compareTo(position.getStopPrice()) <= 0) {
+		if (positive(position.getUserLowerPriceThreshold()) && currentPrice.compareTo(position.getUserLowerPriceThreshold()) <= 0) {
 			evidence.put("matchedThreshold", "USER_LOWER_PRICE_THRESHOLD");
 			return Optional.of(event(InformationalEventType.PRICE_THRESHOLD_REACHED, Severity.HIGH,
 					"Limiar inferior de preco atingido",
 					"O fechamento mais recente cruzou o limiar inferior cadastrado pelo usuario para acompanhamento informativo.",
 					evidence, activeAssociation.orElse(null), currentStudyModel.orElse(null)));
 		}
-		if (positive(position.getTargetPrice()) && currentPrice.compareTo(position.getTargetPrice()) >= 0) {
+		if (positive(position.getUserUpperPriceThreshold()) && currentPrice.compareTo(position.getUserUpperPriceThreshold()) >= 0) {
 			evidence.put("matchedThreshold", "USER_UPPER_PRICE_THRESHOLD");
 			return Optional.of(event(InformationalEventType.PRICE_THRESHOLD_REACHED, Severity.MEDIUM,
 					"Limiar superior de preco atingido",
@@ -302,11 +302,11 @@ public class InformationalEventService {
 			evidence.put("currentPrice", latestCandle.getClosePrice());
 			evidence.put("priceQualityStatus", latestCandle.getQualityStatus());
 		}
-		if (positive(position.getStopPrice())) {
-			evidence.put("userLowerPriceThreshold", position.getStopPrice());
+		if (positive(position.getUserLowerPriceThreshold())) {
+			evidence.put("userLowerPriceThreshold", position.getUserLowerPriceThreshold());
 		}
-		if (positive(position.getTargetPrice())) {
-			evidence.put("userUpperPriceThreshold", position.getTargetPrice());
+		if (positive(position.getUserUpperPriceThreshold())) {
+			evidence.put("userUpperPriceThreshold", position.getUserUpperPriceThreshold());
 		}
 		if (thesis != null) {
 			evidence.put("studyReferenceDate", thesis.getReferenceDate());

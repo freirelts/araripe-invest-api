@@ -8,7 +8,7 @@ import com.freirelts.araripe_invest_api.domain.marketdata.DailyCandle;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
@@ -21,8 +21,6 @@ import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPosit
 import com.freirelts.araripe_invest_api.infrastructure.persistence.CustomerPositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.InformationalAlertRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.NotificationEventRepository;
-import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionRecommendationRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.PositionThesisRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
 import org.junit.jupiter.api.Test;
@@ -83,12 +81,6 @@ class InformationalEventServiceTests {
 	@Autowired
 	private InformationalAlertRepository alertRepository;
 
-	@Autowired
-	private PositionRecommendationRepository recommendationRepository;
-
-	@Autowired
-	private NotificationEventRepository notificationEventRepository;
-
 	@DynamicPropertySource
 	static void postgresProperties(DynamicPropertyRegistry registry) {
 		registry.add("spring.datasource.url", postgres::getJdbcUrl);
@@ -108,8 +100,6 @@ class InformationalEventServiceTests {
 		assertThat(summary.severity()).isEqualTo(Severity.HIGH);
 		assertThat(summary.title()).contains("Limiar inferior");
 		assertNoOperationalTermsWerePersisted();
-		assertThat(recommendationRepository.findAll()).isEmpty();
-		assertThat(notificationEventRepository.findAll()).isEmpty();
 	}
 
 	@Test
@@ -128,8 +118,6 @@ class InformationalEventServiceTests {
 		assertThat(summary.watchItemId()).isEqualTo(item.getId());
 		assertThat(summary.positionId()).isNull();
 		assertNoOperationalTermsWerePersisted();
-		assertThat(recommendationRepository.findAll()).isEmpty();
-		assertThat(notificationEventRepository.findAll()).isEmpty();
 	}
 
 	@Test
@@ -143,8 +131,6 @@ class InformationalEventServiceTests {
 		assertThat(summary.eventType()).isEqualTo(InformationalEventType.QUALITY_DATA_BLOCKED);
 		assertThat(summary.summary()).contains("qualidade valida");
 		assertNoOperationalTermsWerePersisted();
-		assertThat(recommendationRepository.findAll()).isEmpty();
-		assertThat(notificationEventRepository.findAll()).isEmpty();
 	}
 
 	@Test
@@ -225,10 +211,10 @@ class InformationalEventServiceTests {
 		CustomerPosition position = new CustomerPosition(user, asset, new BigDecimal(quantity),
 				new BigDecimal(averagePrice), LocalDate.of(2026, 1, 10));
 		if (lowerThreshold != null) {
-			position.setStopPrice(new BigDecimal(lowerThreshold));
+			position.setUserLowerPriceThreshold(new BigDecimal(lowerThreshold));
 		}
 		if (upperThreshold != null) {
-			position.setTargetPrice(new BigDecimal(upperThreshold));
+			position.setUserUpperPriceThreshold(new BigDecimal(upperThreshold));
 		}
 		return positionRepository.saveAndFlush(position);
 	}
@@ -239,8 +225,6 @@ class InformationalEventServiceTests {
 		thesis.setPriceCeiling(new BigDecimal("42.000000"));
 		thesis.setFairPriceEstimate(new BigDecimal("52.000000"));
 		thesis.setSafetyMarginPercent(new BigDecimal("0.190000"));
-		thesis.setStopPrice(new BigDecimal("34.000000"));
-		thesis.setTargetPrice(new BigDecimal("55.000000"));
 		return thesisRepository.saveAndFlush(thesis);
 	}
 

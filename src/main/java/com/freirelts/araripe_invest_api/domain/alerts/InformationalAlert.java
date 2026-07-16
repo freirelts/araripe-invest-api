@@ -5,8 +5,7 @@ import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPosition;
 import com.freirelts.araripe_invest_api.domain.portfolio.CustomerPositionThesis;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
-import com.freirelts.araripe_invest_api.domain.recommendations.PositionRecommendation;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.users.User;
 import jakarta.persistence.Column;
@@ -67,10 +66,6 @@ public class InformationalAlert {
 	@ManyToOne(fetch = FetchType.LAZY)
 	@JoinColumn(name = "current_study_model_snapshot_id")
 	private PositionThesis currentStudyModelSnapshot;
-
-	@ManyToOne(fetch = FetchType.LAZY)
-	@JoinColumn(name = "legacy_recommendation_id")
-	private PositionRecommendation legacyRecommendation;
 
 	@Column(name = "reference_date", nullable = false)
 	private LocalDate referenceDate;

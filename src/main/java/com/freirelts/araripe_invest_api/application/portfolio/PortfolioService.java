@@ -197,8 +197,8 @@ public class PortfolioService {
 		if (input.entryDate() == null || input.entryDate().isAfter(LocalDate.now())) {
 			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Entry date must be present and not in the future.");
 		}
-		validatePositiveOptional(input.stopPrice(), "Stop price");
-		validatePositiveOptional(input.targetPrice(), "Target price");
+		validatePositiveOptional(input.userLowerPriceThreshold(), "User lower price threshold");
+		validatePositiveOptional(input.userUpperPriceThreshold(), "User upper price threshold");
 		validatePositiveOptional(input.targetReturnPercent(), "Target return percent");
 	}
 
@@ -216,8 +216,8 @@ public class PortfolioService {
 	}
 
 	private void applyEditableFields(CustomerPosition position, PositionInput input) {
-		position.setStopPrice(input.stopPrice());
-		position.setTargetPrice(input.targetPrice());
+		position.setUserLowerPriceThreshold(input.userLowerPriceThreshold());
+		position.setUserUpperPriceThreshold(input.userUpperPriceThreshold());
 		position.setTargetReturnPercent(input.targetReturnPercent());
 		position.setNotes(trimToNull(input.notes()));
 		position.setUpdatedAt(Instant.now());
@@ -242,8 +242,7 @@ public class PortfolioService {
 					"Only monitorable study models can be accompanied.");
 		}
 		if (thesis.getScore() < 60 || !positive(thesis.getFairPriceEstimate()) || !positive(thesis.getPriceCeiling())
-				|| thesis.getSafetyMarginPercent() == null || !positive(thesis.getStopPrice())
-				|| !positive(thesis.getTargetPrice()) || hasDataBlockingFilter(thesis.getFailedFiltersJson())) {
+				|| thesis.getSafetyMarginPercent() == null || hasDataBlockingFilter(thesis.getFailedFiltersJson())) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
 					"Accompanied study model requires complete data, valuation references and no data quality blockers.");
 		}
@@ -277,8 +276,8 @@ public class PortfolioService {
 			BigDecimal quantity,
 			BigDecimal averagePrice,
 			LocalDate entryDate,
-			BigDecimal stopPrice,
-			BigDecimal targetPrice,
+			BigDecimal userLowerPriceThreshold,
+			BigDecimal userUpperPriceThreshold,
 			BigDecimal targetReturnPercent,
 			String notes) {
 	}
@@ -311,7 +310,7 @@ public class PortfolioService {
 		static PositionSummary from(CustomerPosition position, AccompaniedStudyModelSummary accompaniedStudyModel) {
 			return new PositionSummary(position.getId(), position.getAsset().getId(), position.getAsset().getSymbol(),
 					position.getAsset().getName(), position.getQuantity(), position.getAveragePrice(),
-					position.getEntryDate(), position.getStopPrice(), position.getTargetPrice(),
+					position.getEntryDate(), position.getUserLowerPriceThreshold(), position.getUserUpperPriceThreshold(),
 					position.getNotes(), position.getStatus(), position.getCreatedAt(), position.getUpdatedAt(),
 					position.getClosedAt(), accompaniedStudyModel, INFORMATIONAL_POSITION_NOTICE);
 		}

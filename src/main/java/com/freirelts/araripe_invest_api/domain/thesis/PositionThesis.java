@@ -11,7 +11,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -77,12 +76,6 @@ public class PositionThesis {
 	@Column(name = "safety_margin_percent", precision = 19, scale = 6)
 	private BigDecimal safetyMarginPercent;
 
-	@Column(name = "stop_price", precision = 19, scale = 6)
-	private BigDecimal stopPrice;
-
-	@Column(name = "target_price", precision = 19, scale = 6)
-	private BigDecimal targetPrice;
-
 	@Column(name = "review_points_json", nullable = false, columnDefinition = "jsonb")
 	@JdbcTypeCode(SqlTypes.JSON)
 	private String reviewPointsJson = "[]";
@@ -92,9 +85,6 @@ public class PositionThesis {
 
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt = Instant.now();
-
-	@OneToOne(mappedBy = "thesis", fetch = FetchType.LAZY)
-	private AllocationPlan allocationPlan;
 
 	public PositionThesis(Asset asset, LocalDate referenceDate, ThesisType thesisType, ThesisStatus status, int score,
 			String ruleVersion) {

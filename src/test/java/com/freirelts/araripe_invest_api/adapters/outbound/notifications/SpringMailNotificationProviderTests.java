@@ -4,7 +4,7 @@ import com.freirelts.araripe_invest_api.application.notifications.DailyNotificat
 import com.freirelts.araripe_invest_api.application.notifications.DailyNotificationDigestItem;
 import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
-import com.freirelts.araripe_invest_api.domain.recommendations.Severity;
+import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
@@ -45,7 +45,6 @@ class SpringMailNotificationProviderTests {
 
 				Identificador interno: araripe-email-test
 				""");
-		assertThat(body).doesNotContain("recomendacoes acionaveis", "REALIZAR_OBJETIVO", "EXECUTAR_STOP",
-				"RecommendationType");
+		assertThat(body).doesNotContain("recomendacoes acionaveis", "REALIZAR_OBJETIVO", "EXECUTAR_STOP");
 	}
 }
