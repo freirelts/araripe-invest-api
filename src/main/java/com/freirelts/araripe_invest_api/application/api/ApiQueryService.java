@@ -14,6 +14,8 @@ import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import com.freirelts.araripe_invest_api.domain.assets.AssetType;
 import com.freirelts.araripe_invest_api.domain.assets.Market;
+import com.freirelts.araripe_invest_api.domain.jobs.JobName;
+import com.freirelts.araripe_invest_api.domain.jobs.JobRun;
 import com.freirelts.araripe_invest_api.domain.jobs.JobRunStatus;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataCollectionCategory;
 import com.freirelts.araripe_invest_api.domain.marketdata.DataCollectionRecord;
@@ -118,9 +120,9 @@ public class ApiQueryService {
 		if (effectiveDirection == SortDirection.DESC) {
 			comparator = comparator.reversed();
 		}
+		LocalDate effectiveReferenceDate = effectiveScreenerDate(referenceDate);
 		return thesisRepository
-				.findByReferenceDateAndRuleVersion(effectiveDate(referenceDate),
-						PositionThesisGenerationService.RULE_VERSION)
+				.findByReferenceDateAndRuleVersion(effectiveReferenceDate, PositionThesisGenerationService.RULE_VERSION)
 				.stream()
 				.sorted(comparator.thenComparing(thesis -> thesis.getId().toString()))
 				.map(this::thesisSummary)
@@ -193,7 +195,7 @@ public class ApiQueryService {
 	@Transactional(readOnly = true)
 	public List<InformationalAlertResponse> alerts(UUID userId, LocalDate from, LocalDate to) {
 		requireCustomer(userId);
-		LocalDate effectiveTo = effectiveDate(to);
+		LocalDate effectiveTo = effectiveAlertDate(to);
 		LocalDate effectiveFrom = from == null ? effectiveTo.minusDays(30) : from;
 		return informationalAlertRepository
 				.findByUserIdAndReferenceDateBetweenOrderByReferenceDateDescCreatedAtDesc(userId, effectiveFrom,
@@ -224,7 +226,7 @@ public class ApiQueryService {
 
 	@Transactional(readOnly = true)
 	public JobStatusResponse jobStatus(LocalDate date) {
-		LocalDate referenceDate = effectiveDate(date);
+		LocalDate referenceDate = effectiveJobStatusDate(date);
 		List<DataCollectionRecordResponse> records = dataCollectionRecordRepository
 				.findByReferenceDateOrderByCreatedAtDesc(referenceDate)
 				.stream()
@@ -304,6 +306,30 @@ public class ApiQueryService {
 
 	private LocalDate effectiveDate(LocalDate date) {
 		return date == null ? LocalDate.now() : date;
+	}
+
+	private LocalDate effectiveScreenerDate(LocalDate date) {
+		return latestSuccessfulReferenceDate(date, List.of(JobName.SCREENER, JobName.DAILY_OPERATIONAL_FLOW));
+	}
+
+	private LocalDate effectiveAlertDate(LocalDate date) {
+		return latestSuccessfulReferenceDate(date, List.of(JobName.PORTFOLIO_SCAN, JobName.DAILY_OPERATIONAL_FLOW));
+	}
+
+	private LocalDate effectiveJobStatusDate(LocalDate date) {
+		return latestSuccessfulReferenceDate(date, List.of(JobName.DAILY_OPERATIONAL_FLOW, JobName.SCREENER,
+				JobName.PORTFOLIO_SCAN, JobName.INDICATOR_CALCULATION, JobName.DAILY_MARKET_DATA_COLLECTION));
+	}
+
+	private LocalDate latestSuccessfulReferenceDate(LocalDate explicitDate, List<JobName> jobNames) {
+		if (explicitDate != null) {
+			return explicitDate;
+		}
+		return jobRunRepository
+				.findTopByJobNameInAndStatusInOrderByReferenceDateDescCompletedAtDescStartedAtDesc(jobNames,
+						List.of(JobRunStatus.SUCCESS))
+				.map(JobRun::getReferenceDate)
+				.orElseGet(LocalDate::now);
 	}
 
 	private ResponseStatusException notFound(String message) {

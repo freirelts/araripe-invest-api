@@ -16,4 +16,7 @@ public interface JobRunRepository extends JpaRepository<JobRun, UUID> {
 			JobRunStatus status);
 
 	List<JobRun> findByReferenceDateOrderByStartedAtDesc(LocalDate referenceDate);
+
+	Optional<JobRun> findTopByJobNameInAndStatusInOrderByReferenceDateDescCompletedAtDescStartedAtDesc(
+			List<JobName> jobNames, List<JobRunStatus> statuses);
 }

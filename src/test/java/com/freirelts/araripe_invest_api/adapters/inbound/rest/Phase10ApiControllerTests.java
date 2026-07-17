@@ -272,6 +272,49 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$.model").isString());
 	}
 
+	@Test
+	void customerDateDefaultsUseLatestSuccessfulJobRunReferenceDate() throws Exception {
+		LocalDate successfulReferenceDate = LocalDate.of(2099, 1, 15);
+		LocalDate failedReferenceDate = successfulReferenceDate.plusDays(1);
+		User customer = saveUser("Latest Run Customer", "latest-run-customer@araripe.test",
+				"senha-latest-run-123", SubscriptionStatus.ACTIVE, UserRoleType.CUSTOMER);
+		Asset asset = assetRepository.saveAndFlush(new Asset("ZZLR3", "Latest Run S.A.", "Tecnologia"));
+		PositionThesis thesis = thesisRepository.saveAndFlush(thesis(asset, successfulReferenceDate));
+		CustomerPosition position = positionRepository.saveAndFlush(new CustomerPosition(customer, asset,
+				new BigDecimal("10"), new BigDecimal("38.00"), successfulReferenceDate));
+		CustomerPositionThesis association = positionThesisRepository.saveAndFlush(new CustomerPositionThesis(customer,
+				position, thesis, new BigDecimal("38.00")));
+		InformationalAlert alert = informationalAlertRepository.saveAndFlush(alert(customer, position, asset,
+				association, thesis, successfulReferenceDate));
+		saveJobStatus(customer, successfulReferenceDate);
+		saveSuccessfulJobRun(customer, JobName.PORTFOLIO_SCAN, successfulReferenceDate);
+
+		JobRun failedRun = new JobRun(JobName.SCREENER, failedReferenceDate, JobRunTrigger.MANUAL, customer,
+				"{\"referenceDate\":\"%s\"}".formatted(failedReferenceDate));
+		failedRun.setStatus(JobRunStatus.FAILED);
+		failedRun.setCompletedAt(Instant.now());
+		jobRunRepository.saveAndFlush(failedRun);
+
+		String token = login(customer, "senha-latest-run-123");
+
+		mockMvc.perform(get("/api/v1/screener").header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].id").value(thesis.getId().toString()))
+				.andExpect(jsonPath("$[0].referenceDate").value("2099-01-15"));
+
+		mockMvc.perform(get("/api/v1/alerts").header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].id").value(alert.getId().toString()))
+				.andExpect(jsonPath("$[0].referenceDate").value("2099-01-15"));
+
+		mockMvc.perform(get("/api/v1/jobs/status").header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.referenceDate").value("2099-01-15"))
+				.andExpect(jsonPath("$.jobRuns[0].status").value("SUCCESS"));
+	}
+
 	private String login(User user, String password) throws Exception {
 		String response = mockMvc.perform(post("/api/v1/auth/login")
 						.contentType(MediaType.APPLICATION_JSON)
@@ -363,8 +406,12 @@ class Phase10ApiControllerTests {
 		record.setStatus(DataCollectionStatus.SUCCESS);
 		dataCollectionRecordRepository.saveAndFlush(record);
 
-		JobRun run = new JobRun(JobName.SCREENER, referenceDate, JobRunTrigger.MANUAL, requester,
-				"{\"referenceDate\":\"2026-07-07\"}");
+		saveSuccessfulJobRun(requester, JobName.SCREENER, referenceDate);
+	}
+
+	private void saveSuccessfulJobRun(User requester, JobName jobName, LocalDate referenceDate) {
+		JobRun run = new JobRun(jobName, referenceDate, JobRunTrigger.MANUAL, requester,
+				"{\"referenceDate\":\"%s\"}".formatted(referenceDate));
 		run.setStatus(JobRunStatus.SUCCESS);
 		run.setCompletedAt(Instant.now());
 		jobRunRepository.saveAndFlush(run);
