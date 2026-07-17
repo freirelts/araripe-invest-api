@@ -125,6 +125,7 @@ public class OperationalJobService {
 			UUID requestedByUserId) {
 		List<Map<String, Object>> steps = new ArrayList<>();
 		boolean failed = false;
+		boolean partial = false;
 		// A ordem do fluxo preserva a cadeia financeira: dados brutos antes de indicadores, filtros antes de teses
 		// e varredura de ativos acompanhados antes de qualquer notificacao.
 		List<JobName> orderedSteps = List.of(JobName.DAILY_MARKET_DATA_COLLECTION, JobName.INDICATOR_CALCULATION,
@@ -135,12 +136,11 @@ public class OperationalJobService {
 			JobRunResult result = execute(step, referenceDate, trigger, requestedByUserId);
 			steps.add(Map.of("runId", result.runId().toString(), "jobName", result.jobName().name(), "status",
 					result.status().name(), "summary", result.summary()));
-			failed = failed || result.status() == JobRunStatus.FAILED
-					|| result.status() == JobRunStatus.PARTIAL_SUCCESS;
+			failed = failed || result.status() == JobRunStatus.FAILED;
+			partial = partial || result.status() == JobRunStatus.PARTIAL_SUCCESS;
 			log.info("Daily operational flow step={} finished with status={} referenceDate={} runId={}", step,
 					result.status(), referenceDate, result.runId());
-			if ((result.status() == JobRunStatus.FAILED || result.status() == JobRunStatus.PARTIAL_SUCCESS)
-					&& step != JobName.DAILY_NOTIFICATION_DIGEST) {
+			if (result.status() == JobRunStatus.FAILED && step != JobName.DAILY_NOTIFICATION_DIGEST) {
 				log.warn(
 						"Daily operational flow interrupted after incomplete prerequisite step={} referenceDate={} to avoid informational events based on stale data",
 						step, referenceDate);
@@ -153,7 +153,7 @@ public class OperationalJobService {
 		else {
 			log.info("Daily operational flow finished successfully for referenceDate={}", referenceDate);
 		}
-		return Map.of("steps", steps, "failed", failed);
+		return Map.of("steps", steps, "failed", failed, "partial", partial);
 	}
 
 	private Map<String, Object> collectMarketAndFundamentalData() {

@@ -231,22 +231,28 @@ class OperationalJobServiceTests {
 
 	@Test
 	@SuppressWarnings("unchecked")
-	void dailyOperationalFlowStopsAfterPartialCriticalCollection() {
+	void dailyOperationalFlowContinuesAfterPartialCriticalCollection() {
 		User admin = saveAdmin();
 
 		when(marketDataCollectionService.collectActiveAssetData(DEFAULT_MACRO_SLUGS))
 				.thenReturn(new MarketDataCollectionSummary(1, 0, 0, 0, 0, 2, 1, 0, 1));
+		when(indicatorCalculationService.calculateForActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
+		when(assetScreeningService.screenActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
+		when(thesisGenerationService.generateForActiveAssets(REFERENCE_DATE)).thenReturn(List.of());
+		when(informationalEventService.scanOpenPositions(REFERENCE_DATE)).thenReturn(List.of());
+		when(notificationDigestService.publishDailyDigest(REFERENCE_DATE))
+				.thenReturn(new DailyNotificationDigestSummary(0, 0, 0, 0, 0, 0, true, false));
 
 		JobRunResult result = service.execute(JobName.DAILY_OPERATIONAL_FLOW, REFERENCE_DATE, JobRunTrigger.MANUAL,
 				admin.getId());
 
 		List<Map<String, Object>> steps = (List<Map<String, Object>>) result.summary().get("steps");
 
-		assertThat(result.status()).isEqualTo(JobRunStatus.FAILED);
-		assertThat(steps).extracting(step -> step.get("jobName"))
-				.containsExactly("DAILY_MARKET_DATA_COLLECTION");
-		verify(indicatorCalculationService, never()).calculateForActiveAssets(any());
-		verify(informationalEventService, never()).scanOpenPositions(any());
+		assertThat(result.status()).isEqualTo(JobRunStatus.PARTIAL_SUCCESS);
+		assertThat(steps).extracting(step -> step.get("jobName")).containsExactly("DAILY_MARKET_DATA_COLLECTION",
+				"INDICATOR_CALCULATION", "FILTERS_AND_THESES", "SCREENER", "PORTFOLIO_SCAN", "DAILY_NOTIFICATION_DIGEST");
+		verify(indicatorCalculationService, times(1)).calculateForActiveAssets(REFERENCE_DATE);
+		verify(informationalEventService, times(1)).scanOpenPositions(REFERENCE_DATE);
 	}
 
 	@Test
