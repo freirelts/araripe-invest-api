@@ -4,6 +4,7 @@ import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService;
 import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.ContributionInput;
 import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.PositionInput;
 import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.PositionSummary;
+import com.freirelts.araripe_invest_api.application.portfolio.PortfolioService.ReductionInput;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
@@ -74,6 +75,12 @@ class PortfolioPositionController {
 		return portfolioService.registerContribution(userId(authentication), positionId, request.toInput());
 	}
 
+	@PostMapping("/{positionId}/quantity-reductions")
+	PositionSummary registerQuantityReduction(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
+			@Valid @RequestBody ReductionRequest request) {
+		return portfolioService.registerReduction(userId(authentication), positionId, request.toInput());
+	}
+
 	@PostMapping("/{positionId}/main-thesis")
 	@ResponseStatus(HttpStatus.CREATED)
 	PositionSummary associateMainThesis(JwtAuthenticationToken authentication, @PathVariable UUID positionId,
@@ -140,6 +147,20 @@ class PortfolioPositionController {
 
 		ContributionInput toInput() {
 			return new ContributionInput(quantity, price, contributionDate, notes);
+		}
+	}
+
+	record ReductionRequest(
+			@NotNull
+			@Positive
+			BigDecimal quantity,
+			@PastOrPresent
+			LocalDate reductionDate,
+			@Size(max = 1000)
+			String notes) {
+
+		ReductionInput toInput() {
+			return new ReductionInput(quantity, reductionDate, notes);
 		}
 	}
 }

@@ -113,6 +113,43 @@ class PortfolioServiceTests {
 	}
 
 	@Test
+	void registeringReductionUpdatesQuantityAndPreservesAveragePrice() {
+		User customer = saveCustomer("portfolio-reduction@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("WEGE3", "WEG S.A.", "Bens Industriais"));
+		var created = portfolioService.createPosition(customer.getId(), input(asset, "100", "20.00"));
+
+		var updated = portfolioService.registerReduction(customer.getId(), created.id(),
+				new PortfolioService.ReductionInput(new BigDecimal("30"), LocalDate.of(2026, 7, 8),
+						"Saida parcial registrada pelo cliente"));
+
+		assertThat(updated.quantity()).isEqualByComparingTo("70");
+		assertThat(updated.averagePrice()).isEqualByComparingTo("20.00");
+		assertThat(updated.status()).isEqualTo(PositionStatus.OPEN);
+		assertThat(updated.notes()).isEqualTo("Saida parcial registrada pelo cliente");
+	}
+
+	@Test
+	void registeringFullReductionClosesPositionAndRejectsQuantityAboveCurrentPosition() {
+		User customer = saveCustomer("portfolio-full-reduction@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("EGIE3", "Engie Brasil", "Utilidade Publica"));
+		var created = portfolioService.createPosition(customer.getId(), input(asset, "40", "44.00"));
+
+		assertThatThrownBy(() -> portfolioService.registerReduction(customer.getId(), created.id(),
+				new PortfolioService.ReductionInput(new BigDecimal("41"), LocalDate.of(2026, 7, 8),
+						"Quantidade maior que o registro atual")))
+				.isInstanceOf(ResponseStatusException.class)
+				.hasMessageContaining("400 BAD_REQUEST");
+
+		var closed = portfolioService.registerReduction(customer.getId(), created.id(),
+				new PortfolioService.ReductionInput(new BigDecimal("40"), LocalDate.of(2026, 7, 8),
+						"Saida total registrada pelo cliente"));
+
+		assertThat(closed.status()).isEqualTo(PositionStatus.CLOSED);
+		assertThat(closed.quantity()).isEqualByComparingTo("40");
+		assertThat(closed.closedAt()).isNotNull();
+	}
+
+	@Test
 	void userCannotAccessPositionFromAnotherCustomer() {
 		User owner = saveCustomer("portfolio-owner-deny@araripe.test");
 		User other = saveCustomer("portfolio-other-deny@araripe.test");

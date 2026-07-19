@@ -137,6 +137,21 @@ class PortfolioPositionControllerTests {
 				.andExpect(jsonPath("$.averagePrice").value(39.6))
 				.andExpect(jsonPath("$.notes").value("Aporte executado na corretora"));
 
+		mockMvc.perform(post("/api/v1/position-records/{positionId}/quantity-reductions", positionId)
+						.header("Authorization", bearer(token))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "quantity":3,
+								  "reductionDate":"2026-07-09",
+								  "notes":"Saida parcial registrada pelo cliente"
+								}
+								"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.quantity").value(12))
+				.andExpect(jsonPath("$.averagePrice").value(39.6))
+				.andExpect(jsonPath("$.notes").value("Saida parcial registrada pelo cliente"));
+
 		mockMvc.perform(patch("/api/v1/position-records/{positionId}/close", positionId)
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())

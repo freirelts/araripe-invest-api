@@ -112,6 +112,34 @@ public class PortfolioService {
 	}
 
 	@Transactional
+	public PositionSummary registerReduction(UUID userId, UUID positionId, ReductionInput input) {
+		requireCustomer(userId);
+		validateReductionInput(input);
+		CustomerPosition position = openOwnedPosition(userId, positionId);
+
+		BigDecimal currentQuantity = position.getQuantity();
+		BigDecimal reductionQuantity = input.quantity();
+		int comparison = reductionQuantity.compareTo(currentQuantity);
+		if (comparison > 0) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Reduction quantity must not exceed current position quantity.");
+		}
+		if (trimToNull(input.notes()) != null) {
+			position.setNotes(trimToNull(input.notes()));
+		}
+		if (comparison == 0) {
+			positionThesisRepository.findByPositionIdAndStatus(positionId, CustomerPositionThesisStatus.ACTIVE)
+					.ifPresent(activeThesis -> activeThesis.close(CLOSED_WITH_POSITION));
+			position.close();
+			return summary(positionRepository.saveAndFlush(position));
+		}
+
+		position.setQuantity(currentQuantity.subtract(reductionQuantity));
+		position.setUpdatedAt(Instant.now());
+		return summary(positionRepository.saveAndFlush(position));
+	}
+
+	@Transactional
 	public PositionSummary closePosition(UUID userId, UUID positionId) {
 		requireCustomer(userId);
 		CustomerPosition position = openOwnedPosition(userId, positionId);
@@ -215,6 +243,16 @@ public class PortfolioService {
 		}
 	}
 
+	private void validateReductionInput(ReductionInput input) {
+		if (input.quantity() == null || input.quantity().signum() <= 0) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+					"Reduction quantity must be greater than zero.");
+		}
+		if (input.reductionDate() != null && input.reductionDate().isAfter(LocalDate.now())) {
+			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Reduction date must not be in the future.");
+		}
+	}
+
 	private void applyEditableFields(CustomerPosition position, PositionInput input) {
 		position.setUserLowerPriceThreshold(input.userLowerPriceThreshold());
 		position.setUserUpperPriceThreshold(input.userUpperPriceThreshold());
@@ -286,6 +324,12 @@ public class PortfolioService {
 			BigDecimal quantity,
 			BigDecimal price,
 			LocalDate contributionDate,
+			String notes) {
+	}
+
+	public record ReductionInput(
+			BigDecimal quantity,
+			LocalDate reductionDate,
 			String notes) {
 	}
 
