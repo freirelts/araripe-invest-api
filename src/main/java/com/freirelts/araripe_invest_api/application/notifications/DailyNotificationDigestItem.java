@@ -4,6 +4,7 @@ import com.freirelts.araripe_invest_api.domain.alerts.InformationalEventType;
 import com.freirelts.araripe_invest_api.domain.alerts.Severity;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 public record DailyNotificationDigestItem(
@@ -17,5 +18,6 @@ public record DailyNotificationDigestItem(
 		String title,
 		String source,
 		String ruleVersion,
-		String summary) {
+		String summary,
+		Map<String, Object> evidence) {
 }

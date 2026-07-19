@@ -160,6 +160,12 @@ class InformationalEventServiceTests {
 
 		assertThat(summary.eventType()).isEqualTo(InformationalEventType.STUDY_ASSUMPTION_CHANGED);
 		assertThat(summary.currentStudyModelSnapshotId()).isEqualTo(scenario.currentThesis().getId());
+		assertThat(alertRepository.findAll()).singleElement()
+				.satisfies(alert -> assertThat(alert.getEvidenceJson())
+						.contains("\"currentStudyStatus\":\"PREMISSAS_ALTERADAS\"")
+						.contains("\"acceptedScore\":82")
+						.contains("\"currentScore\":58")
+						.contains("\"scoreDelta\":-24"));
 		assertNoOperationalTermsWerePersisted();
 	}
 

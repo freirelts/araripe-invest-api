@@ -91,6 +91,9 @@ class NotificationDigestServiceTests {
 				.satisfies(digest -> {
 					assertThat(digest.recipientEmail()).isEqualTo("digest@araripe.test");
 					assertThat(digest.items()).hasSize(2);
+					assertThat(digest.items().getFirst().evidence())
+							.containsEntry("source", "test")
+							.containsEntry("referenceDate", "2026-07-07");
 				});
 		assertThat(alertRepository.findAll())
 				.allSatisfy(event -> {

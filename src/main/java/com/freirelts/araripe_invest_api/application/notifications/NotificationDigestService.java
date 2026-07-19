@@ -1,5 +1,7 @@
 package com.freirelts.araripe_invest_api.application.notifications;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.domain.alerts.InformationalAlert;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationChannel;
 import com.freirelts.araripe_invest_api.domain.notifications.NotificationStatus;
@@ -22,9 +24,12 @@ public class NotificationDigestService {
 
 	private static final Logger log = LoggerFactory.getLogger(NotificationDigestService.class);
 	private static final DateTimeFormatter SUBJECT_DATE_FORMAT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+	private static final TypeReference<Map<String, Object>> EVIDENCE_TYPE = new TypeReference<>() {
+	};
 
 	private final InformationalAlertRepository alertRepository;
 	private final NotificationProvider notificationProvider;
+	private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
 	public NotificationDigestService(InformationalAlertRepository alertRepository,
 			NotificationProvider notificationProvider) {
@@ -92,7 +97,21 @@ public class NotificationDigestService {
 		return new DailyNotificationDigestItem(event.getId(), event.getWatchItem() == null ? null : event.getWatchItem().getId(),
 				event.getSourcePosition() == null ? null : event.getSourcePosition().getId(),
 				event.getAsset().getSymbol(), event.getReferenceDate(), event.getEventType(), event.getSeverity(),
-				event.getTitle(), event.getSource(), event.getRuleVersion(), event.getSummary());
+				event.getTitle(), event.getSource(), event.getRuleVersion(), event.getSummary(),
+				evidence(event.getEvidenceJson()));
+	}
+
+	private Map<String, Object> evidence(String evidenceJson) {
+		if (evidenceJson == null || evidenceJson.isBlank()) {
+			return Map.of();
+		}
+		try {
+			return objectMapper.readValue(evidenceJson, EVIDENCE_TYPE);
+		}
+		catch (Exception ex) {
+			log.warn("Could not parse informational alert evidence for email digest.", ex);
+			return Map.of();
+		}
 	}
 
 	private String subject(LocalDate referenceDate) {

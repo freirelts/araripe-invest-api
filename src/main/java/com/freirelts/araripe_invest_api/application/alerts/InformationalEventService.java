@@ -198,9 +198,7 @@ public class InformationalEventService {
 		}
 		PositionThesis thesis = currentStudyModel.get();
 		if (studyAssumptionChanged(activeAssociation.get(), thesis)) {
-			evidence.put("acceptedScore", activeAssociation.get().getAcceptedScore());
-			evidence.put("currentScore", thesis.getScore());
-			evidence.put("scoreDelta", thesis.getScore() - activeAssociation.get().getAcceptedScore());
+			addStudyAssumptionEvidence(evidence, activeAssociation.get(), thesis);
 			return Optional.of(event(InformationalEventType.STUDY_ASSUMPTION_CHANGED, Severity.HIGH,
 					"Premissas do modelo de estudo alteradas",
 					"Indicadores ou criterios do modelo acompanhado mudaram em relacao ao registro aceito pelo usuario.",
@@ -266,9 +264,7 @@ public class InformationalEventService {
 		}
 		PositionThesis thesis = currentStudyModel.get();
 		if (studyAssumptionChanged(activeAssociation.get(), thesis)) {
-			evidence.put("acceptedScore", activeAssociation.get().getAcceptedScore());
-			evidence.put("currentScore", thesis.getScore());
-			evidence.put("scoreDelta", thesis.getScore() - activeAssociation.get().getAcceptedScore());
+			addStudyAssumptionEvidence(evidence, activeAssociation.get(), thesis);
 			return Optional.of(event(InformationalEventType.STUDY_ASSUMPTION_CHANGED, Severity.HIGH,
 					"Premissas do modelo de estudo alteradas",
 					"Indicadores ou criterios do modelo acompanhado mudaram em relacao ao registro aceito pelo usuario.",
@@ -342,6 +338,43 @@ public class InformationalEventService {
 		return evidence;
 	}
 
+	private void addStudyAssumptionEvidence(Map<String, Object> evidence, CustomerPositionThesis association,
+			PositionThesis thesis) {
+		PositionThesis acceptedThesis = association.getAcceptedThesis();
+		evidence.put("acceptedStudyReferenceDate", acceptedThesis.getReferenceDate());
+		evidence.put("acceptedStudyStatus", acceptedThesis.getStatus());
+		evidence.put("acceptedScore", association.getAcceptedScore());
+		if (association.getAcceptedPriceCeiling() != null) {
+			evidence.put("acceptedStudyPriceReference", association.getAcceptedPriceCeiling());
+		}
+		if (association.getAcceptedSafetyMarginPercent() != null) {
+			evidence.put("acceptedSafetyMarginPercent", association.getAcceptedSafetyMarginPercent());
+		}
+		evidence.put("currentStudyStatus", thesis.getStatus());
+		evidence.put("currentScore", thesis.getScore());
+		evidence.put("scoreDelta", thesis.getScore() - association.getAcceptedScore());
+		evidence.put("currentStudyRuleVersion", thesis.getRuleVersion());
+		putJsonEvidence(evidence, "currentFailedFilters", thesis.getFailedFiltersJson());
+		putJsonEvidence(evidence, "currentReviewPoints", thesis.getReviewPointsJson());
+		putJsonEvidence(evidence, "currentReasons", thesis.getReasonsJson());
+	}
+
+	private void putJsonEvidence(Map<String, Object> evidence, String key, String json) {
+		if (json == null || json.isBlank()) {
+			return;
+		}
+		Object value = jsonValue(json);
+		if (value instanceof List<?> list && list.isEmpty()) {
+			return;
+		}
+		if (value instanceof Map<?, ?> map && map.isEmpty()) {
+			return;
+		}
+		if (value != null) {
+			evidence.put(key, value);
+		}
+	}
+
 	private EventDecision event(InformationalEventType eventType, Severity severity, String title, String summary,
 			Map<String, Object> evidence, CustomerPositionThesis association, PositionThesis currentStudyModelSnapshot) {
 		return new EventDecision(eventType, severity, title, summary, Map.copyOf(evidence), association,
@@ -354,6 +387,15 @@ public class InformationalEventService {
 		}
 		catch (JsonProcessingException ex) {
 			throw new IllegalStateException("Could not serialize informational event evidence.", ex);
+		}
+	}
+
+	private Object jsonValue(String json) {
+		try {
+			return objectMapper.readValue(json, Object.class);
+		}
+		catch (JsonProcessingException ex) {
+			throw new IllegalStateException("Could not deserialize informational event evidence details.", ex);
 		}
 	}
 
