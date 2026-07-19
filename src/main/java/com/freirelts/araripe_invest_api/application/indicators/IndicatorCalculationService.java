@@ -34,6 +34,7 @@ public class IndicatorCalculationService {
 
 	public static final String CALCULATION_VERSION = "phase4-v1";
 	private static final String COLLECTOR_SOURCE = "brapi";
+	private static final String COLLECTOR_CALCULATION_VERSION = "collector-v1";
 	private static final String DERIVED_SOURCE = "araripe-indicators";
 	private static final int SIX_MONTH_TRADING_DAYS = 126;
 	private static final int TWELVE_MONTH_TRADING_DAYS = 252;
@@ -114,8 +115,9 @@ public class IndicatorCalculationService {
 		List<String> missingFields = new ArrayList<>();
 		List<String> assumptions = new ArrayList<>();
 		FundamentalSnapshot collector = fundamentalSnapshotRepository
-				.findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceOrderByReferenceDateDescCreatedAtDesc(
-						asset.getId(), referenceDate, PeriodType.TTM, COLLECTOR_SOURCE)
+				.findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionAndQualityStatusOrderByReferenceDateDescCreatedAtDesc(
+						asset.getId(), referenceDate, PeriodType.TTM, COLLECTOR_SOURCE,
+						COLLECTOR_CALCULATION_VERSION, DataQualityStatus.VALID)
 				.orElse(null);
 		FundamentalSnapshot derived = fundamentalSnapshotRepository
 				.findByAssetIdAndReferenceDateAndPeriodTypeAndSourceAndCalculationVersion(asset.getId(), referenceDate,
@@ -177,25 +179,22 @@ public class IndicatorCalculationService {
 			missingFields.add("freeCashflow");
 		}
 
-		// Margens usam a receita como denominador para medir eficiência operacional em cada real vendido.
-		derived.setGrossMargin(ratio(grossProfit, revenue).orElse(nonNull(derived.getGrossMargin(), null)));
-		derived.setEbitdaMargin(ratio(ebitda, revenue).orElse(nonNull(derived.getEbitdaMargin(), null)));
-		derived.setOperatingMargin(ratio(operatingIncome, revenue).orElse(nonNull(derived.getOperatingMargin(), null)));
-		derived.setProfitMargin(ratio(netIncome, revenue).orElse(nonNull(derived.getProfitMargin(), null)));
+		// Campos current/TTM enviados pela brapi permanecem canonicos; calculos por demonstrativo apenas preenchem lacunas.
+		setIfMissing(derived::getGrossMargin, derived::setGrossMargin, ratio(grossProfit, revenue).orElse(null));
+		setIfMissing(derived::getEbitdaMargin, derived::setEbitdaMargin, ratio(ebitda, revenue).orElse(null));
+		setIfMissing(derived::getOperatingMargin, derived::setOperatingMargin,
+				ratio(operatingIncome, revenue).orElse(null));
+		setIfMissing(derived::getProfitMargin, derived::setProfitMargin, ratio(netIncome, revenue).orElse(null));
+		setIfMissing(derived::getRoe, derived::setRoe, ratio(netIncome, equity).orElse(null));
+		setIfMissing(derived::getRoa, derived::setRoa, ratio(netIncome, totalAssets).orElse(null));
+		setIfMissing(derived::getDebtToEquity, derived::setDebtToEquity, ratio(totalDebt, equity).orElse(null));
+		setIfMissing(derived::getNetDebt, derived::setNetDebt,
+				totalDebt == null || cash == null ? null : scaleMoney(totalDebt.subtract(cash)));
+		setIfMissing(derived::getOperatingCashflow, derived::setOperatingCashflow, operatingCashflow);
+		setIfMissing(derived::getFreeCashflow, derived::setFreeCashflow,
+				nonNull(freeCashflow, calculatedFreeCashflow));
 
-		// ROE e ROA aproximam retorno do capital: lucro líquido dividido por patrimônio e ativos totais.
-		derived.setRoe(ratio(netIncome, equity).orElse(nonNull(derived.getRoe(), null)));
-		derived.setRoa(ratio(netIncome, totalAssets).orElse(nonNull(derived.getRoa(), null)));
-		derived.setDebtToEquity(ratio(totalDebt, equity).orElse(nonNull(derived.getDebtToEquity(), null)));
-
-		// Dívida líquida aproxima a obrigação financeira que sobra após caixa disponível.
-		derived.setNetDebt(totalDebt == null || cash == null ? derived.getNetDebt()
-				: scaleMoney(totalDebt.subtract(cash)));
-		derived.setOperatingCashflow(nonNull(operatingCashflow, derived.getOperatingCashflow()));
-		derived.setFreeCashflow(nonNull(freeCashflow, nonNull(calculatedFreeCashflow, derived.getFreeCashflow())));
-		derived.setRevenueGrowth(nonNull(derived.getAnnualRevenueGrowth(), derived.getRevenueGrowth()));
-		derived.setEarningsGrowth(nonNull(derived.getAnnualEarningsGrowth(), derived.getEarningsGrowth()));
-
+		assumptions.add("Campos current/TTM coletados da brapi sao preservados quando presentes; calculos internos por demonstrativo preenchem apenas lacunas.");
 		assumptions.add("Crescimento anual compara a ultima demonstracao anual valida com a anual imediatamente anterior.");
 		assumptions.add("Crescimento trimestral compara o ultimo trimestre valido com o mesmo trimestre do ano anterior para reduzir ruido sazonal.");
 		assumptions.add("Crescimento com base negativa nao usa divisao percentual tradicional; viradas de prejuizo para lucro nao contam como crescimento normal.");
@@ -208,6 +207,7 @@ public class IndicatorCalculationService {
 	}
 
 	private void copyCollectorValuation(FundamentalSnapshot source, FundamentalSnapshot target) {
+		resetCollectorFields(target);
 		if (source == null) {
 			return;
 		}
@@ -255,6 +255,53 @@ public class IndicatorCalculationService {
 		target.setFreeCashflow(source.getFreeCashflow());
 		target.setOperatingCashflow(source.getOperatingCashflow());
 		target.setNetDebt(source.getNetDebt());
+	}
+
+	private void resetCollectorFields(FundamentalSnapshot target) {
+		target.setMarketCap(null);
+		target.setMostRecentQuarter(null);
+		target.setEnterpriseValue(null);
+		target.setTrailingPe(null);
+		target.setPriceToBook(null);
+		target.setEnterpriseToRevenue(null);
+		target.setEnterpriseToEbitda(null);
+		target.setForwardPe(null);
+		target.setPegRatio(null);
+		target.setEarningsPerShare(null);
+		target.setNetIncomeToCommon(null);
+		target.setBookValue(null);
+		target.setDividendYield(null);
+		target.setLastDividendValue(null);
+		target.setLastDividendDate(null);
+		target.setBeta(null);
+		target.setFloatShares(null);
+		target.setSharesOutstanding(null);
+		target.setFiftyTwoWeekChange(null);
+		target.setTotalCash(null);
+		target.setTotalCashPerShare(null);
+		target.setEbitda(null);
+		target.setTotalDebt(null);
+		target.setQuickRatio(null);
+		target.setCurrentRatio(null);
+		target.setTotalRevenue(null);
+		target.setGrossProfits(null);
+		target.setProfitMargin(null);
+		target.setGrossMargin(null);
+		target.setEbitdaMargin(null);
+		target.setOperatingMargin(null);
+		target.setRoe(null);
+		target.setRoa(null);
+		target.setDebtToEquity(null);
+		target.setRevenueGrowth(null);
+		target.setEarningsGrowth(null);
+		target.setAnnualRevenueGrowth(null);
+		target.setQuarterlyRevenueGrowth(null);
+		target.setAnnualEarningsGrowth(null);
+		target.setQuarterlyEarningsGrowth(null);
+		target.setEbitdaGrowth(null);
+		target.setFreeCashflow(null);
+		target.setOperatingCashflow(null);
+		target.setNetDebt(null);
 	}
 
 	private List<StatementValues> statements(Asset asset, StatementType statementType, PeriodType periodType,
@@ -573,6 +620,13 @@ public class IndicatorCalculationService {
 
 	private <T> T nonNull(T preferred, T fallback) {
 		return preferred == null ? fallback : preferred;
+	}
+
+	private <T> void setIfMissing(java.util.function.Supplier<T> current,
+			java.util.function.Consumer<T> setter, T calculated) {
+		if (current.get() == null && calculated != null) {
+			setter.accept(calculated);
+		}
 	}
 
 	private List<String> distinctSorted(List<String> values) {

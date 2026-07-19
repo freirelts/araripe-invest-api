@@ -1,5 +1,6 @@
 package com.freirelts.araripe_invest_api.infrastructure.persistence;
 
+import com.freirelts.araripe_invest_api.domain.marketdata.DataQualityStatus;
 import com.freirelts.araripe_invest_api.domain.marketdata.FundamentalSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +19,10 @@ public interface FundamentalSnapshotRepository extends JpaRepository<Fundamental
 
 	Optional<FundamentalSnapshot> findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionOrderByReferenceDateDescCreatedAtDesc(
 			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source, String calculationVersion);
+
+	Optional<FundamentalSnapshot> findTopByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionAndQualityStatusOrderByReferenceDateDescCreatedAtDesc(
+			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source, String calculationVersion,
+			DataQualityStatus qualityStatus);
 
 	java.util.List<FundamentalSnapshot> findTop4ByAssetIdAndReferenceDateLessThanEqualAndPeriodTypeAndSourceAndCalculationVersionOrderByReferenceDateDescCreatedAtDesc(
 			UUID assetId, LocalDate referenceDate, PeriodType periodType, String source, String calculationVersion);
