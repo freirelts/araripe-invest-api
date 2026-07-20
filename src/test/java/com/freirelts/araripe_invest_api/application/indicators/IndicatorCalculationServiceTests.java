@@ -187,18 +187,17 @@ class IndicatorCalculationServiceTests {
 		assertThat(snapshot.getAnnualEarningsGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getQuarterlyEarningsGrowth()).isEqualByComparingTo("0.200000");
 		assertThat(snapshot.getEbitdaGrowth()).isEqualByComparingTo("0.200000");
-		assertThat(snapshot.getGrossMargin()).isEqualByComparingTo("0.500000");
-		assertThat(snapshot.getEbitdaMargin()).isEqualByComparingTo("0.250000");
-		assertThat(snapshot.getOperatingMargin()).isEqualByComparingTo("0.200000");
-		assertThat(snapshot.getProfitMargin()).isEqualByComparingTo("0.150000");
-		assertThat(snapshot.getRoe()).isEqualByComparingTo("0.200000");
-		assertThat(snapshot.getRoa()).isEqualByComparingTo("0.090000");
-		assertThat(snapshot.getDebtToEquity()).isEqualByComparingTo("0.555556");
-		assertThat(snapshot.getNetDebt()).isEqualByComparingTo("300.000000");
-		assertThat(snapshot.getOperatingCashflow()).isEqualByComparingTo("260.000000");
-		assertThat(snapshot.getFreeCashflow()).isEqualByComparingTo("200.000000");
+		assertThat(snapshot.getGrossMargin()).isNull();
+		assertThat(snapshot.getEbitdaMargin()).isNull();
+		assertThat(snapshot.getOperatingMargin()).isNull();
+		assertThat(snapshot.getProfitMargin()).isNull();
+		assertThat(snapshot.getRoe()).isNull();
+		assertThat(snapshot.getRoa()).isNull();
+		assertThat(snapshot.getDebtToEquity()).isNull();
+		assertThat(snapshot.getNetDebt()).isNull();
+		assertThat(snapshot.getOperatingCashflow()).isNull();
+		assertThat(snapshot.getFreeCashflow()).isNull();
 		assertThat(snapshot.getQualityStatus()).isEqualTo(DataQualityStatus.VALID);
-		assertThat(snapshot.getAssumptionsJson()).contains("Fluxo de caixa livre");
 		assertThat(snapshot.getAssumptionsJson()).contains("brapi");
 	}
 

@@ -164,41 +164,12 @@ public class IndicatorCalculationService {
 
 		BigDecimal revenue = value(latestAnnualIncome, "revenue", missingFields);
 		BigDecimal netIncome = value(latestAnnualIncome, "netIncome", missingFields);
-		BigDecimal grossProfit = value(latestAnnualIncome, "grossProfit", missingFields);
-		BigDecimal ebitda = value(latestAnnualIncome, "ebitda", missingFields);
-		BigDecimal operatingIncome = value(latestAnnualIncome, "operatingIncome", missingFields);
-		BigDecimal totalAssets = value(latestBalance, "totalAssets", missingFields);
-		BigDecimal equity = value(latestBalance, "equity", missingFields);
-		BigDecimal totalDebt = value(latestBalance, "totalDebt", missingFields);
-		BigDecimal cash = value(latestBalance, "cash", missingFields);
 		BigDecimal operatingCashflow = value(latestCash, "operatingCashflow", missingFields);
-		BigDecimal freeCashflow = optionalValue(latestCash, "freeCashflow");
-		BigDecimal capitalExpenditures = optionalValue(latestCash, "capitalExpenditures");
-		BigDecimal calculatedFreeCashflow = freeCashflow(operatingCashflow, capitalExpenditures).orElse(null);
-		if (freeCashflow == null && calculatedFreeCashflow == null) {
-			missingFields.add("freeCashflow");
-		}
 
-		// Campos current/TTM enviados pela brapi permanecem canonicos; calculos por demonstrativo apenas preenchem lacunas.
-		setIfMissing(derived::getGrossMargin, derived::setGrossMargin, ratio(grossProfit, revenue).orElse(null));
-		setIfMissing(derived::getEbitdaMargin, derived::setEbitdaMargin, ratio(ebitda, revenue).orElse(null));
-		setIfMissing(derived::getOperatingMargin, derived::setOperatingMargin,
-				ratio(operatingIncome, revenue).orElse(null));
-		setIfMissing(derived::getProfitMargin, derived::setProfitMargin, ratio(netIncome, revenue).orElse(null));
-		setIfMissing(derived::getRoe, derived::setRoe, ratio(netIncome, equity).orElse(null));
-		setIfMissing(derived::getRoa, derived::setRoa, ratio(netIncome, totalAssets).orElse(null));
-		setIfMissing(derived::getDebtToEquity, derived::setDebtToEquity, ratio(totalDebt, equity).orElse(null));
-		setIfMissing(derived::getNetDebt, derived::setNetDebt,
-				totalDebt == null || cash == null ? null : scaleMoney(totalDebt.subtract(cash)));
-		setIfMissing(derived::getOperatingCashflow, derived::setOperatingCashflow, operatingCashflow);
-		setIfMissing(derived::getFreeCashflow, derived::setFreeCashflow,
-				nonNull(freeCashflow, calculatedFreeCashflow));
-
-		assumptions.add("Campos current/TTM coletados da brapi sao preservados quando presentes; calculos internos por demonstrativo preenchem apenas lacunas.");
+		assumptions.add("Campos current/TTM coletados da brapi sao preservados quando presentes; calculos internos por demonstrativo nao preenchem lacunas desses campos.");
 		assumptions.add("Crescimento anual compara a ultima demonstracao anual valida com a anual imediatamente anterior.");
 		assumptions.add("Crescimento trimestral compara o ultimo trimestre valido com o mesmo trimestre do ano anterior para reduzir ruido sazonal.");
 		assumptions.add("Crescimento com base negativa nao usa divisao percentual tradicional; viradas de prejuizo para lucro nao contam como crescimento normal.");
-		assumptions.add("Fluxo de caixa livre usa caixa operacional menos capex quando capex vem positivo, ou soma quando capex vem negativo.");
 		derived.setAssumptionsJson(json(assumptions));
 		derived.setQualityStatus(fundamentalQuality(derived, revenue, netIncome, operatingCashflow, missingFields));
 		derived.setMissingFieldsJson(json(distinctSorted(missingFields)));
@@ -501,21 +472,6 @@ public class IndicatorCalculationService {
 		return Optional.of(scaleRatio(BigDecimal.ZERO));
 	}
 
-	private Optional<BigDecimal> ratio(BigDecimal numerator, BigDecimal denominator) {
-		if (numerator == null || denominator == null || denominator.signum() == 0) {
-			return Optional.empty();
-		}
-		return Optional.of(scaleRatio(numerator.divide(denominator, 12, RoundingMode.HALF_UP)));
-	}
-
-	private Optional<BigDecimal> freeCashflow(BigDecimal operatingCashflow, BigDecimal capitalExpenditures) {
-		if (operatingCashflow == null || capitalExpenditures == null) {
-			return Optional.empty();
-		}
-		BigDecimal normalizedCapex = capitalExpenditures.signum() < 0 ? capitalExpenditures : capitalExpenditures.negate();
-		return Optional.of(scaleMoney(operatingCashflow.add(normalizedCapex)));
-	}
-
 	private DataQualityStatus fundamentalQuality(FundamentalSnapshot snapshot, BigDecimal revenue, BigDecimal netIncome,
 			BigDecimal operatingCashflow, List<String> missingFields) {
 		boolean hasRevenue = revenue != null || snapshot.getTotalRevenue() != null;
@@ -540,10 +496,6 @@ public class IndicatorCalculationService {
 			missingFields.add(field);
 		}
 		return value;
-	}
-
-	private BigDecimal optionalValue(StatementValues values, String field) {
-		return values == null ? null : values.value(field);
 	}
 
 	private BigDecimal analysisClose(DailyCandle candle) {
@@ -616,17 +568,6 @@ public class IndicatorCalculationService {
 			}
 		}
 		return latest;
-	}
-
-	private <T> T nonNull(T preferred, T fallback) {
-		return preferred == null ? fallback : preferred;
-	}
-
-	private <T> void setIfMissing(java.util.function.Supplier<T> current,
-			java.util.function.Consumer<T> setter, T calculated) {
-		if (current.get() == null && calculated != null) {
-			setter.accept(calculated);
-		}
 	}
 
 	private List<String> distinctSorted(List<String> values) {
