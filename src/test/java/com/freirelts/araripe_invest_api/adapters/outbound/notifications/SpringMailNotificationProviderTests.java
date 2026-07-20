@@ -65,15 +65,15 @@ class SpringMailNotificationProviderTests {
 						LocalDate.of(2026, 7, 7), InformationalEventType.STUDY_ASSUMPTION_CHANGED, Severity.HIGH,
 						"Premissas do modelo de estudo alteradas", "araripe-rules", "informational-events-v1",
 						"Indicadores ou criterios do modelo acompanhado mudaram em relacao ao registro aceito pelo usuario.",
-						Map.of("currentStudyStatus", "PREMISSAS_ALTERADAS", "acceptedScore", 82, "currentScore", 58,
-								"scoreDelta", -24, "currentFailedFilters",
-								List.of(Map.of("message", "Lucro caiu abaixo do limite deterministico."))))));
+							Map.of("currentStudyStatus", "CRITERIOS_EM_ATENCAO", "acceptedScore", 82, "currentScore", 58,
+									"scoreDelta", -24, "currentFailedFilters",
+									List.of(Map.of("message", "Lucro caiu abaixo do limite deterministico."))))));
 
 		String body = provider.body(digest, "araripe-email-test");
 
 		assertThat(body)
-				.contains("Tipo: Premissa do estudo alterada | Severidade: alta")
-				.contains("Status atual do estudo: premissas alteradas.")
+					.contains("Tipo: Premissa do estudo alterada | Severidade: alta")
+					.contains("Status atual do estudo: criterios em atencao.")
 				.contains("Score aceito: 82; score atual: 58; variacao: -24 pontos.")
 				.contains("O score atual ficou abaixo do minimo informativo de 60 pontos.")
 				.contains("Motivos deterministicos: Lucro caiu abaixo do limite deterministico.");
@@ -93,8 +93,8 @@ class SpringMailNotificationProviderTests {
 						LocalDate.of(2026, 7, 7), InformationalEventType.STUDY_ASSUMPTION_CHANGED, Severity.HIGH,
 						"Premissas do modelo de estudo alteradas", "araripe-rules", "informational-events-v1",
 						"Indicadores ou criterios do modelo acompanhado mudaram em relacao ao registro aceito pelo usuario.",
-							Map.of("currentStudyStatus", "PREMISSAS_ALTERADAS", "acceptedScore", 82, "currentScore", 58,
-									"scoreDelta", -24))));
+								Map.of("currentStudyStatus", "CRITERIOS_EM_ATENCAO", "acceptedScore", 82, "currentScore", 58,
+										"scoreDelta", -24))));
 
 		String html = provider.htmlBody(digest, "araripe-email-test");
 
@@ -105,7 +105,7 @@ class SpringMailNotificationProviderTests {
 				.contains("Cliente &lt;Teste&gt;")
 				.contains("TAEE11")
 				.contains("Motivo do alerta")
-				.contains("Status atual do estudo: premissas alteradas.")
+					.contains("Status atual do estudo: criterios em atencao.")
 				.contains("Identificador interno: araripe-email-test");
 		assertThat(html).doesNotContain("Cliente <Teste>", "STUDY_ASSUMPTION_CHANGED", "HIGH");
 	}

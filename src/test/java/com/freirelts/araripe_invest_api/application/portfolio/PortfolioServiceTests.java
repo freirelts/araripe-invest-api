@@ -197,6 +197,22 @@ class PortfolioServiceTests {
 	}
 
 	@Test
+	void customerCanAssociateCriteriaAttentionThesisWhenDataIsComplete() {
+		User customer = saveCustomer("portfolio-attention-thesis@araripe.test");
+		Asset asset = assetRepository.saveAndFlush(new Asset("TAEE11", "Taesa", "Energia"));
+		var position = portfolioService.createPosition(customer.getId(), input(asset, "100", "35.00"));
+		PositionThesis attentionThesis = thesisRepository.saveAndFlush(thesis(asset, LocalDate.of(2026, 7, 7),
+				ThesisType.QUALITY_REASONABLE_PRICE, 72, "rules-v1", ThesisStatus.CRITERIOS_EM_ATENCAO));
+
+		var associated = portfolioService.associateMainThesis(customer.getId(), position.id(),
+				attentionThesis.getId(), "Acompanhamento em atencao");
+
+		assertThat(associated.accompaniedStudyModel()).isNotNull();
+		assertThat(associated.accompaniedStudyModel().acceptedThesisId()).isEqualTo(attentionThesis.getId());
+		assertThat(associated.accompaniedStudyModel().acceptedScore()).isEqualTo(72);
+	}
+
+	@Test
 	void customerCannotAssociateInvalidOrDataBlockedMainThesis() {
 		User customer = saveCustomer("portfolio-invalid-thesis@araripe.test");
 		Asset asset = assetRepository.saveAndFlush(new Asset("BBAS3", "Banco do Brasil", "Financeiro"));

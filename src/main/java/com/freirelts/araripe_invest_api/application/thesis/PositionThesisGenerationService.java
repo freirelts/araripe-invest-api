@@ -402,13 +402,13 @@ public class PositionThesisGenerationService {
 				EliminatoryFilterCode.STRONG_REVENUE_DETERIORATION,
 				EliminatoryFilterCode.NEGATIVE_PROFIT_MARGIN,
 				EliminatoryFilterCode.LONG_TREND_DETERIORATED)) {
-			return ThesisStatus.PREMISSAS_ALTERADAS;
+			return ThesisStatus.CRITERIOS_EM_ATENCAO;
 		}
 		if (hasFilter(failedFilters, EliminatoryFilterCode.EXCESSIVE_DEBT,
 				EliminatoryFilterCode.EXTREME_VALUATION_WITHOUT_GROWTH,
 				EliminatoryFilterCode.STRONG_EARNINGS_DETERIORATION,
 				EliminatoryFilterCode.EXTREME_VOLATILITY)) {
-			return ThesisStatus.PREMISSAS_ALTERADAS;
+			return ThesisStatus.CRITERIOS_EM_ATENCAO;
 		}
 		if (hasFilter(failedFilters, EliminatoryFilterCode.DATA_QUALITY_BLOCKED)) {
 			return ThesisStatus.DADOS_DESATUALIZADOS;
@@ -421,7 +421,7 @@ public class PositionThesisGenerationService {
 		}
 		if (priceCeiling != null && context.currentPrice() != null
 				&& context.currentPrice().compareTo(priceCeiling.multiply(PRICE_REVIEW_PREMIUM)) > 0) {
-			return ThesisStatus.PREMISSAS_ALTERADAS;
+			return ThesisStatus.CRITERIOS_EM_ATENCAO;
 		}
 		if (hasFilter(failedFilters, EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY,
 				EliminatoryFilterCode.PRICE_BELOW_MINIMUM)) {

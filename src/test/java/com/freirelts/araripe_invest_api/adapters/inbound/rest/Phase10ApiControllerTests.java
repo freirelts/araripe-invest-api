@@ -199,6 +199,23 @@ class Phase10ApiControllerTests {
 				.andExpect(jsonPath("$[0].sources[0]").value("brapi"))
 				.andExpect(jsonPath("$[0].limitations[0]").value("Conteudo educacional e informativo."));
 
+		Asset otherAsset = assetRepository.saveAndFlush(new Asset("PETR4", "Petrobras PN", "Energia"));
+		PositionThesis otherThesis = thesisRepository.saveAndFlush(thesis(otherAsset, referenceDate));
+
+		mockMvc.perform(get("/api/v1/screener?date=2026-07-07&symbol=wege3&sortBy=CRITERIA_ADHERENCE_SCORE&direction=DESC")
+						.header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].id").value(thesis.getId().toString()))
+				.andExpect(jsonPath("$[0].asset.symbol").value("WEGE3"));
+
+		mockMvc.perform(get("/api/v1/screener?date=2026-07-07&symbol=PETR4")
+						.header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].id").value(otherThesis.getId().toString()))
+				.andExpect(jsonPath("$[0].asset.symbol").value("PETR4"));
+
 		mockMvc.perform(get("/api/v1/asset-studies/{studyId}", thesis.getId()).header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.thesis.asset.symbol").value("WEGE3"))

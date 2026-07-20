@@ -291,12 +291,17 @@ public class PortfolioService {
 	}
 
 	private void validateAssociableThesis(PositionThesis thesis) {
-		if (thesis.getStatus() != ThesisStatus.EM_ESTUDO
-				&& thesis.getStatus() != ThesisStatus.CRITERIOS_ATENDIDOS
-				&& thesis.getStatus() != ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS) {
+		boolean monitorable = thesis.getStatus() == ThesisStatus.EM_ESTUDO
+				|| thesis.getStatus() == ThesisStatus.CRITERIOS_ATENDIDOS
+				|| thesis.getStatus() == ThesisStatus.CRITERIOS_PARCIALMENTE_ATENDIDOS;
+
+		boolean reviewable = thesis.getStatus() == ThesisStatus.CRITERIOS_EM_ATENCAO;
+
+		if (!monitorable && !reviewable) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
-					"Only monitorable study models can be accompanied.");
+					"Only monitorable or reviewable study models can be accompanied.");
 		}
+
 		if (thesis.getScore() < 60 || !positive(thesis.getFairPriceEstimate()) || !positive(thesis.getPriceCeiling())
 				|| thesis.getSafetyMarginPercent() == null || hasDataBlockingFilter(thesis.getFailedFiltersJson())) {
 			throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,

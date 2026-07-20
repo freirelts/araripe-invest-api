@@ -153,19 +153,20 @@ class InformationalEventServiceTests {
 	@Test
 	void changedStudyIndicatorsCreateAssumptionChangedEventWithoutOperationalText() {
 		Scenario scenario = scenario("assumption@araripe.test", "TAEE11", "35.00", "30.00", "45.00", "36.00",
-				DataQualityStatus.VALID, ThesisStatus.PREMISSAS_ALTERADAS, 58);
+				DataQualityStatus.VALID, ThesisStatus.CRITERIOS_EM_ATENCAO, 78);
 
 		InformationalEventSummary summary = service.scanPosition(scenario.position().getId(), REFERENCE_DATE)
 				.orElseThrow();
 
 		assertThat(summary.eventType()).isEqualTo(InformationalEventType.STUDY_ASSUMPTION_CHANGED);
 		assertThat(summary.currentStudyModelSnapshotId()).isEqualTo(scenario.currentThesis().getId());
-		assertThat(alertRepository.findAll()).singleElement()
-				.satisfies(alert -> assertThat(alert.getEvidenceJson())
-						.contains("\"currentStudyStatus\":\"PREMISSAS_ALTERADAS\"")
-						.contains("\"acceptedScore\":82")
-						.contains("\"currentScore\":58")
-						.contains("\"scoreDelta\":-24"));
+			assertThat(alertRepository.findAll()).singleElement()
+					.satisfies(alert -> assertThat(alert.getEvidenceJson())
+							.contains("\"acceptedStudyStatus\":\"CRITERIOS_ATENDIDOS\"")
+							.contains("\"currentStudyStatus\":\"CRITERIOS_EM_ATENCAO\"")
+							.contains("\"acceptedScore\":82")
+							.contains("\"currentScore\":78")
+							.contains("\"scoreDelta\":-4"));
 		assertNoOperationalTermsWerePersisted();
 	}
 

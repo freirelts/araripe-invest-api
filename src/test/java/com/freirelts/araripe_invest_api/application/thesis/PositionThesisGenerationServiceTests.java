@@ -149,21 +149,21 @@ class PositionThesisGenerationServiceTests {
 	}
 
 	@Test
-	void mapsExtremeVolatilityToReduceExposureStatus() {
+	void mapsExtremeVolatilityToCriteriaAttentionStatus() {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
 		Asset asset = assetRepository.saveAndFlush(new Asset("VOL3", "Volatilidade Alta", "Consumo"));
 		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
 		saveTechnical(asset, referenceDate, TrendStatus.HEALTHY, new BigDecimal("0.700000"));
 		saveStrongFundamental(asset, referenceDate);
 
-		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
+			List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
-		assertThat(theses)
-				.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS));
+			assertThat(theses)
+					.allSatisfy(thesis -> assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.CRITERIOS_EM_ATENCAO));
 	}
 
 	@Test
-	void mapsStrongEarningsDeteriorationToReduceExposureWithoutExitThesis() {
+	void mapsStrongEarningsDeteriorationToCriteriaAttentionWithoutExitThesis() {
 		LocalDate referenceDate = LocalDate.of(2026, 7, 10);
 		Asset asset = assetRepository.saveAndFlush(new Asset("LUCRO3", "Lucro Pressionado", "Energia"));
 		saveValidCandle(asset, referenceDate, new BigDecimal("20.00"));
@@ -179,7 +179,7 @@ class PositionThesisGenerationServiceTests {
 		List<PositionThesis> theses = service.generateForAsset(asset, referenceDate);
 
 		assertThat(theses).allSatisfy(thesis -> {
-			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.PREMISSAS_ALTERADAS);
+			assertThat(thesis.getStatus()).isEqualTo(ThesisStatus.CRITERIOS_EM_ATENCAO);
 			assertThat(thesis.getFailedFiltersJson()).contains("STRONG_EARNINGS_DETERIORATION")
 				.doesNotContain("STRONG_REVENUE_DETERIORATION", "NEGATIVE_PROFIT_MARGIN");
 		});

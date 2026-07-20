@@ -398,6 +398,7 @@ class SpringMailNotificationProvider implements NotificationProvider {
 			case "EM_ESTUDO" -> "em estudo";
 			case "CRITERIOS_ATENDIDOS" -> "criterios atendidos";
 			case "CRITERIOS_PARCIALMENTE_ATENDIDOS" -> "criterios parcialmente atendidos";
+			case "CRITERIOS_EM_ATENCAO" -> "criterios em atencao";
 			case "PREMISSAS_ALTERADAS" -> "premissas alteradas";
 			case "DADOS_DESATUALIZADOS" -> "dados desatualizados";
 			default -> status;

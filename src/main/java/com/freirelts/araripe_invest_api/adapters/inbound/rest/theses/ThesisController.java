@@ -31,7 +31,9 @@ class ScreenerController {
 			@RequestParam(required = false)
 			ScreenerSortBy sortBy,
 			@RequestParam(required = false)
-			SortDirection direction) {
-		return apiQueryService.screener(date, sortBy, direction);
+			SortDirection direction,
+			@RequestParam(required = false)
+			String symbol) {
+		return apiQueryService.screener(date, sortBy, direction, symbol);
 	}
 }

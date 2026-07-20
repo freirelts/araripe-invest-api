@@ -113,7 +113,7 @@ public class ApiQueryService {
 
 	@Transactional(readOnly = true)
 	public List<ThesisSummaryResponse> screener(LocalDate referenceDate, ScreenerSortBy sortBy,
-			SortDirection direction) {
+			SortDirection direction, String symbol) {
 		ScreenerSortBy effectiveSort = sortBy == null ? ScreenerSortBy.ASSET_SYMBOL : sortBy;
 		SortDirection effectiveDirection = direction == null ? SortDirection.ASC : direction;
 		Comparator<PositionThesis> comparator = comparator(effectiveSort);
@@ -121,9 +121,13 @@ public class ApiQueryService {
 			comparator = comparator.reversed();
 		}
 		LocalDate effectiveReferenceDate = effectiveScreenerDate(referenceDate);
-		return thesisRepository
-				.findByReferenceDateAndRuleVersion(effectiveReferenceDate, PositionThesisGenerationService.RULE_VERSION)
-				.stream()
+		String normalizedSymbol = trimToNull(symbol);
+		List<PositionThesis> theses = normalizedSymbol == null
+				? thesisRepository.findByReferenceDateAndRuleVersion(effectiveReferenceDate,
+						PositionThesisGenerationService.RULE_VERSION)
+				: thesisRepository.findByAssetSymbolIgnoreCaseAndReferenceDateAndRuleVersion(normalizedSymbol,
+						effectiveReferenceDate, PositionThesisGenerationService.RULE_VERSION);
+		return theses.stream()
 				.sorted(comparator.thenComparing(thesis -> thesis.getId().toString()))
 				.map(this::thesisSummary)
 				.toList();
@@ -302,6 +306,13 @@ public class ApiQueryService {
 
 	private BigDecimal percent(BigDecimal ratio) {
 		return ratio == null ? null : ratio.multiply(new BigDecimal("100.000000")).setScale(6, RoundingMode.HALF_UP);
+	}
+
+	private static String trimToNull(String value) {
+		if (value == null || value.isBlank()) {
+			return null;
+		}
+		return value.trim();
 	}
 
 	private LocalDate effectiveDate(LocalDate date) {
