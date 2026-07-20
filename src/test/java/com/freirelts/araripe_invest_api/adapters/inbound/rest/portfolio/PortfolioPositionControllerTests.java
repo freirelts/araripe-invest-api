@@ -156,6 +156,16 @@ class PortfolioPositionControllerTests {
 						.header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.status").value("CLOSED"));
+
+		mockMvc.perform(get("/api/v1/position-records").header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(0)));
+
+		mockMvc.perform(get("/api/v1/position-records/history").header("Authorization", bearer(token)))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$", hasSize(1)))
+				.andExpect(jsonPath("$[0].id").value(positionId))
+				.andExpect(jsonPath("$[0].status").value("CLOSED"));
 	}
 
 	@Test

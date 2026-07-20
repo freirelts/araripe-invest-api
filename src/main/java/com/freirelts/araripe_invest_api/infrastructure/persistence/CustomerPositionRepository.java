@@ -19,6 +19,9 @@ public interface CustomerPositionRepository extends JpaRepository<CustomerPositi
 	List<CustomerPosition> findByUserIdOrderByCreatedAtDesc(UUID userId);
 
 	@EntityGraph(attributePaths = { "asset", "user" })
+	List<CustomerPosition> findByUserIdAndStatusOrderByCreatedAtDesc(UUID userId, PositionStatus status);
+
+	@EntityGraph(attributePaths = { "asset", "user" })
 	Optional<CustomerPosition> findByIdAndUserId(UUID id, UUID userId);
 
 	@EntityGraph(attributePaths = { "asset", "user" })

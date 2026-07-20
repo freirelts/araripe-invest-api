@@ -45,6 +45,11 @@ class PortfolioPositionController {
 		return portfolioService.listPositions(userId(authentication));
 	}
 
+	@GetMapping("/history")
+	List<PositionSummary> listClosedPositions(JwtAuthenticationToken authentication) {
+		return portfolioService.listClosedPositions(userId(authentication));
+	}
+
 	@PostMapping
 	@ResponseStatus(HttpStatus.CREATED)
 	PositionSummary createPosition(JwtAuthenticationToken authentication,

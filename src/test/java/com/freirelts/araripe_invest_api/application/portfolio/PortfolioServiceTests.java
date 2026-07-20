@@ -94,6 +94,12 @@ class PortfolioServiceTests {
 
 		assertThat(closed.status()).isEqualTo(PositionStatus.CLOSED);
 		assertThat(closed.closedAt()).isNotNull();
+		assertThat(portfolioService.listPositions(customer.getId())).isEmpty();
+		assertThat(portfolioService.listClosedPositions(customer.getId())).singleElement()
+				.satisfies(history -> {
+					assertThat(history.id()).isEqualTo(created.id());
+					assertThat(history.status()).isEqualTo(PositionStatus.CLOSED);
+				});
 		assertThat(positionRepository.findById(created.id()).orElseThrow().isOpenAndValidForDailyScan()).isFalse();
 	}
 
@@ -250,10 +256,12 @@ class PortfolioServiceTests {
 				ThesisType.SUSTAINABLE_DIVIDENDS, 78, "rules-v1"));
 		portfolioService.associateMainThesis(customer.getId(), position.id(), thesis.getId(), "Tese de dividendos");
 
-		portfolioService.closePosition(customer.getId(), position.id());
+		var closed = portfolioService.closePosition(customer.getId(), position.id());
 
 		CustomerPosition persisted = positionRepository.findById(position.id()).orElseThrow();
 		assertThat(persisted.getStatus()).isEqualTo(PositionStatus.CLOSED);
+		assertThat(closed.accompaniedStudyModel()).isNotNull();
+		assertThat(closed.accompaniedStudyModel().status()).isEqualTo(CustomerPositionThesisStatus.CLOSED);
 		assertThat(positionThesisRepository.findByPositionIdAndStatus(position.id(),
 				CustomerPositionThesisStatus.ACTIVE)).isEmpty();
 		assertThat(positionThesisRepository.findByPositionIdOrderByCreatedAtDesc(position.id()))

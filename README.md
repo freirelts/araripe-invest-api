@@ -94,11 +94,11 @@ http://localhost:8080/actuator/health
 
 ## Autenticacao
 
-A API usa JWT stateless assinado com HMAC. Cadastro e login ficam publicos:
+A API usa JWT stateless assinado com HMAC. Login e termos vigentes ficam publicos:
 
 ```http
-POST /api/v1/auth/register
 POST /api/v1/auth/login
+GET /api/v1/legal/terms/current
 ```
 
 Rotas autenticadas exigem header:
@@ -109,15 +109,22 @@ Authorization: Bearer <token>
 
 O endpoint `GET /api/v1/auth/me` retorna o usuario autenticado. Rotas `/api/v1/admin/**` exigem perfil `ADMIN`.
 
-O cadastro de cliente exige aceite versionado dos termos educacionais vigentes:
+Cadastro publico nao fica habilitado. A criacao de usuarios acontece somente por perfil `ADMIN`:
+
+```http
+POST /api/v1/admin/users
+```
+
+Exemplo de criacao administrativa:
 
 ```json
 {
   "name": "Cliente",
   "email": "cliente@exemplo.com",
   "password": "senha-forte",
-  "acceptedTerms": true,
-  "acceptedTermsVersion": "terms-educational-v1"
+  "status": "ACTIVE",
+  "subscriptionStatus": "ACTIVE",
+  "roles": ["CUSTOMER"]
 }
 ```
 

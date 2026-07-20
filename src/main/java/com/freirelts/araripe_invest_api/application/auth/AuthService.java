@@ -1,16 +1,12 @@
 package com.freirelts.araripe_invest_api.application.auth;
 
-import com.freirelts.araripe_invest_api.application.legal.LegalTermsService;
-import com.freirelts.araripe_invest_api.domain.users.SubscriptionStatus;
 import com.freirelts.araripe_invest_api.domain.users.User;
-import com.freirelts.araripe_invest_api.domain.users.UserRoleType;
 import com.freirelts.araripe_invest_api.infrastructure.config.AraripeSecurityProperties;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.UserRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,40 +20,16 @@ import java.util.UUID;
 public class AuthService {
 
 	private final UserRepository userRepository;
-	private final PasswordEncoder passwordEncoder;
 	private final AuthenticationManager authenticationManager;
 	private final JwtTokenService jwtTokenService;
 	private final AraripeSecurityProperties properties;
-	private final LegalTermsService legalTermsService;
 
-	AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder,
-			AuthenticationManager authenticationManager, JwtTokenService jwtTokenService,
-			AraripeSecurityProperties properties, LegalTermsService legalTermsService) {
+	AuthService(UserRepository userRepository, AuthenticationManager authenticationManager,
+			JwtTokenService jwtTokenService, AraripeSecurityProperties properties) {
 		this.userRepository = userRepository;
-		this.passwordEncoder = passwordEncoder;
 		this.authenticationManager = authenticationManager;
 		this.jwtTokenService = jwtTokenService;
 		this.properties = properties;
-		this.legalTermsService = legalTermsService;
-	}
-
-	@Transactional
-	public AuthResult registerCustomer(String name, String email, String rawPassword, boolean acceptedTerms,
-			String acceptedTermsVersion) {
-		String normalizedEmail = normalizeEmail(email);
-		if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
-			throw new ResponseStatusException(HttpStatus.CONFLICT, "E-mail already registered.");
-		}
-		if (!acceptedTerms || !legalTermsService.isCurrentVersion(acceptedTermsVersion)) {
-			throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Current terms must be accepted.");
-		}
-
-		User user = new User(name.trim(), normalizedEmail, passwordEncoder.encode(rawPassword),
-				SubscriptionStatus.TRIALING);
-		user.addRole(UserRoleType.CUSTOMER);
-		user.acceptTerms(acceptedTermsVersion, Instant.now());
-		User persisted = userRepository.saveAndFlush(user);
-		return issueToken(new AraripeUserDetails(persisted), persisted);
 	}
 
 	@Transactional

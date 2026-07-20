@@ -22,7 +22,6 @@ class OpenApiController {
 
 	private Map<String, Object> paths() {
 		Map<String, Object> paths = new LinkedHashMap<>();
-		add(paths, "/api/v1/auth/register", "post", "Cadastro de usuario CUSTOMER.");
 		add(paths, "/api/v1/auth/login", "post", "Login com JWT assinado.");
 		add(paths, "/api/v1/auth/me", "get", "Usuario autenticado.");
 		add(paths, "/api/v1/legal/terms/current", "get", "Termos atuais de uso educacional e informativo.");
@@ -41,7 +40,10 @@ class OpenApiController {
 		add(paths, "/api/v1/watched-assets/{watchItemId}", "put",
 				"Atualiza preferencias de alerta de ativo acompanhado, sem inferir suitability.");
 		add(paths, "/api/v1/watched-assets/{watchItemId}/archive", "patch", "Arquiva ativo acompanhado.");
-		add(paths, "/api/v1/position-records", "get", "Registros informativos de posicao real declarados pelo usuario.");
+		add(paths, "/api/v1/position-records", "get",
+				"Registros informativos de posicao real abertos declarados pelo usuario.");
+		add(paths, "/api/v1/position-records/history", "get",
+				"Historico de registros informativos de posicao real encerrados pelo usuario.");
 		add(paths, "/api/v1/position-records", "post", "Cria cadastro informativo de posicao real do usuario.");
 		add(paths, "/api/v1/position-records/{positionId}", "put", "Edita cadastro informativo de posicao real.");
 		add(paths, "/api/v1/position-records/{positionId}/quantity-adjustments", "post",

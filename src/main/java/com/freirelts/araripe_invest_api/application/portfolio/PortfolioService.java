@@ -25,6 +25,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -54,7 +55,15 @@ public class PortfolioService {
 	@Transactional(readOnly = true)
 	public List<PositionSummary> listPositions(UUID userId) {
 		requireCustomer(userId);
-		return positionRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
+		return positionRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, PositionStatus.OPEN).stream()
+				.map(this::summary)
+				.toList();
+	}
+
+	@Transactional(readOnly = true)
+	public List<PositionSummary> listClosedPositions(UUID userId) {
+		requireCustomer(userId);
+		return positionRepository.findByUserIdAndStatusOrderByCreatedAtDesc(userId, PositionStatus.CLOSED).stream()
 				.map(this::summary)
 				.toList();
 	}
@@ -192,9 +201,18 @@ public class PortfolioService {
 	private PositionSummary summary(CustomerPosition position) {
 		AccompaniedStudyModelSummary accompaniedStudyModel = positionThesisRepository
 				.findByPositionIdAndStatus(position.getId(), CustomerPositionThesisStatus.ACTIVE)
+				.or(() -> latestHistoricalAssociation(position))
 				.map(AccompaniedStudyModelSummary::from)
 				.orElse(null);
 		return PositionSummary.from(position, accompaniedStudyModel);
+	}
+
+	private Optional<CustomerPositionThesis> latestHistoricalAssociation(CustomerPosition position) {
+		if (position.getStatus() != PositionStatus.CLOSED) {
+			return Optional.empty();
+		}
+		return positionThesisRepository.findByPositionIdOrderByCreatedAtDesc(position.getId()).stream()
+				.findFirst();
 	}
 
 	private User requireCustomer(UUID userId) {

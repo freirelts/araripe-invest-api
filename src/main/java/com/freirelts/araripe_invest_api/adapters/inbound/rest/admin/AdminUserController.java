@@ -13,10 +13,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
@@ -34,9 +38,11 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 class AdminUserController {
 
 	private final UserRepository userRepository;
+	private final PasswordEncoder passwordEncoder;
 
-	AdminUserController(UserRepository userRepository) {
+	AdminUserController(UserRepository userRepository, PasswordEncoder passwordEncoder) {
 		this.userRepository = userRepository;
+		this.passwordEncoder = passwordEncoder;
 	}
 
 	@GetMapping
@@ -44,6 +50,20 @@ class AdminUserController {
 		return userRepository.findAll().stream()
 				.map(AdminUserResponse::from)
 				.toList();
+	}
+
+	@PostMapping
+	@ResponseStatus(HttpStatus.CREATED)
+	AdminUserResponse createUser(@Valid @RequestBody CreateUserRequest request) {
+		String email = normalizeEmail(request.email());
+		if (userRepository.existsByEmailIgnoreCase(email)) {
+			throw new ResponseStatusException(CONFLICT, "E-mail already registered.");
+		}
+		User user = new User(request.name().trim(), email, passwordEncoder.encode(request.password()),
+				request.subscriptionStatus());
+		user.setStatus(request.status());
+		user.replaceRoles(toRoleSet(request.roles()));
+		return AdminUserResponse.from(userRepository.saveAndFlush(user));
 	}
 
 	@PutMapping("/{userId}")
@@ -90,6 +110,30 @@ class AdminUserController {
 			SubscriptionStatus subscriptionStatus,
 			@NotEmpty
 			List<@NotNull UserRoleType> roles) {
+	}
+
+	record CreateUserRequest(
+			@NotBlank
+			@Size(max = 160)
+			String name,
+			@NotBlank
+			@Email
+			@Size(max = 320)
+			String email,
+			@NotBlank
+			@Size(min = 8, max = 120)
+			String password,
+			@NotNull
+			UserStatus status,
+			@NotNull
+			SubscriptionStatus subscriptionStatus,
+			@NotEmpty
+			List<@NotNull UserRoleType> roles) {
+
+		@Override
+		public String toString() {
+			return "CreateUserRequest[name=%s, email=%s, password=<masked>]".formatted(name, email);
+		}
 	}
 
 	record AdminUserResponse(

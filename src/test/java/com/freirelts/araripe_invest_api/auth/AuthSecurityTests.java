@@ -68,15 +68,35 @@ class AuthSecurityTests {
 	}
 
 	@Test
-	void registeredCustomerCanAuthenticateAndPasswordIsHashed() throws Exception {
-		String token = register("Cliente Araripe", "cliente-auth@araripe.test", "senha-forte-123");
+	void adminCreatedCustomerCanAuthenticateAndPasswordIsHashed() throws Exception {
+		User admin = saveUser("Admin Creator", "admin-creator@araripe.test", "senha-admin-123",
+				SubscriptionStatus.NONE, UserRoleType.ADMIN);
+		String adminToken = login(admin, "senha-admin-123");
+
+		mockMvc.perform(post("/api/v1/admin/users")
+						.header("Authorization", bearer(adminToken))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("""
+								{
+								  "name":"Cliente Araripe",
+								  "email":"cliente-auth@araripe.test",
+								  "password":"senha-forte-123",
+								  "status":"ACTIVE",
+								  "subscriptionStatus":"ACTIVE",
+								  "roles":["CUSTOMER"]
+								}
+								"""))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.email").value("cliente-auth@araripe.test"))
+				.andExpect(jsonPath("$.roles[*]").value(containsInAnyOrder("CUSTOMER")));
+
+		String token = login(userRepository.findByEmailIgnoreCase("cliente-auth@araripe.test").orElseThrow(),
+				"senha-forte-123");
 
 		mockMvc.perform(get("/api/v1/auth/me").header("Authorization", bearer(token)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.email").value("cliente-auth@araripe.test"))
-				.andExpect(jsonPath("$.roles[*]").value(containsInAnyOrder("CUSTOMER")))
-				.andExpect(jsonPath("$.termsVersionAccepted").value("terms-educational-v1"))
-				.andExpect(jsonPath("$.termsAcceptedAt").isString());
+				.andExpect(jsonPath("$.roles[*]").value(containsInAnyOrder("CUSTOMER")));
 
 		User user = userRepository.findByEmailIgnoreCase("cliente-auth@araripe.test").orElseThrow();
 		assertThat(user.getPasswordHash()).isNotEqualTo("senha-forte-123");
@@ -84,7 +104,7 @@ class AuthSecurityTests {
 	}
 
 	@Test
-	void currentTermsArePublicAndRegistrationRequiresAcceptance() throws Exception {
+	void currentTermsArePublicAndPublicRegistrationIsDisabled() throws Exception {
 		mockMvc.perform(get("/api/v1/legal/terms/current"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.version").value("terms-educational-v1"))
@@ -93,9 +113,9 @@ class AuthSecurityTests {
 		mockMvc.perform(post("/api/v1/auth/register")
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("""
-								{"name":"Sem Termos","email":"sem-termos@araripe.test","password":"senha-forte-123","acceptedTerms":false,"acceptedTermsVersion":"terms-educational-v1"}
+								{"name":"Cliente Publico","email":"cliente-publico@araripe.test","password":"senha-forte-123","acceptedTerms":true,"acceptedTermsVersion":"terms-educational-v1"}
 								"""))
-				.andExpect(status().isBadRequest());
+				.andExpect(status().isUnauthorized());
 	}
 
 	@Test
@@ -245,20 +265,6 @@ class AuthSecurityTests {
 								{"email":"pastdue@araripe.test","password":"senha-pastdue-123"}
 								"""))
 				.andExpect(status().isUnauthorized());
-	}
-
-	private String register(String name, String email, String password) throws Exception {
-		String response = mockMvc.perform(post("/api/v1/auth/register")
-						.contentType(MediaType.APPLICATION_JSON)
-						.content("""
-								{"name":"%s","email":"%s","password":"%s","acceptedTerms":true,"acceptedTermsVersion":"terms-educational-v1"}
-								""".formatted(name, email, password)))
-				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.accessToken").isString())
-				.andReturn()
-				.getResponse()
-				.getContentAsString();
-		return objectMapper.readTree(response).get("accessToken").asText();
 	}
 
 	private String login(User user, String password) throws Exception {
