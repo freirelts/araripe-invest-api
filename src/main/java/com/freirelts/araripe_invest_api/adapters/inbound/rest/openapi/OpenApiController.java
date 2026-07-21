@@ -90,7 +90,7 @@ class OpenApiController {
 
 	private static Map<String, Object> example(String path) {
 		if (path.contains("diagnostics")) {
-			return Map.of("symbol", "WEGE3", "status", "APPROVED", "failedFilters", List.of());
+			return Map.of("symbol", "WEGE3", "failedFilters", List.of());
 		}
 		if (path.contains("legal/terms")) {
 			return Map.of("version", "terms-educational-v1", "title",

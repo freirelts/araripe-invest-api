@@ -3,8 +3,6 @@ package com.freirelts.araripe_invest_api.domain.screening;
 import com.freirelts.araripe_invest_api.domain.assets.Asset;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -42,10 +40,6 @@ public class AssetScreeningResult {
 
 	@Column(name = "reference_date", nullable = false)
 	private LocalDate referenceDate;
-
-	@Enumerated(EnumType.STRING)
-	@Column(nullable = false, length = 32)
-	private ScreeningStatus status = ScreeningStatus.ELIMINATED;
 
 	@Column(name = "rule_version", nullable = false, length = 40)
 	private String ruleVersion;

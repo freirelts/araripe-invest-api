@@ -230,15 +230,20 @@ Regras:
 
 ### `asset_screening_results`
 
-Guarda o resultado consolidado de filtros por ativo e data.
+Guarda o resultado consolidado de filtros determinísticos por ativo e data. Essa tabela não classifica o ativo nem define estado educacional; ela preserva evidências auditáveis para que o modelo de estudo derive seu `status` em `position_theses`.
 
 Campos principais:
 
 - `asset_id`
 - `reference_date`
-- `status`
 - `failed_filters_json`
 - `rule_version`
+
+Regras:
+
+- `failed_filters_json` não é sinônimo de reprovação total ou de ativo ruim;
+- a presença de filtros deve ser interpretada pela geração do modelo de estudo junto com score, dados mínimos, liquidez, preço de referência e demais critérios;
+- status educacionais permanecem somente em `position_theses.status`.
 
 ## Posições e acompanhamentos
 

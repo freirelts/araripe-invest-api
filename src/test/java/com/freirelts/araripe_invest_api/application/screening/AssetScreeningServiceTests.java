@@ -10,7 +10,6 @@ import com.freirelts.araripe_invest_api.domain.marketdata.FinancialStatementSnap
 import com.freirelts.araripe_invest_api.domain.marketdata.StatementType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.marketdata.TrendStatus;
-import com.freirelts.araripe_invest_api.domain.screening.ScreeningStatus;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetScreeningResultRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
@@ -82,7 +81,6 @@ class AssetScreeningServiceTests {
 
 		AssetScreeningDiagnostic diagnostic = service.diagnoseAsset("wege3", referenceDate);
 
-		assertThat(diagnostic.status()).isEqualTo(ScreeningStatus.ELIMINATED);
 		assertThat(diagnostic.failedFilters()).extracting(EliminatoryFilterReason::code)
 				.containsExactly(EliminatoryFilterCode.INSUFFICIENT_LIQUIDITY);
 		assertThat(assetScreeningResultRepository
@@ -90,10 +88,6 @@ class AssetScreeningServiceTests {
 						AssetScreeningService.RULE_VERSION)
 				.orElseThrow()
 				.getFailedFiltersJson()).contains("INSUFFICIENT_LIQUIDITY");
-		assertThat(assetScreeningResultRepository
-				.findByReferenceDateAndRuleVersionAndStatus(referenceDate, AssetScreeningService.RULE_VERSION,
-						ScreeningStatus.ELIGIBLE))
-				.isEmpty();
 	}
 
 	@Test
@@ -107,7 +101,6 @@ class AssetScreeningServiceTests {
 
 		AssetScreeningDiagnostic diagnostic = service.diagnoseAsset("radl3", referenceDate);
 
-		assertThat(diagnostic.status()).isEqualTo(ScreeningStatus.ELIGIBLE);
 		assertThat(diagnostic.failedFilters()).isEmpty();
 		assertThat(assetScreeningResultRepository
 				.findByAssetIdAndReferenceDateAndRuleVersion(asset.getId(), referenceDate,
@@ -130,7 +123,6 @@ class AssetScreeningServiceTests {
 
 		AssetScreeningDiagnostic diagnostic = service.diagnoseAsset("alfa3", referenceDate);
 
-		assertThat(diagnostic.status()).isEqualTo(ScreeningStatus.ELIMINATED);
 		assertThat(diagnostic.failedFilters()).extracting(EliminatoryFilterReason::code)
 				.contains(EliminatoryFilterCode.DATA_QUALITY_BLOCKED);
 	}

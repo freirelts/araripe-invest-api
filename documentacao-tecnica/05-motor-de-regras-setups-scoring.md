@@ -61,6 +61,8 @@ Filtro eliminatório não deve ser tratado sempre como sinônimo de score zero. 
 - `elegibilidade`: permissão para publicar modelo de estudo ou alerta informativo com base auditável;
 - `failedFilters`: motivos auditáveis que bloqueiam o estudo ou o alerta.
 
+O screening de ativos não possui status próprio. Seu papel é registrar `failedFilters` e evidências por ativo, data e versão de regra. A classificação educacional deve ocorrer somente na geração do modelo de estudo, por meio de status neutros em `ThesisStatus`.
+
 Quando houver dados suficientes, filtros como liquidez insuficiente, preço abaixo do mínimo, endividamento extremo, valuation extremo, deterioração de tendência, queda forte de lucro ou volatilidade extrema devem bloquear modelo de estudo publicado ou alerta informativo sem base, mas o score diagnóstico pode continuar sendo calculado e persistido. Isso permite explicar casos como "empresa com boa qualidade, mas sem liquidez suficiente".
 
 ### Relação entre filtros e status da modelo de estudo

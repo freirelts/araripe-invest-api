@@ -12,7 +12,6 @@ import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import com.freirelts.araripe_invest_api.domain.marketdata.TechnicalIndicatorSnapshot;
 import com.freirelts.araripe_invest_api.domain.thesis.PositionThesis;
 import com.freirelts.araripe_invest_api.domain.screening.AssetScreeningResult;
-import com.freirelts.araripe_invest_api.domain.screening.ScreeningStatus;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.AssetScreeningResultRepository;
 import com.freirelts.araripe_invest_api.infrastructure.persistence.DailyCandleRepository;
@@ -98,7 +97,6 @@ public class AssetScreeningService {
 		EliminatoryFilterInput input = buildInput(referenceDate, candle, technical, fundamental, fcfHistory,
 				latestAnnualStatementEndDate);
 		List<EliminatoryFilterReason> failedFilters = evaluator.evaluate(input);
-		ScreeningStatus status = failedFilters.isEmpty() ? ScreeningStatus.ELIGIBLE : ScreeningStatus.ELIMINATED;
 
 		AssetScreeningResult result = assetScreeningResultRepository
 				.findByAssetIdAndReferenceDateAndRuleVersion(asset.getId(), referenceDate, RULE_VERSION)
@@ -106,13 +104,12 @@ public class AssetScreeningService {
 		result.setAsset(asset);
 		result.setReferenceDate(referenceDate);
 		result.setRuleVersion(RULE_VERSION);
-		result.setStatus(status);
 		result.setFailedFiltersJson(json(failedFilters));
 		result.setUpdatedAt(Instant.now());
 		assetScreeningResultRepository.save(result);
 
-		return new AssetScreeningDiagnostic(asset.getId(), asset.getSymbol(), referenceDate, status, RULE_VERSION,
-				failedFilters, thesisScores(asset, referenceDate));
+		return new AssetScreeningDiagnostic(asset.getId(), asset.getSymbol(), referenceDate, RULE_VERSION, failedFilters,
+				thesisScores(asset, referenceDate));
 	}
 
 	private List<PositionThesisScoreDiagnostic> thesisScores(Asset asset, LocalDate referenceDate) {
