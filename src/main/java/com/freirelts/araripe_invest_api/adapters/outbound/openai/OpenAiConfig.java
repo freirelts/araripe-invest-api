@@ -3,19 +3,30 @@ package com.freirelts.araripe_invest_api.adapters.outbound.openai;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.Arrays;
 
 @Configuration
 @EnableConfigurationProperties(OpenAiProperties.class)
 class OpenAiConfig {
 
 	@Bean
-	RestClient openAiRestClient(OpenAiProperties properties) {
+	RestClient openAiRestClient(OpenAiProperties properties, Environment environment) {
+		if (Arrays.asList(environment.getActiveProfiles()).contains("test")) {
+			return RestClient.builder()
+					.baseUrl("https://unit-test.invalid/v1")
+					.requestFactory((uri, method) -> {
+						throw new AssertionError("OpenAI HTTP calls are forbidden in tests. Mock the provider or client.");
+					})
+					.build();
+		}
+
 		SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
 		Duration timeout = Duration.ofSeconds(properties.timeoutSeconds());
 		requestFactory.setConnectTimeout(timeout);

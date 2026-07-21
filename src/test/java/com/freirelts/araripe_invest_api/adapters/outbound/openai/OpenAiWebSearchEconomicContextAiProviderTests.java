@@ -1,5 +1,6 @@
 package com.freirelts.araripe_invest_api.adapters.outbound.openai;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.freirelts.araripe_invest_api.application.ai.AiAssetContext;
 import com.freirelts.araripe_invest_api.application.ai.AiContextResponseValidator;
@@ -9,21 +10,24 @@ import com.freirelts.araripe_invest_api.application.ai.EconomicContextAiResult;
 import com.freirelts.araripe_invest_api.domain.ai.AiValidationStatus;
 import com.freirelts.araripe_invest_api.domain.thesis.ThesisType;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.mock.http.client.MockClientHttpRequest;
+import org.springframework.mock.http.client.MockClientHttpResponse;
+import org.springframework.http.client.ClientHttpRequest;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.io.IOException;
+import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.containsString;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
-import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
-import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 class OpenAiWebSearchEconomicContextAiProviderTests {
 
@@ -31,26 +35,26 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 
 	@Test
 	void callsResponsesApiWithRequiredWebSearchAndPersistsCitationUrls() throws Exception {
-		RestClient.Builder builder = RestClient.builder();
-		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		StubOpenAiHttpTransport transport = new StubOpenAiHttpTransport(openAiResponse());
 		OpenAiWebSearchEconomicContextAiProvider provider = new OpenAiWebSearchEconomicContextAiProvider(
-				properties("test-key"), new AiContextResponseValidator(), objectMapper, builder);
-
-		server.expect(requestTo("https://api.openai.test/v1/responses"))
-				.andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer test-key"))
-				.andExpect(jsonPath("$.model").value("gpt-5.5"))
-				.andExpect(jsonPath("$.reasoning.effort").value("high"))
-				.andExpect(jsonPath("$.tools[0].type").value("web_search"))
-				.andExpect(jsonPath("$.tool_choice").value("required"))
-				.andExpect(jsonPath("$.max_output_tokens").value(16000))
-				.andExpect(jsonPath("$.instructions").value(containsString("nao substitua Selic")))
-				.andExpect(jsonPath("$.instructions").value(containsString("sourceReferenceDates")))
-				.andExpect(jsonPath("$.instructions").value(containsString("nao oriente compra, venda")))
-				.andExpect(jsonPath("$.input").value(containsString("Banco Central/SGS")))
-				.andRespond(withSuccess(openAiResponse(), MediaType.APPLICATION_JSON));
+				properties("test-key"), new AiContextResponseValidator(), objectMapper, restClient(transport));
 
 		EconomicContextAiResult result = provider.analyze(request());
 
+		JsonNode requestBody = objectMapper.readTree(transport.requestBody());
+		assertThat(transport.method()).isEqualTo(HttpMethod.POST);
+		assertThat(transport.uri()).isEqualTo(URI.create("https://unit-test.invalid/v1/responses"));
+		assertThat(transport.authorization()).isEqualTo("Bearer test-key");
+		assertThat(requestBody.path("model").asText()).isEqualTo("gpt-5.5");
+		assertThat(requestBody.path("reasoning").path("effort").asText()).isEqualTo("high");
+		assertThat(requestBody.path("tools").path(0).path("type").asText()).isEqualTo("web_search");
+		assertThat(requestBody.path("tool_choice").asText()).isEqualTo("required");
+		assertThat(requestBody.path("max_output_tokens").asInt()).isEqualTo(16000);
+		assertThat(requestBody.path("instructions").asText())
+				.contains("nao substitua Selic")
+				.contains("sourceReferenceDates")
+				.contains("nao oriente compra, venda");
+		assertThat(requestBody.path("input").asText()).contains("Banco Central/SGS");
 		assertThat(result.provider()).isEqualTo(OpenAiWebSearchEconomicContextAiProvider.PROVIDER);
 		assertThat(result.validationStatus()).isEqualTo(AiValidationStatus.VALID);
 		assertThat(result.outputJson()).contains("https://valor.example/noticia-wege");
@@ -63,18 +67,14 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 		assertThat(result.tokenUsage().outputTokens()).isEqualTo(450L);
 		assertThat(result.tokenUsage().totalTokens()).isEqualTo(1650L);
 		assertThat(result.tokenUsage().reasoningTokens()).isEqualTo(300L);
-		server.verify();
+		assertThat(transport.callCount()).isEqualTo(1);
 	}
 
 	@Test
 	void returnsFailedWithResponseAuditWhenResponseIsIncomplete() throws Exception {
-		RestClient.Builder builder = RestClient.builder();
-		MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+		StubOpenAiHttpTransport transport = new StubOpenAiHttpTransport(incompleteOpenAiResponse());
 		OpenAiWebSearchEconomicContextAiProvider provider = new OpenAiWebSearchEconomicContextAiProvider(
-				properties("test-key"), new AiContextResponseValidator(), objectMapper, builder);
-
-		server.expect(requestTo("https://api.openai.test/v1/responses"))
-				.andRespond(withSuccess(incompleteOpenAiResponse(), MediaType.APPLICATION_JSON));
+				properties("test-key"), new AiContextResponseValidator(), objectMapper, restClient(transport));
 
 		EconomicContextAiResult result = provider.analyze(request());
 
@@ -89,18 +89,28 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 		assertThat(result.tokenUsage().outputTokens()).isEqualTo(16000L);
 		assertThat(result.tokenUsage().totalTokens()).isEqualTo(17400L);
 		assertThat(result.tokenUsage().reasoningTokens()).isEqualTo(15993L);
-		server.verify();
+		assertThat(transport.callCount()).isEqualTo(1);
 	}
 
 	@Test
 	void returnsUnavailableWhenApiKeyIsMissing() {
+		StubOpenAiHttpTransport transport = new StubOpenAiHttpTransport("{}");
 		OpenAiWebSearchEconomicContextAiProvider provider = new OpenAiWebSearchEconomicContextAiProvider(
-				properties(""), new AiContextResponseValidator(), objectMapper, RestClient.builder());
+				properties(""), new AiContextResponseValidator(), objectMapper, restClient(transport));
 
 		EconomicContextAiResult result = provider.analyze(request());
 
 		assertThat(result.validationStatus()).isEqualTo(AiValidationStatus.UNAVAILABLE);
 		assertThat(result.errorMessage()).contains("API key is not configured");
+		assertThat(transport.callCount()).isZero();
+	}
+
+	private RestClient restClient(StubOpenAiHttpTransport transport) {
+		return RestClient.builder()
+				.baseUrl("https://unit-test.invalid/v1")
+				.defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+				.requestFactory(transport)
+				.build();
 	}
 
 	private String openAiResponse() throws Exception {
@@ -161,5 +171,45 @@ class OpenAiWebSearchEconomicContextAiProviderTests {
 	private OpenAiProperties properties(String apiKey) {
 		return new OpenAiProperties(true, "gpt-5.6-luna", apiKey, "https://api.openai.test/v1", 30, 16000,
 				"macro-sector-context-v1", "gpt-5.5", "high", "medium");
+	}
+
+	private static final class StubOpenAiHttpTransport implements ClientHttpRequestFactory {
+
+		private final String responseBody;
+		private MockClientHttpRequest request;
+		private int callCount;
+
+		private StubOpenAiHttpTransport(String responseBody) {
+			this.responseBody = responseBody;
+		}
+
+		@Override
+		public ClientHttpRequest createRequest(URI uri, HttpMethod httpMethod) throws IOException {
+			callCount++;
+			request = new MockClientHttpRequest(httpMethod, uri);
+			request.setResponse(new MockClientHttpResponse(responseBody.getBytes(StandardCharsets.UTF_8),
+					HttpStatus.OK));
+			return request;
+		}
+
+		private URI uri() {
+			return request.getURI();
+		}
+
+		private HttpMethod method() {
+			return request.getMethod();
+		}
+
+		private String authorization() {
+			return request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
+		}
+
+		private String requestBody() {
+			return request.getBodyAsString(StandardCharsets.UTF_8);
+		}
+
+		private int callCount() {
+			return callCount;
+		}
 	}
 }
