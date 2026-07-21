@@ -29,7 +29,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.client.RestClient;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -180,7 +179,7 @@ class BrapiDataProviderIntegrationTests {
 				"/v2/stocks/quote?symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3,"
 						+ "/v2/stocks/quote?symbols=WEGE3,BBAS3,MGLU3,RENT3,LREN3,"
 						+ "/v2/stocks/quote?symbols=SUZB3,RAIL3");
-		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getRawQuery)
+		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getQuery)
 				.containsExactly("symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3",
 						"symbols=WEGE3,BBAS3,MGLU3,RENT3,LREN3", "symbols=SUZB3,RAIL3");
 		assertThat(BRAPI_SERVER.authorizationHeaders()).containsExactly("Bearer test-brapi-token",
@@ -229,7 +228,7 @@ class BrapiDataProviderIntegrationTests {
 		ProviderRawResponse response = fundamentalDataProvider.fetchIncomeStatements(symbols, PeriodType.QUARTERLY);
 
 		assertThat(response.status()).isEqualTo(ProviderResponseStatus.SUCCESS);
-		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getRawQuery)
+		assertThat(BRAPI_SERVER.requestUris()).extracting(URI::getQuery)
 				.containsExactly("symbols=PETR4,VALE3,ITUB4,BBDC4,ABEV3&period=quarterly",
 						"symbols=WEGE3&period=quarterly");
 	}
@@ -250,9 +249,8 @@ class BrapiDataProviderIntegrationTests {
 	@Test
 	void protectedEndpointWithoutTokenReturnsTraceableFailureWithoutCallingBrapi() {
 		assetRepository.saveAndFlush(new Asset("ITUB4", "Itaú Unibanco PN", "Financeiro"));
-		BrapiDataProvider providerWithoutToken = new BrapiDataProvider(RestClient.builder()
-				.baseUrl(BRAPI_SERVER.baseUrl())
-				.build(), new BrapiProperties(BRAPI_SERVER.baseUrl(), "", 5, 1), monitoredAssetUniverse);
+		BrapiDataProvider providerWithoutToken = new BrapiDataProvider(new FailingBrapiFeignClient(),
+				new BrapiProperties(BRAPI_SERVER.baseUrl(), "", 5, 1), monitoredAssetUniverse);
 
 		ProviderRawResponse response = providerWithoutToken.fetchCurrentQuotes(List.of("ITUB4"));
 
@@ -352,6 +350,68 @@ class BrapiDataProviderIntegrationTests {
 			try (OutputStream outputStream = exchange.getResponseBody()) {
 				outputStream.write(body);
 			}
+		}
+	}
+
+	private static final class FailingBrapiFeignClient implements BrapiFeignClient {
+
+		@Override
+		public String quote(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String historical(String authorization, String symbols, String range, String interval, String sortOrder) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String profile(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String statistics(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String financialData(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String balanceSheet(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String incomeStatement(String authorization, String symbols, String period) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String cashFlow(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String dividends(String authorization, String symbols, String sortOrder, String startDate, String endDate) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String availableMacroSeries(String authorization) {
+			throw unexpectedCall();
+		}
+
+		@Override
+		public String macroSeries(String authorization, String symbols) {
+			throw unexpectedCall();
+		}
+
+		private IllegalStateException unexpectedCall() {
+			return new IllegalStateException("Brapi client should not be called without a configured token.");
 		}
 	}
 }

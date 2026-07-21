@@ -63,6 +63,8 @@ Equivalente lógico:
 symbols=PETR4,VALE3
 ```
 
+O adapter outbound do backend usa Spring Cloud OpenFeign. A chamada HTTP pode enviar a vírgula codificada como `%2C`; internamente, logs e registros de coleta devem manter o endpoint lógico rastreável com os símbolos consultados e demais parâmetros relevantes.
+
 O retorno vem em `results[]`, com um item por ativo. O processamento interno deve:
 
 - iterar por `results[]`;
@@ -934,6 +936,7 @@ BRAPI_RETRY_MAX_ATTEMPTS=3
 
 - Usar token por header, nunca por query string em produção.
 - Chamar brapi apenas pelo `araripe-invest-api`.
+- Usar Spring Cloud OpenFeign no adapter outbound da brapi, mantendo as interfaces de aplicação como fronteira de domínio.
 - Preservar `requestedSymbol`, `symbol` e `changed`, porque a brapi pode resolver tickers antigos para novos.
 - Persistir `requestedAt`, `took`, fonte e status de qualidade.
 - Não gerar modelo de estudo se endpoint obrigatório da modelo de estudo falhar.

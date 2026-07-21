@@ -18,8 +18,6 @@ import com.freirelts.araripe_invest_api.domain.marketdata.PeriodType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientResponseException;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -27,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.function.Function;
+
+import feign.FeignException;
 
 @Component
 class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, MacroEconomicDataProvider {
@@ -37,21 +37,22 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 	static final int SYMBOL_BATCH_SIZE = 5;
 	private static final Logger log = LoggerFactory.getLogger(BrapiDataProvider.class);
 
-	private final RestClient restClient;
+	private final BrapiFeignClient brapiClient;
 	private final BrapiProperties properties;
 	private final MonitoredAssetUniverseService monitoredAssetUniverse;
 	private final ObjectMapper objectMapper = new ObjectMapper();
 
-	BrapiDataProvider(RestClient brapiRestClient, BrapiProperties properties,
+	BrapiDataProvider(BrapiFeignClient brapiClient, BrapiProperties properties,
 			MonitoredAssetUniverseService monitoredAssetUniverse) {
-		this.restClient = brapiRestClient;
+		this.brapiClient = brapiClient;
 		this.properties = properties;
 		this.monitoredAssetUniverse = monitoredAssetUniverse;
 	}
 
 	@Override
 	public ProviderRawResponse fetchCurrentQuotes(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/quote", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+		return fetchForSymbols("/v2/stocks/quote", symbols, query -> query.queryParam("symbols", query.joinedSymbols()),
+				(authorization, query) -> brapiClient.quote(authorization, query.joinedSymbols()));
 	}
 
 	@Override
@@ -60,39 +61,51 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 				.queryParam("symbols", query.joinedSymbols())
 				.queryParam("range", request.range())
 				.queryParam("interval", request.interval())
-				.queryParam("sortOrder", request.sortOrder()));
+				.queryParam("sortOrder", request.sortOrder()),
+				(authorization, query) -> brapiClient.historical(authorization, query.joinedSymbols(), request.range(),
+						request.interval(), request.sortOrder()));
 	}
 
 	@Override
 	public ProviderRawResponse fetchCompanyProfiles(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/profile", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+		return fetchForSymbols("/v2/stocks/profile", symbols, query -> query.queryParam("symbols", query.joinedSymbols()),
+				(authorization, query) -> brapiClient.profile(authorization, query.joinedSymbols()));
 	}
 
 	@Override
 	public ProviderRawResponse fetchStatistics(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/statistics", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+		return fetchForSymbols("/v2/stocks/statistics", symbols,
+				query -> query.queryParam("symbols", query.joinedSymbols()),
+				(authorization, query) -> brapiClient.statistics(authorization, query.joinedSymbols()));
 	}
 
 	@Override
 	public ProviderRawResponse fetchFinancialData(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/financial-data", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+		return fetchForSymbols("/v2/stocks/financial-data", symbols,
+				query -> query.queryParam("symbols", query.joinedSymbols()),
+				(authorization, query) -> brapiClient.financialData(authorization, query.joinedSymbols()));
 	}
 
 	@Override
 	public ProviderRawResponse fetchBalanceSheets(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/balance-sheet", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+		return fetchForSymbols("/v2/stocks/balance-sheet", symbols,
+				query -> query.queryParam("symbols", query.joinedSymbols()),
+				(authorization, query) -> brapiClient.balanceSheet(authorization, query.joinedSymbols()));
 	}
 
 	@Override
 	public ProviderRawResponse fetchIncomeStatements(Collection<String> symbols, PeriodType periodType) {
 		return fetchForSymbols("/v2/stocks/income-statement", symbols, query -> query
 				.queryParam("symbols", query.joinedSymbols())
-				.queryParam("period", brapiStatementPeriod(periodType)));
+				.queryParam("period", brapiStatementPeriod(periodType)),
+				(authorization, query) -> brapiClient.incomeStatement(authorization, query.joinedSymbols(),
+						brapiStatementPeriod(periodType)));
 	}
 
 	@Override
 	public ProviderRawResponse fetchCashFlows(Collection<String> symbols) {
-		return fetchForSymbols("/v2/stocks/cash-flow", symbols, query -> query.queryParam("symbols", query.joinedSymbols()));
+		return fetchForSymbols("/v2/stocks/cash-flow", symbols, query -> query.queryParam("symbols", query.joinedSymbols()),
+				(authorization, query) -> brapiClient.cashFlow(authorization, query.joinedSymbols()));
 	}
 
 	@Override
@@ -101,12 +114,16 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 				.queryParam("symbols", query.joinedSymbols())
 				.queryParam("sortOrder", request.sortOrder())
 				.queryParam("startDate", request.startDate() == null ? null : request.startDate().toString())
-				.queryParam("endDate", request.endDate() == null ? null : request.endDate().toString()));
+				.queryParam("endDate", request.endDate() == null ? null : request.endDate().toString()),
+				(authorization, query) -> brapiClient.dividends(authorization, query.joinedSymbols(), request.sortOrder(),
+						request.startDate() == null ? null : request.startDate().toString(),
+						request.endDate() == null ? null : request.endDate().toString()));
 	}
 
 	@Override
 	public ProviderRawResponse fetchAvailableSeries() {
-		return fetchMacro("/v2/macro/available", query -> query);
+		return fetchMacro("/v2/macro/available", query -> query,
+				(authorization, query) -> brapiClient.availableMacroSeries(authorization));
 	}
 
 	@Override
@@ -117,11 +134,12 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 					"No macroeconomic series were requested.");
 		}
 		String joinedSlugs = String.join(",", normalizedSlugs);
-		return fetchMacro("/v2/macro", query -> query.queryParam("symbols", joinedSlugs), normalizedSlugs);
+		return fetchMacro("/v2/macro", query -> query.queryParam("symbols", joinedSlugs), normalizedSlugs,
+				(authorization, query) -> brapiClient.macroSeries(authorization, joinedSlugs));
 	}
 
 	private ProviderRawResponse fetchForSymbols(String endpoint, Collection<String> symbols,
-			Function<Query, Query> queryCustomizer) {
+			Function<Query, Query> queryCustomizer, BrapiRequest brapiRequest) {
 		List<String> requestedSymbols = monitoredAssetUniverse.normalizeSymbols(symbols);
 		List<String> activeSymbols = monitoredAssetUniverse.findActiveAssets(requestedSymbols).stream()
 				.map(Asset::getSymbol)
@@ -133,7 +151,7 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 		}
 		if (activeSymbols.size() <= SYMBOL_BATCH_SIZE) {
 			return fetch(endpoint, requestedSymbols, activeSymbols,
-					queryCustomizer.apply(new Query(endpoint, activeSymbols)));
+					queryCustomizer.apply(new Query(endpoint, activeSymbols)), brapiRequest);
 		}
 		if (!properties.hasToken()) {
 			return ProviderRawResponse.failed(PROVIDER, endpoint, requestedSymbols, activeSymbols, Instant.now(), 0,
@@ -142,7 +160,8 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 
 		List<ProviderRawResponse> responses = new ArrayList<>();
 		for (List<String> batch : batches(activeSymbols, SYMBOL_BATCH_SIZE)) {
-			responses.add(fetch(endpoint, requestedSymbols, batch, queryCustomizer.apply(new Query(endpoint, batch))));
+			responses.add(fetch(endpoint, requestedSymbols, batch, queryCustomizer.apply(new Query(endpoint, batch)),
+					brapiRequest));
 		}
 		return aggregateBatchResponses(endpoint, requestedSymbols, activeSymbols, responses);
 	}
@@ -220,17 +239,19 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 				.sum();
 	}
 
-	private ProviderRawResponse fetchMacro(String endpoint, Function<Query, Query> queryCustomizer) {
-		return fetchMacro(endpoint, queryCustomizer, List.of());
+	private ProviderRawResponse fetchMacro(String endpoint, Function<Query, Query> queryCustomizer,
+			BrapiRequest brapiRequest) {
+		return fetchMacro(endpoint, queryCustomizer, List.of(), brapiRequest);
 	}
 
 	private ProviderRawResponse fetchMacro(String endpoint, Function<Query, Query> queryCustomizer,
-			List<String> requestedSlugs) {
-		return fetch(endpoint, requestedSlugs, requestedSlugs, queryCustomizer.apply(new Query(endpoint, List.of())));
+			List<String> requestedSlugs, BrapiRequest brapiRequest) {
+		return fetch(endpoint, requestedSlugs, requestedSlugs, queryCustomizer.apply(new Query(endpoint, List.of())),
+				brapiRequest);
 	}
 
 	private ProviderRawResponse fetch(String endpoint, List<String> requestedSymbols, List<String> queriedSymbols,
-			Query query) {
+			Query query, BrapiRequest brapiRequest) {
 		String requestUri = query.toUriString();
 		if (!properties.hasToken()) {
 			return ProviderRawResponse.failed(PROVIDER, requestUri, requestedSymbols, queriedSymbols, Instant.now(), 0,
@@ -239,11 +260,7 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 
 		Instant requestedAt = Instant.now();
 		try {
-			String rawPayload = restClient.get()
-					.uri(requestUri)
-					.headers(headers -> headers.setBearerAuth(properties.token()))
-					.retrieve()
-					.body(String.class);
+			String rawPayload = brapiRequest.execute(bearerToken(), query);
 			JsonNode payload = objectMapper.readTree(rawPayload);
 			return ProviderRawResponse.success(PROVIDER, requestUri, requestedSymbols, queriedSymbols, requestedAt,
 					Duration.between(requestedAt, Instant.now()).toMillis(), payload);
@@ -255,13 +272,12 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_INVALID_JSON",
 					"Brapi response could not be parsed as JSON.");
 		}
-		catch (RestClientResponseException ex) {
+		catch (FeignException ex) {
 			log.warn("Brapi provider HTTP failure endpoint={} status={} responseBody={} requestedSymbols={} queriedSymbols={}",
-					requestUri, ex.getStatusCode().value(), ex.getResponseBodyAsString(), requestedSymbols,
-					queriedSymbols, ex);
+					requestUri, ex.status(), ex.contentUTF8(), requestedSymbols, queriedSymbols, ex);
 			return ProviderRawResponse.failed(PROVIDER, requestUri, requestedSymbols, queriedSymbols, requestedAt,
-					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_HTTP_" + ex.getStatusCode().value(),
-					"Brapi request failed with HTTP status " + ex.getStatusCode().value() + ".");
+					Duration.between(requestedAt, Instant.now()).toMillis(), "BRAPI_HTTP_" + ex.status(),
+					"Brapi request failed with HTTP status " + ex.status() + ".");
 		}
 		catch (RuntimeException ex) {
 			log.warn("Brapi provider request failed endpoint={} requestedSymbols={} queriedSymbols={}",
@@ -278,6 +294,16 @@ class BrapiDataProvider implements MarketDataProvider, FundamentalDataProvider, 
 			case QUARTERLY -> "quarterly";
 			case TTM -> throw new IllegalArgumentException("Brapi statement endpoints do not support TTM period.");
 		};
+	}
+
+	private String bearerToken() {
+		return "Bearer " + properties.token();
+	}
+
+	@FunctionalInterface
+	private interface BrapiRequest {
+
+		String execute(String authorization, Query query);
 	}
 
 	record Query(String path, List<String> symbols, StringBuilder queryString) {

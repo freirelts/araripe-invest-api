@@ -346,6 +346,8 @@ O client brapi fica isolado atras destes contratos:
 - `FundamentalDataProvider`
 - `MacroEconomicDataProvider`
 
+O adapter outbound da brapi usa Spring Cloud OpenFeign para as chamadas HTTP declarativas. O token e aplicado somente como header `Authorization: Bearer ...` no backend, e o adapter preserva o limite defensivo de 5 simbolos por chamada externa.
+
 A OpenAI Responses API fica isolada atras de:
 
 - `EconomicContextAiProvider`
