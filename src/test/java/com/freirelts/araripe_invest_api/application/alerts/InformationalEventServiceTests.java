@@ -160,13 +160,33 @@ class InformationalEventServiceTests {
 
 		assertThat(summary.eventType()).isEqualTo(InformationalEventType.STUDY_ASSUMPTION_CHANGED);
 		assertThat(summary.currentStudyModelSnapshotId()).isEqualTo(scenario.currentThesis().getId());
-			assertThat(alertRepository.findAll()).singleElement()
-					.satisfies(alert -> assertThat(alert.getEvidenceJson())
-							.contains("\"acceptedStudyStatus\":\"CRITERIOS_ATENDIDOS\"")
-							.contains("\"currentStudyStatus\":\"CRITERIOS_EM_ATENCAO\"")
-							.contains("\"acceptedScore\":82")
-							.contains("\"currentScore\":78")
-							.contains("\"scoreDelta\":-4"));
+		assertThat(alertRepository.findAll()).singleElement()
+				.satisfies(alert -> assertThat(alert.getEvidenceJson())
+						.contains("\"acceptedStudyStatus\":\"CRITERIOS_ATENDIDOS\"")
+						.contains("\"currentStudyStatus\":\"CRITERIOS_EM_ATENCAO\"")
+						.contains("\"acceptedScore\":82")
+						.contains("\"currentScore\":78")
+						.contains("\"scoreDelta\":-4"));
+		assertNoOperationalTermsWerePersisted();
+	}
+
+	@Test
+	void changedStudyScoreCreatesAssumptionChangedEventEvenWhenStatusIsUnchanged() {
+		Scenario scenario = scenario("score-change@araripe.test", "EGIE3", "42.00", "30.00", "70.00", "43.00",
+				DataQualityStatus.VALID, ThesisStatus.CRITERIOS_ATENDIDOS, 81);
+
+		InformationalEventSummary summary = service.scanPosition(scenario.position().getId(), REFERENCE_DATE)
+				.orElseThrow();
+
+		assertThat(summary.eventType()).isEqualTo(InformationalEventType.STUDY_ASSUMPTION_CHANGED);
+		assertThat(summary.currentStudyModelSnapshotId()).isEqualTo(scenario.currentThesis().getId());
+		assertThat(alertRepository.findAll()).singleElement()
+				.satisfies(alert -> assertThat(alert.getEvidenceJson())
+						.contains("\"acceptedStudyStatus\":\"CRITERIOS_ATENDIDOS\"")
+						.contains("\"currentStudyStatus\":\"CRITERIOS_ATENDIDOS\"")
+						.contains("\"acceptedScore\":82")
+						.contains("\"currentScore\":81")
+						.contains("\"scoreDelta\":-1"));
 		assertNoOperationalTermsWerePersisted();
 	}
 

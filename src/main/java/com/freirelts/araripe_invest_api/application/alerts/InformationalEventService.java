@@ -288,7 +288,7 @@ public class InformationalEventService {
 		if (association.getAcceptedThesis().getStatus() != thesis.getStatus()) {
 			return true;
 		}
-		return thesis.getScore() < 60 || association.getAcceptedScore() - thesis.getScore() >= 20;
+		return association.getAcceptedScore() != thesis.getScore();
 	}
 
 	private Map<String, Object> baseEvidence(CustomerPosition position, DailyCandle latestCandle, PositionThesis thesis) {
