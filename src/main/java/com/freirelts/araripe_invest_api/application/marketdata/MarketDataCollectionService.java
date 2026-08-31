@@ -726,8 +726,7 @@ public class MarketDataCollectionService {
 	private String json(Object value) {
 		try {
 			return objectMapper.writeValueAsString(value);
-		}
-		catch (JsonProcessingException ex) {
+		} catch (JsonProcessingException ex) {
 			throw new IllegalStateException("Could not serialize collection audit payload.", ex);
 		}
 	}

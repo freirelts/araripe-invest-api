@@ -98,7 +98,7 @@ O Araripe Invest e uma plataforma educacional, informativa e analitica para estu
 |   `-- persistence                 # Repositories JPA
 |-- src/main/resources/db/migration # Migracoes Flyway
 |-- src/test/java                   # Testes automatizados
-|-- docker-compose.yml              # PostgreSQL local
+|-- docker-compose.yml              # API e PostgreSQL local
 `-- .env.example                    # Variaveis locais de referencia
 ```
 
@@ -110,16 +110,22 @@ O Araripe Invest e uma plataforma educacional, informativa e analitica para estu
 - Docker e Docker Compose
 - Bash ou terminal compativel
 
-### Subir banco local
+### Subir ambiente local
 
 ```bash
 cp .env.example .env
-docker compose up -d
+docker compose up --build -d
 ```
 
-O compose sobe um PostgreSQL local com health check e volume persistente.
+O compose sobe a API e um PostgreSQL local com health check e volume persistente.
 
-### Rodar API
+### Rodar API fora do Compose
+
+Se quiser rodar a API diretamente pelo Maven, suba apenas o PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
 
 Com o PostgreSQL local ativo:
 
@@ -153,6 +159,7 @@ Use [`.env.example`](.env.example) como base para um arquivo local `.env`. Segre
 | --- | --- |
 | `SPRING_PROFILES_ACTIVE` | Profile ativo. Para desenvolvimento local, use `local`. |
 | `SERVER_PORT` | Porta HTTP da API. Default local: `8080`. |
+| `ARARIPE_API_PORT` | Porta publicada pelo Docker Compose para acessar a API no host. Default local: `8080`. |
 | `ARARIPE_DB_HOST` | Host do PostgreSQL. Default: `localhost`. |
 | `ARARIPE_DB_PORT` | Porta do PostgreSQL. Default: `5432`. |
 | `ARARIPE_DB_NAME` | Nome do banco. Default: `araripe_invest`. |
